@@ -34,6 +34,7 @@ export default async function handler(req, res) {
         const apellidos = fields.apellidos?.[0] || '';
         const curp = (fields.curp?.[0] || '').toUpperCase();
         const tipo_persona = fields.tipo_persona?.[0] || '';
+        const notas = fields.notas?.[0] || null;
         let id_carrera = fields.id_carrera?.[0] || null;
 
         if (!matricula || !nombres || !apellidos || !curp || !tipo_persona) {
@@ -79,8 +80,8 @@ export default async function handler(req, res) {
         }
 
         await pool.execute(
-            "INSERT INTO personas (matricula, nombres, apellidos, curp, id_carrera, foto_perfil, tipo_persona, estado) VALUES ($1, $2, $3, $4, $5, $6, $7, 'activo')",
-            [matricula, nombres, apellidos, curp, id_carrera, foto_perfil, tipo_persona]
+            "INSERT INTO personas (matricula, nombres, apellidos, curp, id_carrera, foto_perfil, tipo_persona, notas, estado) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'activo')",
+            [matricula, nombres, apellidos, curp, id_carrera, foto_perfil, tipo_persona, notas]
         );
 
         return res.status(200).json({
