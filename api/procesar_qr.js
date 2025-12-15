@@ -11,6 +11,17 @@ async function obtenerIdAdmin(token) {
     return rows[0].id;
 }
 
+async function obtenerHotQR(codigo) {
+    const [rows] = await pool.execute(`
+      SELECT h.*, a.nombre as nombre_creador
+      FROM hot_qr h
+      LEFT JOIN administradores a ON h.creado_por = a.id
+      WHERE h.codigo = $1
+    `, [codigo]);
+
+    return rows[0];
+}
+
 function sanitizeOutput(persona) {
     // Handle BLOB/Buffer for foto_perfil
     if (persona.foto_perfil) {
@@ -47,14 +58,62 @@ export default async function handler(req, res) {
         const idAdmin = await obtenerIdAdmin(admin_token);
 
         const [personas] = await pool.execute(`
-      SELECT p.*, c.nombre_carrera 
+      SELECT p.*, c.nombre_carrera
       FROM personas p 
       LEFT JOIN carreras c ON p.id_carrera = c.id_carrera 
       WHERE p.matricula = $1
     `, [matricula]);
 
         if (personas.length === 0) {
-            throw new Error('Matrícula no encontrada');
+            const hotQR = await obtenerHotQR(matricula);
+
+            if (!hotQR) {
+                throw new Error('Matrícula no encontrada');
+            }
+
+            if (hotQR.usado) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'El hot-QR ya fue utilizado'
+                });
+            }
+
+            const ahora = new Date();
+            if (hotQR.expira_en && new Date(hotQR.expira_en) < ahora) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'El hot-QR ha expirado'
+                });
+            }
+
+            await pool.execute(
+                `UPDATE hot_qr
+                 SET usado = TRUE,
+                     usado_en = NOW(),
+                     usado_por = $2
+                 WHERE codigo = $1`,
+                [matricula, idAdmin]
+            );
+
+            return res.status(200).json({
+                success: true,
+                data: {
+                    matricula: hotQR.codigo,
+                    nombres: hotQR.nombre_visitante,
+                    apellidos: '',
+                    tipo_persona: 'invitado',
+                    estado: 'activo',
+                    nombre_carrera: 'Visitante',
+                    foto_perfil: null,
+                    tipo_registro: 'entrada',
+                    hora_entrada: ahora,
+                    hora_salida: null,
+                    admin_entrada: hotQR.nombre_creador,
+                    admin_salida: null,
+                    origen: 'hot_qr',
+                    expira_en: hotQR.expira_en
+                }
+            });
         }
 
         const persona = personas[0];

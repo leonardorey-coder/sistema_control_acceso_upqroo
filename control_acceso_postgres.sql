@@ -13,6 +13,18 @@ CREATE TABLE administradores (
     token VARCHAR(255) DEFAULT NULL
 );
 
+CREATE TABLE hot_qr (
+    codigo VARCHAR(50) PRIMARY KEY,
+    nombre_visitante VARCHAR(150) NOT NULL,
+    motivo VARCHAR(255),
+    creado_por INT REFERENCES administradores(id),
+    usado_por INT REFERENCES administradores(id),
+    expira_en TIMESTAMP NOT NULL,
+    usado BOOLEAN DEFAULT FALSE,
+    usado_en TIMESTAMP DEFAULT NULL,
+    creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE carreras (
     id_carrera SERIAL PRIMARY KEY,
     nombre_carrera VARCHAR(100) NOT NULL,

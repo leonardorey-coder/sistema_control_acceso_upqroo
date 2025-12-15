@@ -106,6 +106,7 @@ vercel --prod
 | POST | `/api/procesar_qr` | Registrar acceso |
 | POST | `/api/registrar_persona` | Crear persona |
 | POST | `/api/editar_persona` | Editar persona |
+| POST | `/api/generar_hot_qr` | Crear pase rápido para visitantes |
 | GET | `/api/obtener_carreras` | Listar carreras |
 | GET | `/api/obtener_registros` | Registros del día |
 | GET | `/api/verificar_admin` | Verificar sesión |
