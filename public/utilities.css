@@ -1,0 +1,35 @@
+:root {
+  --color-primary: #ff8c00;
+  --color-secondary: #2c3e50;
+  --color-surface: #ffffff;
+  --color-muted: #6c757d;
+  --shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.08);
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --font-display: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* Utilidades inspiradas en tailwind */
+.flex { display: flex; }
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.gap-2 { gap: var(--spacing-sm); }
+.gap-4 { gap: var(--spacing-lg); }
+.rounded-md { border-radius: var(--radius-md); }
+.rounded-lg { border-radius: var(--radius-lg); }
+.shadow-soft { box-shadow: var(--shadow-soft); }
+.bg-primary { background-color: var(--color-primary); color: #fff; }
+.text-muted { color: var(--color-muted); }
+.p-2 { padding: var(--spacing-sm); }
+.p-4 { padding: var(--spacing-lg); }
+.w-full { width: 100%; }
+.max-w-md { max-width: 720px; }
+
+.card { background: var(--color-surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-soft); }
+.btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: var(--radius-md); font-weight: 600; cursor: pointer; border: none; }
+.btn-primary { background: var(--color-primary); color: #fff; }
+.btn-outline { border: 1px solid var(--color-muted); color: var(--color-secondary); background: var(--color-surface); }
