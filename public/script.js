@@ -590,6 +590,7 @@ function verificarSesionAdmin() {
           <div class="admin-avatar">${iniciales}</div>
           <span class="admin-name">${nombre}</span>
         </div>
+        <a class="tab-button" href="index.html">Vista del cliente</a>
         <button onclick="cerrarSesion()" class="logout-button">Cerrar Sesión</button>
       `;
 
