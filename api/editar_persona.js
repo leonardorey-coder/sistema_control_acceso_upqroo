@@ -37,6 +37,9 @@ export default async function handler(req, res) {
         const tipopersona = fields.tipo_persona?.[0];
         const estado = fields.estado?.[0];
         const idCarrera = fields.id_carrera?.[0] ? parseInt(fields.id_carrera[0]) : null;
+        const notas = fields.notas?.[0] || '';
+        const qrTieneCaducidad = fields.qr_tiene_caducidad?.[0] === 'true' || fields.qr_tiene_caducidad?.[0] === true;
+        const qrFechaCaducidad = fields.qr_fecha_caducidad?.[0] || null;
 
         if (!matriculaOriginal || !matricula || !nombres || !apellidos || !curp || !tipopersona || !estado) {
             throw new Error('Faltan datos requeridos');
@@ -46,6 +49,8 @@ export default async function handler(req, res) {
         if (!/^[A-Z]{4}[0-9]{6}[HM][A-Z]{5}[0-9]{2}$/.test(curp)) throw new Error('El CURP no tiene el formato correcto');
 
         if (tipopersona === 'estudiante' && !idCarrera) throw new Error('Debe seleccionar una carrera para estudiantes');
+
+        if (qrTieneCaducidad && !qrFechaCaducidad) throw new Error('Debe capturar la fecha de caducidad del QR');
 
         // Check existence
         const [exists] = await pool.execute("SELECT matricula FROM personas WHERE matricula = $1", [matriculaOriginal]);
@@ -78,17 +83,19 @@ export default async function handler(req, res) {
 
         let sql, params;
         if (updateFoto) {
-            sql = `UPDATE personas SET 
-               matricula = $1, nombres = $2, apellidos = $3, curp = $4, 
-               tipo_persona = $5, id_carrera = $6, estado = $7, foto_perfil = $8 
-               WHERE matricula = $9`;
-            params = [matricula, nombres, apellidos, curp, tipopersona, idCarrera, estado, fotoPerfil, matriculaOriginal];
+            sql = `UPDATE personas SET
+               matricula = $1, nombres = $2, apellidos = $3, curp = $4,
+               tipo_persona = $5, id_carrera = $6, estado = $7, foto_perfil = $8,
+               notas = $9, qr_tiene_caducidad = $10, qr_fecha_caducidad = $11
+               WHERE matricula = $12`;
+            params = [matricula, nombres, apellidos, curp, tipopersona, idCarrera, estado, fotoPerfil, notas, qrTieneCaducidad, qrFechaCaducidad || null, matriculaOriginal];
         } else {
-            sql = `UPDATE personas SET 
-               matricula = $1, nombres = $2, apellidos = $3, curp = $4, 
-               tipo_persona = $5, id_carrera = $6, estado = $7 
-               WHERE matricula = $8`;
-            params = [matricula, nombres, apellidos, curp, tipopersona, idCarrera, estado, matriculaOriginal];
+            sql = `UPDATE personas SET
+               matricula = $1, nombres = $2, apellidos = $3, curp = $4,
+               tipo_persona = $5, id_carrera = $6, estado = $7,
+               notas = $8, qr_tiene_caducidad = $9, qr_fecha_caducidad = $10
+               WHERE matricula = $11`;
+            params = [matricula, nombres, apellidos, curp, tipopersona, idCarrera, estado, notas, qrTieneCaducidad, qrFechaCaducidad || null, matriculaOriginal];
         }
 
         await pool.execute(sql, params);

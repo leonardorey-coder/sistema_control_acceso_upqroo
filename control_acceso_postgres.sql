@@ -27,8 +27,11 @@ CREATE TABLE personas (
     curp VARCHAR(18) NOT NULL UNIQUE,
     id_carrera INT REFERENCES carreras(id_carrera),
     foto_perfil BYTEA DEFAULT NULL,
-    tipo_persona VARCHAR(20) NOT NULL CHECK (tipo_persona IN ('estudiante', 'docente', 'administrativo', 'otro')),
+    tipo_persona VARCHAR(20) NOT NULL CHECK (tipo_persona IN ('estudiante', 'docente', 'administrativo', 'otro', 'invitado')),
     estado VARCHAR(20) DEFAULT 'activo' CHECK (estado IN ('activo', 'inactivo')),
+    notas TEXT DEFAULT NULL,
+    qr_tiene_caducidad BOOLEAN DEFAULT FALSE,
+    qr_fecha_caducidad TIMESTAMP DEFAULT NULL,
     fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -38,7 +41,28 @@ CREATE TABLE registros_acceso (
     hora_entrada TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     hora_salida TIMESTAMP DEFAULT NULL,
     id_admin_entrada INT REFERENCES administradores(id),
-    id_admin_salida INT REFERENCES administradores(id)
+    id_admin_salida INT REFERENCES administradores(id),
+    hash_anterior TEXT DEFAULT 'GENESIS',
+    hash_registro TEXT
+);
+
+CREATE TABLE horarios_estudiante (
+    id_horario SERIAL PRIMARY KEY,
+    matricula VARCHAR(10) REFERENCES personas(matricula),
+    nombre_materia VARCHAR(100) NOT NULL,
+    dia_semana SMALLINT NOT NULL CHECK (dia_semana BETWEEN 0 AND 6),
+    hora_inicio TIME NOT NULL,
+    hora_fin TIME NOT NULL
+);
+
+CREATE TABLE asistencias_estudiante (
+    id_asistencia SERIAL PRIMARY KEY,
+    matricula VARCHAR(10) REFERENCES personas(matricula),
+    nombre_materia VARCHAR(100) NOT NULL,
+    fecha DATE NOT NULL,
+    hora_escaneo TIMESTAMP NOT NULL,
+    minutos_potenciales INT NOT NULL,
+    comentario TEXT DEFAULT 'Generado automáticamente desde escaneo QR'
 );
 
 -- Stored Procedures / Functions

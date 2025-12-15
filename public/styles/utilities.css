@@ -1,0 +1,38 @@
+:root {
+  --orange: #FF8C00;
+  --white: #ffffff;
+  --light-orange: #FFE4B5;
+  --dark-gray: #333;
+  --medium-gray: #666;
+  --light-gray: #f8f9fa;
+  --border-gray: #dee2e6;
+  --success: #15803d;
+  --error: #dc2626;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: var(--white);
+}
+
+.utility-flex { display: flex; }
+.utility-col { flex-direction: column; }
+.utility-center { align-items: center; justify-content: center; }
+.utility-between { justify-content: space-between; }
+.utility-gap-2 { gap: 0.5rem; }
+.utility-gap-4 { gap: 1rem; }
+.utility-rounded { border-radius: 12px; }
+.utility-card { background: var(--white); border: 1px solid var(--border-gray); box-shadow: 0 10px 40px rgba(0,0,0,0.04); }
+.utility-muted { color: var(--medium-gray); }
+.utility-title { font-weight: 600; color: var(--dark-gray); }
+.utility-pill { padding: 4px 10px; border-radius: 9999px; background: var(--light-gray); }
+.utility-input { width: 100%; padding: 10px 12px; border: 1px solid var(--border-gray); border-radius: 10px; }
+.utility-input:focus { outline: 2px solid rgba(255,140,0,0.25); border-color: var(--orange); }
+
+/* Comentario: agregar en futuras iteraciones utilidades responsive y set de colores extendido. */

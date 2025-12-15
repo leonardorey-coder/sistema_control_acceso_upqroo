@@ -6,6 +6,7 @@
   <title>Sistema de Acceso Universidad</title>
   <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <link rel="stylesheet" href="styles/utilities.css">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -75,6 +76,10 @@
         <div id="reader"></div>
         <div id="result">Esperando escanear código QR...</div>
         <div class="scanner-controls">
+          <div class="utility-flex utility-gap-4 utility-center" style="align-items:center;">
+            <label for="scan-delay" class="utility-title" style="display:block;">Pausa automática entre escaneos (segundos)</label>
+            <input type="number" id="scan-delay" class="utility-input" value="2" min="1" max="15" step="1" style="max-width:120px;">
+          </div>
           <button id="continueButton" class="control-button" style="display: none;">
             Continuar Escaneando
           </button>
@@ -197,6 +202,7 @@
                 <option value="estudiante">Estudiante</option>
                 <option value="docente">Docente</option>
                 <option value="administrativo">Administrativo</option>
+                <option value="invitado">Invitado</option>
                 <option value="otro">Otro</option>
               </select>
             </div>
@@ -215,6 +221,28 @@
                 <option value="">Seleccione...</option>
               </select>
             </div>
+          </div>
+
+          <div class="form-group">
+            <label>Caducidad del QR</label>
+            <div class="mode-switch-container" style="justify-content: flex-start; gap: 12px;">
+              <span class="switch-label">QR sin caducidad</span>
+              <label class="ios-switch">
+                <input type="checkbox" id="qrExpiracionSwitch">
+                <span class="slider"></span>
+              </label>
+              <span class="switch-label inactive">Asignar fecha de caducidad</span>
+            </div>
+            <div class="input-helper">Activa la opción para fijar una fecha límite de uso.</div>
+            <div class="form-group" id="qr-expiracion-group" style="display:none; margin-top:10px;">
+              <label for="qr_fecha_caducidad">Fecha y hora de caducidad</label>
+              <input type="datetime-local" id="qr_fecha_caducidad" class="form-control">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="notas">Notas</label>
+            <textarea id="notas" class="form-control" rows="2" placeholder="Notas generales o indicaciones"></textarea>
           </div>
 
           <div class="form-group">
@@ -429,6 +457,8 @@
                   <option value="estudiante">Estudiante</option>
                   <option value="docente">Docente</option>
                   <option value="administrativo">Administrativo</option>
+                  <option value="invitado">Invitado</option>
+                  <option value="otro">Otro</option>
                 </select>
               </div>
             </div>
@@ -446,6 +476,28 @@
                   <option value="">Seleccione...</option>
                 </select>
               </div>
+            </div>
+
+            <div class="form-group">
+              <label>Caducidad del QR</label>
+              <div class="mode-switch-container" style="justify-content: flex-start; gap: 12px;">
+                <span class="switch-label">QR sin caducidad</span>
+                <label class="ios-switch">
+                  <input type="checkbox" id="editar-qr-expiracion-switch">
+                  <span class="slider"></span>
+                </label>
+                <span class="switch-label inactive">Asignar fecha de caducidad</span>
+              </div>
+              <div class="input-helper">Sin fecha el QR permanece vigente.</div>
+              <div class="form-group" id="editar-qr-expiracion-group" style="display:none; margin-top:10px;">
+                <label for="editar-qr-fecha-caducidad">Fecha y hora de caducidad</label>
+                <input type="datetime-local" id="editar-qr-fecha-caducidad" class="form-control">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="editar-notas">Notas</label>
+              <textarea id="editar-notas" class="form-control" rows="2" placeholder="Notas, instrucciones o restricciones"></textarea>
             </div>
 
             <div class="form-group">
@@ -518,14 +570,17 @@
       <div id="registrosContainer" class="registros-container">
         <div class="tabla-header">
           <h2 class="tabla-titulo">Registros del día</h2>
-          <button id="refreshButton" class="refresh-button" onclick="cargarRegistros()">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px; vertical-align: middle;">
-              <polyline points="23 4 23 10 17 10"/>
-              <polyline points="1 20 1 14 7 14"/>
-              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-            </svg>
-            Actualizar
-          </button>
+          <div class="utility-flex utility-gap-4 utility-center" style="align-items: center;">
+            <input id="buscador-registros" type="search" class="utility-input" placeholder="Buscar por matrícula o nombre">
+            <button id="refreshButton" class="refresh-button" onclick="cargarRegistros()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px; vertical-align: middle;">
+                <polyline points="23 4 23 10 17 10"/>
+                <polyline points="1 20 1 14 7 14"/>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+              </svg>
+              Actualizar
+            </button>
+          </div>
         </div>
         <table class="registros-table">
           <thead>
