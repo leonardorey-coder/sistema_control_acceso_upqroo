@@ -137,8 +137,8 @@
                     localStorage.setItem('adminNombre', data.nombre);
                     localStorage.setItem('adminUsuario', data.usuario);
 
-                    // Redireccionar
-                    window.location.href = 'index.html';
+                    // Redireccionar a la vista de administración
+                    window.location.href = 'admin.html';
                 } else {
                     errorMessage.style.display = 'block';
                     errorMessage.textContent = data.message || 'Error al iniciar sesión';
