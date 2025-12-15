@@ -3,6 +3,9 @@
 let currentQRCode = null;
 let html5QrCode = null;
 let isScanning = true;
+let registrosActuales = [];
+let scanCooldownMs = 2000;
+let scanCooldownTimeout = null;
 
 // Sistema de tabs
 function switchTab(tabName) {
@@ -93,6 +96,7 @@ document.getElementById('qr-form').addEventListener('submit', async function (e)
   const curp = document.getElementById('curp').value.toUpperCase();
   const tipo_persona = document.getElementById('tipo_persona').value;
   const id_carrera = document.getElementById('id_carrera').value;
+  const notas = document.getElementById('notas').value;
   const foto_perfil = document.getElementById('foto_perfil').files[0];
 
   if (!/^[A-Z]{4}[0-9]{6}[HM][A-Z]{5}[0-9]{2}$/.test(curp)) {
@@ -113,6 +117,7 @@ document.getElementById('qr-form').addEventListener('submit', async function (e)
   formData.append('curp', curp);
   formData.append('tipo_persona', tipo_persona);
   formData.append('id_carrera', id_carrera || '');
+  formData.append('notas', notas || '');
 
   if (foto_perfil) {
     formData.append('foto_perfil', foto_perfil);
@@ -316,7 +321,6 @@ async function onScanSuccess(decodedText, decodedResult) {
   if (!isScanning) return;
   isScanning = false;
   html5QrCode.pause();
-  document.getElementById('continueButton').style.display = 'inline-block';
 
   const resultElement = document.getElementById('result');
   resultElement.innerHTML = `
@@ -408,6 +412,7 @@ async function onScanSuccess(decodedText, decodedResult) {
       mostrarAlerta(data.message, 'error');
       reproducirSonido('error');
     }
+    iniciarEnfriamientoEscaneo();
   } catch (error) {
     console.error('Error:', error);
     const resultElement = document.getElementById('result');
@@ -421,6 +426,7 @@ async function onScanSuccess(decodedText, decodedResult) {
         `;
     mostrarAlerta(error.message || 'Error al procesar el código QR', 'error');
     reproducirSonido('error');
+    iniciarEnfriamientoEscaneo();
   }
 }
 
@@ -430,11 +436,32 @@ function onScanFailure(error) {
 
 // Evento del botón continuar
 document.getElementById('continueButton').addEventListener('click', () => {
+  reanudarScanner();
+});
+
+function iniciarEnfriamientoEscaneo() {
+  clearTimeout(scanCooldownTimeout);
+  const inputCooldown = document.getElementById('cooldownInput');
+  scanCooldownMs = Math.max(500, parseInt(inputCooldown.value, 10) || 2000);
+  const continueButton = document.getElementById('continueButton');
+  continueButton.style.display = 'inline-block';
+  continueButton.disabled = false;
+  continueButton.textContent = `Reanudar en ${(scanCooldownMs / 1000).toFixed(1)}s`;
+
+  scanCooldownTimeout = setTimeout(() => {
+    reanudarScanner();
+  }, scanCooldownMs);
+}
+
+function reanudarScanner() {
+  clearTimeout(scanCooldownTimeout);
   isScanning = true;
   html5QrCode.resume();
-  document.getElementById('continueButton').style.display = 'none';
+  const continueButton = document.getElementById('continueButton');
+  continueButton.style.display = 'none';
+  continueButton.textContent = 'Continuar Escaneando';
   document.getElementById('result').innerHTML = 'Esperando escanear código QR...';
-});
+}
 
 // Funciones de utilidad
 function mostrarAlerta(mensaje, tipo) {
@@ -504,71 +531,89 @@ function reproducirSonido(tipo) {
 
 // Función para cargar registros
 async function cargarRegistros() {
-  const registrosTableBody = document.getElementById('registrosTableBody');
-
   try {
     const response = await fetch('/api/obtener_registros');
     const data = await response.json();
 
     if (data.success) {
-      registrosTableBody.innerHTML = '';
-      data.data.forEach(registro => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-              <td>${registro.matricula}</td>
-              <td>${registro.nombres} ${registro.apellidos}</td>
-              <td>${registro.nombre_carrera}</td>
-              <td class="tiempo-columna">
-                ${registro.hora_entrada || 'N/A'}
-                ${registro.admin_entrada ?
-            `<span class="admin-nombre">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;">
-                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                      <circle cx="12" cy="7" r="4"/>
-                    </svg>
-                    ${registro.admin_entrada}
-                  </span>` :
-            ''}
-              </td>
-              <td class="tiempo-columna">
-                ${registro.hora_salida || 'N/A'}
-                ${registro.admin_salida ?
-            `<span class="admin-nombre">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;">
-                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                      <circle cx="12" cy="7" r="4"/>
-                    </svg>
-                    ${registro.admin_salida}
-                  </span>` :
-            ''}
-              </td>
-              <td>
-                <span class="estado-registro ${registro.hora_salida ? 'salida' : 'entrada'}">
-                  ${registro.hora_salida ? 'Completado' : 'En curso'}
-                </span>
-              </td>
-            `;
-        registrosTableBody.appendChild(row);
-      });
+      registrosActuales = data.data;
+      renderRegistros();
     } else {
-      registrosTableBody.innerHTML = `
-            <tr>
-              <td colspan="6" style="text-align: center; padding: 20px;">
-                No hay registros para el día de hoy
-              </td>
-            </tr>
-          `;
+      mostrarRegistrosVacios();
     }
   } catch (error) {
     console.error('Error al obtener los registros:', error);
-    registrosTableBody.innerHTML = `
-          <tr>
-            <td colspan="6" style="text-align: center; padding: 20px; color: #dc3545;">
-              Error al cargar los registros
-            </td>
-          </tr>
-        `;
+    mostrarRegistrosVacios('Error al cargar los registros');
   }
+}
+
+function mostrarRegistrosVacios(mensaje = 'No hay registros para el día de hoy') {
+  const registrosTableBody = document.getElementById('registrosTableBody');
+  registrosTableBody.innerHTML = `
+        <tr>
+          <td colspan="6" style="text-align: center; padding: 20px;">
+            ${mensaje}
+          </td>
+        </tr>
+      `;
+}
+
+function renderRegistros() {
+  const registrosTableBody = document.getElementById('registrosTableBody');
+  const filtro = (document.getElementById('busqueda-registros')?.value || '').trim().toLowerCase();
+  const filtrados = registrosActuales.filter(registro => {
+    const nombre = `${registro.nombres} ${registro.apellidos}`.toLowerCase();
+    return registro.matricula.toLowerCase().includes(filtro) || nombre.includes(filtro);
+  });
+
+  if (filtrados.length === 0) {
+    mostrarRegistrosVacios('No hay coincidencias');
+    return;
+  }
+
+  registrosTableBody.innerHTML = '';
+  filtrados.forEach(registro => {
+    const row = document.createElement('tr');
+    row.innerHTML = `
+          <td>${registro.matricula}</td>
+          <td>${registro.nombres} ${registro.apellidos}</td>
+          <td>${registro.nombre_carrera}</td>
+          <td class="tiempo-columna">
+            ${registro.hora_entrada || 'N/A'}
+            ${registro.admin_entrada ?
+        `<span class="admin-nombre">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                  <circle cx="12" cy="7" r="4"/>
+                </svg>
+                ${registro.admin_entrada}
+              </span>` :
+        ''}
+          </td>
+          <td class="tiempo-columna">
+            ${registro.hora_salida || 'N/A'}
+            ${registro.admin_salida ?
+        `<span class="admin-nombre">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                  <circle cx="12" cy="7" r="4"/>
+                </svg>
+                ${registro.admin_salida}
+              </span>` :
+        ''}
+          </td>
+          <td>
+            <span class="estado-registro ${registro.hora_salida ? 'salida' : 'entrada'}">
+              ${registro.hora_salida ? 'Completado' : 'En curso'}
+            </span>
+          </td>
+        `;
+    registrosTableBody.appendChild(row);
+  });
+}
+
+function filtrarRegistros() {
+  renderRegistros();
 }
 
 // Funciones de sesión
@@ -606,6 +651,12 @@ function cerrarSesion() {
 // Validación de entrada de matrícula
 document.getElementById('matricula').addEventListener('input', function (e) {
   this.value = this.value.replace(/\D/g, '');
+});
+
+document.getElementById('cooldownInput').addEventListener('input', function (e) {
+  const valor = Math.max(500, parseInt(e.target.value, 10) || 2000);
+  e.target.value = valor;
+  scanCooldownMs = valor;
 });
 
 // Mode Switch Functionality
@@ -730,6 +781,7 @@ function cargarDatosPersona(persona) {
   document.getElementById('editar-curp').value = persona.curp;
   document.getElementById('editar-tipo-persona').value = persona.tipo_persona;
   document.getElementById('editar-estado').value = persona.estado;
+  document.getElementById('editar-notas').value = persona.notas || '';
 
   // Manejar campo de carrera
   const carreraGroup = document.getElementById('editar-carrera-group');
@@ -781,6 +833,8 @@ async function cargarCarrerasEditar() {
     console.error('Error al cargar carreras:', error);
   }
 }
+
+// TODO: Graficar asistencias por materia para estudiantes en el panel de registros.
 
 function cancelarEdicion() {
   document.getElementById('editar-form').reset();
@@ -839,6 +893,7 @@ document.getElementById('editar-form').addEventListener('submit', async function
   const tipo_persona = document.getElementById('editar-tipo-persona').value;
   const id_carrera = document.getElementById('editar-id-carrera').value;
   const estado = document.getElementById('editar-estado').value;
+  const notas = document.getElementById('editar-notas').value;
   const foto_perfil = document.getElementById('editar-foto-perfil').files[0];
 
   // Validaciones
@@ -867,6 +922,7 @@ document.getElementById('editar-form').addEventListener('submit', async function
   formData.append('tipo_persona', tipo_persona);
   formData.append('id_carrera', id_carrera || '');
   formData.append('estado', estado);
+  formData.append('notas', notas || '');
 
   if (foto_perfil) {
     formData.append('foto_perfil', foto_perfil);

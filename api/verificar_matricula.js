@@ -38,6 +38,7 @@ export default async function handler(req, res) {
         p.curp,
         p.tipo_persona,
         p.estado,
+        p.notas,
         p.foto_perfil,
         p.id_carrera,
         c.nombre_carrera

@@ -1,8 +1,10 @@
-    :root {
-      --orange: #FF8C00;
-      --white: #ffffff;
-      --light-orange: #FFE4B5;
-      --dark-gray: #333;
+@import './utilities.css';
+
+:root {
+  --orange: #FF8C00;
+  --white: #ffffff;
+  --light-orange: #FFE4B5;
+  --dark-gray: #333;
       --medium-gray: #666;
       --light-gray: #f8f9fa;
       --border-gray: #dee2e6;

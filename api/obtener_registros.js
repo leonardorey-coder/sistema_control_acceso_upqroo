@@ -11,6 +11,13 @@ export default async function handler(req, res) {
     }
 
     try {
+        await pool.execute(`
+      UPDATE registros_acceso
+      SET hora_salida = date_trunc('day', hora_entrada) + interval '23 hours 59 minutes 59 seconds'
+      WHERE hora_salida IS NULL
+      AND DATE(hora_entrada) < CURRENT_DATE;
+    `);
+
         const [rows] = await pool.query("SELECT * FROM registros_hoy");
 
         // Format times if needed, or let frontend handle it.
