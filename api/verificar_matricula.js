@@ -40,6 +40,9 @@ export default async function handler(req, res) {
         p.estado,
         p.foto_perfil,
         p.id_carrera,
+        p.notas,
+        p.qr_tiene_caducidad,
+        p.qr_fecha_caducidad,
         c.nombre_carrera
       FROM personas p
       LEFT JOIN carreras c ON p.id_carrera = c.id_carrera

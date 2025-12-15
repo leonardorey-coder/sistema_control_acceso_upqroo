@@ -35,6 +35,9 @@ export default async function handler(req, res) {
         const curp = (fields.curp?.[0] || '').toUpperCase();
         const tipo_persona = fields.tipo_persona?.[0] || '';
         let id_carrera = fields.id_carrera?.[0] || null;
+        const notas = fields.notas?.[0] || '';
+        const qr_tiene_caducidad = fields.qr_tiene_caducidad?.[0] === 'true' || fields.qr_tiene_caducidad?.[0] === true;
+        const qr_fecha_caducidad = fields.qr_fecha_caducidad?.[0] || null;
 
         if (!matricula || !nombres || !apellidos || !curp || !tipo_persona) {
             return res.status(400).json({ success: false, message: 'Todos los campos obligatorios deben ser completados' });
@@ -50,6 +53,14 @@ export default async function handler(req, res) {
 
         if (tipo_persona === 'estudiante' && !id_carrera) {
             return res.status(400).json({ success: false, message: 'Debe seleccionar una carrera para estudiantes' });
+        }
+
+        if (qr_tiene_caducidad && !qr_fecha_caducidad) {
+            return res.status(400).json({ success: false, message: 'Debe definir la fecha de caducidad del QR' });
+        }
+
+        if (qr_tiene_caducidad && new Date(qr_fecha_caducidad) <= new Date()) {
+            return res.status(400).json({ success: false, message: 'La fecha de caducidad debe ser futura' });
         }
 
         if (tipo_persona !== 'estudiante') {
@@ -79,8 +90,8 @@ export default async function handler(req, res) {
         }
 
         await pool.execute(
-            "INSERT INTO personas (matricula, nombres, apellidos, curp, id_carrera, foto_perfil, tipo_persona, estado) VALUES ($1, $2, $3, $4, $5, $6, $7, 'activo')",
-            [matricula, nombres, apellidos, curp, id_carrera, foto_perfil, tipo_persona]
+            "INSERT INTO personas (matricula, nombres, apellidos, curp, id_carrera, foto_perfil, tipo_persona, estado, notas, qr_tiene_caducidad, qr_fecha_caducidad) VALUES ($1, $2, $3, $4, $5, $6, $7, 'activo', $8, $9, $10)",
+            [matricula, nombres, apellidos, curp, id_carrera, foto_perfil, tipo_persona, notas, qr_tiene_caducidad, qr_fecha_caducidad || null]
         );
 
         return res.status(200).json({

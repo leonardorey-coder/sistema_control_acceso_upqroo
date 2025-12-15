@@ -1,4 +1,5 @@
 import pool from '../lib/db.js';
+import crypto from 'crypto';
 
 async function obtenerIdAdmin(token) {
     const [rows] = await pool.execute(
@@ -21,6 +22,92 @@ function sanitizeOutput(persona) {
     return persona;
 }
 
+async function cerrarRegistrosPendientes() {
+    const [pendientes] = await pool.execute(
+        `SELECT id_registro, hora_entrada, id_admin_entrada FROM registros_acceso WHERE hora_salida IS NULL AND DATE(hora_entrada) < CURRENT_DATE`
+    );
+
+    for (const registro of pendientes) {
+        const finDelDia = new Date(registro.hora_entrada);
+        finDelDia.setHours(23, 59, 59, 0);
+        await pool.execute(
+            `UPDATE registros_acceso SET hora_salida = $1, id_admin_salida = COALESCE(id_admin_salida, $2) WHERE id_registro = $3`,
+            [finDelDia, registro.id_admin_entrada, registro.id_registro]
+        );
+        await encadenarRegistro(registro.id_registro);
+    }
+}
+
+async function obtenerHashAnteriorPara(idRegistro) {
+    const [rows] = await pool.execute(
+        'SELECT hash_registro FROM registros_acceso WHERE id_registro < $1 ORDER BY id_registro DESC LIMIT 1',
+        [idRegistro]
+    );
+    return rows.length ? rows[0].hash_registro : 'GENESIS';
+}
+
+function construirHashRegistro(registro, hashAnterior) {
+    const hash = crypto.createHash('sha256');
+    const data = [
+        registro.id_registro,
+        registro.matricula,
+        registro.hora_entrada,
+        registro.hora_salida,
+        registro.id_admin_entrada,
+        registro.id_admin_salida,
+        hashAnterior
+    ].join('|');
+    hash.update(data);
+    return hash.digest('hex');
+}
+
+async function encadenarRegistro(idRegistro) {
+    const [rows] = await pool.execute(
+        'SELECT id_registro, matricula, hora_entrada, hora_salida, id_admin_entrada, id_admin_salida, hash_anterior FROM registros_acceso WHERE id_registro = $1',
+        [idRegistro]
+    );
+
+    if (!rows.length) return;
+
+    const registro = rows[0];
+    const hashAnterior = registro.hash_anterior === 'GENESIS'
+        ? await obtenerHashAnteriorPara(idRegistro)
+        : registro.hash_anterior;
+    const hashActual = construirHashRegistro(registro, hashAnterior);
+
+    await pool.execute(
+        'UPDATE registros_acceso SET hash_anterior = $1, hash_registro = $2 WHERE id_registro = $3',
+        [hashAnterior, hashActual, idRegistro]
+    );
+}
+
+async function registrarAsistenciasPotenciales(matricula, fechaEscaneo) {
+    const diaSemana = fechaEscaneo.getDay();
+    const minutosEscaneo = fechaEscaneo.getHours() * 60 + fechaEscaneo.getMinutes();
+    const [horarios] = await pool.execute(
+        'SELECT nombre_materia, hora_inicio, hora_fin FROM horarios_estudiante WHERE matricula = $1 AND dia_semana = $2',
+        [matricula, diaSemana]
+    );
+
+    for (const horario of horarios) {
+        const [inicioHoras, inicioMinutos] = horario.hora_inicio.split(':').map(Number);
+        const [finHoras, finMinutos] = horario.hora_fin.split(':').map(Number);
+        const inicio = inicioHoras * 60 + inicioMinutos;
+        const fin = finHoras * 60 + finMinutos;
+
+        const inicioReal = Math.max(inicio, minutosEscaneo);
+        const minutosPotenciales = Math.max(0, fin - inicioReal);
+
+        if (minutosPotenciales > 0) {
+            await pool.execute(
+                `INSERT INTO asistencias_estudiante (matricula, nombre_materia, fecha, hora_escaneo, minutos_potenciales, comentario)
+                 VALUES ($1, $2, $3, $4, $5, 'Base para futuras graficaciones de asistencia')`,
+                [matricula, horario.nombre_materia, fechaEscaneo, fechaEscaneo, minutosPotenciales]
+            );
+        }
+    }
+}
+
 export default async function handler(req, res) {
     // CORS headers
     res.setHeader('Access-Control-Allow-Credentials', true);
@@ -38,6 +125,7 @@ export default async function handler(req, res) {
     }
 
     try {
+        await cerrarRegistrosPendientes();
         const { matricula, admin_token } = req.body;
 
         if (!matricula || !admin_token) {
@@ -58,6 +146,14 @@ export default async function handler(req, res) {
         }
 
         const persona = personas[0];
+
+        if (persona.qr_tiene_caducidad && persona.qr_fecha_caducidad && new Date(persona.qr_fecha_caducidad) <= new Date()) {
+            return res.status(403).json({
+                success: false,
+                message: 'El código QR asociado está vencido',
+                data: sanitizeOutput(persona)
+            });
+        }
 
         if (persona.estado === 'inactivo') {
             return res.status(403).json({
@@ -93,6 +189,7 @@ export default async function handler(req, res) {
         // Get latest record details
         const [lastRecords] = await pool.execute(`
       SELECT r.hora_entrada, r.hora_salida,
+             r.id_registro,
              a1.nombre as nombre_admin_entrada,
              a2.nombre as nombre_admin_salida
       FROM registros_acceso r
@@ -109,6 +206,10 @@ export default async function handler(req, res) {
             persona.hora_salida = u.hora_salida;
             persona.admin_entrada = u.nombre_admin_entrada;
             persona.admin_salida = u.nombre_admin_salida;
+            await encadenarRegistro(u.id_registro);
+            if (persona.tipo_persona === 'estudiante') {
+                await registrarAsistenciasPotenciales(persona.matricula, new Date(u.hora_entrada || new Date()));
+            }
         }
 
         return res.status(200).json({
