@@ -834,6 +834,16 @@
       padding: 1rem;
     }
 
+    .tabla-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .tabla-actions .form-control {
+      min-width: 240px;
+    }
+
     .registros-table {
       width: 100%;
       border-collapse: separate;

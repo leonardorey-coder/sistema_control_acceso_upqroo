@@ -3,6 +3,9 @@
 let currentQRCode = null;
 let html5QrCode = null;
 let isScanning = true;
+let scanCooldownMs = 2000;
+let scanCooldownTimeout = null;
+let registrosCache = [];
 
 // Sistema de tabs
 function switchTab(tabName) {
@@ -93,6 +96,9 @@ document.getElementById('qr-form').addEventListener('submit', async function (e)
   const curp = document.getElementById('curp').value.toUpperCase();
   const tipo_persona = document.getElementById('tipo_persona').value;
   const id_carrera = document.getElementById('id_carrera').value;
+  const notas = document.getElementById('notas').value;
+  const qr_caduca = document.getElementById('qr-caduca').checked;
+  const qr_expiracion = document.getElementById('qr-expiracion').value;
   const foto_perfil = document.getElementById('foto_perfil').files[0];
 
   if (!/^[A-Z]{4}[0-9]{6}[HM][A-Z]{5}[0-9]{2}$/.test(curp)) {
@@ -105,6 +111,11 @@ document.getElementById('qr-form').addEventListener('submit', async function (e)
     return;
   }
 
+  if (qr_caduca && !qr_expiracion) {
+    mostrarAlerta('Debe seleccionar la fecha de caducidad del QR', 'error');
+    return;
+  }
+
   // Enviar al servidor
   const formData = new FormData();
   formData.append('matricula', matricula);
@@ -113,6 +124,9 @@ document.getElementById('qr-form').addEventListener('submit', async function (e)
   formData.append('curp', curp);
   formData.append('tipo_persona', tipo_persona);
   formData.append('id_carrera', id_carrera || '');
+  formData.append('notas', notas);
+  formData.append('qr_caduca', qr_caduca);
+  formData.append('qr_expiracion', qr_caduca ? qr_expiracion : '');
 
   if (foto_perfil) {
     formData.append('foto_perfil', foto_perfil);
@@ -209,6 +223,16 @@ document.getElementById('curp').addEventListener('input', function (e) {
   this.value = this.value.toUpperCase();
 });
 
+function toggleExpiracion() {
+  const input = document.getElementById('qr-expiracion');
+  input.style.display = document.getElementById('qr-caduca').checked ? 'block' : 'none';
+}
+
+function toggleExpiracionEdicion() {
+  const input = document.getElementById('editar-qr-expiracion');
+  input.style.display = document.getElementById('editar-qr-caduca').checked ? 'block' : 'none';
+}
+
 function descargarQR() {
   const matricula = document.getElementById('qr-matricula').textContent;
   const nombre = document.getElementById('qr-nombre').textContent;
@@ -270,6 +294,7 @@ function limpiarFormulario() {
   document.getElementById('qr-form').reset();
   document.getElementById('qr-result').classList.remove('show');
   document.getElementById('carrera-group').style.display = 'none';
+  document.getElementById('qr-expiracion').style.display = 'none';
   currentQRCode = null;
 }
 
@@ -316,7 +341,6 @@ async function onScanSuccess(decodedText, decodedResult) {
   if (!isScanning) return;
   isScanning = false;
   html5QrCode.pause();
-  document.getElementById('continueButton').style.display = 'inline-block';
 
   const resultElement = document.getElementById('result');
   resultElement.innerHTML = `
@@ -421,6 +445,8 @@ async function onScanSuccess(decodedText, decodedResult) {
         `;
     mostrarAlerta(error.message || 'Error al procesar el código QR', 'error');
     reproducirSonido('error');
+  } finally {
+    programarReinicioEscaneo();
   }
 }
 
@@ -430,11 +456,39 @@ function onScanFailure(error) {
 
 // Evento del botón continuar
 document.getElementById('continueButton').addEventListener('click', () => {
+  if (scanCooldownTimeout) {
+    clearTimeout(scanCooldownTimeout);
+    scanCooldownTimeout = null;
+  }
+  reanudarEscaneo();
+});
+
+function reanudarEscaneo() {
+  if (!html5QrCode) return;
   isScanning = true;
   html5QrCode.resume();
   document.getElementById('continueButton').style.display = 'none';
   document.getElementById('result').innerHTML = 'Esperando escanear código QR...';
-});
+}
+
+function programarReinicioEscaneo() {
+  const continueButton = document.getElementById('continueButton');
+  continueButton.style.display = 'inline-block';
+  continueButton.textContent = `Reanudar en ${(scanCooldownMs / 1000).toFixed(1)}s`;
+  if (scanCooldownTimeout) {
+    clearTimeout(scanCooldownTimeout);
+  }
+  scanCooldownTimeout = setTimeout(reanudarEscaneo, scanCooldownMs);
+}
+
+function actualizarRetardoEscaneo() {
+  const input = document.getElementById('scan-delay');
+  const nuevoValor = parseInt(input.value, 10);
+  scanCooldownMs = Number.isFinite(nuevoValor) && nuevoValor >= 500 ? nuevoValor : 2000;
+  if (scanCooldownTimeout) {
+    programarReinicioEscaneo();
+  }
+}
 
 // Funciones de utilidad
 function mostrarAlerta(mensaje, tipo) {
@@ -511,46 +565,10 @@ async function cargarRegistros() {
     const data = await response.json();
 
     if (data.success) {
-      registrosTableBody.innerHTML = '';
-      data.data.forEach(registro => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-              <td>${registro.matricula}</td>
-              <td>${registro.nombres} ${registro.apellidos}</td>
-              <td>${registro.nombre_carrera}</td>
-              <td class="tiempo-columna">
-                ${registro.hora_entrada || 'N/A'}
-                ${registro.admin_entrada ?
-            `<span class="admin-nombre">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;">
-                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                      <circle cx="12" cy="7" r="4"/>
-                    </svg>
-                    ${registro.admin_entrada}
-                  </span>` :
-            ''}
-              </td>
-              <td class="tiempo-columna">
-                ${registro.hora_salida || 'N/A'}
-                ${registro.admin_salida ?
-            `<span class="admin-nombre">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;">
-                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                      <circle cx="12" cy="7" r="4"/>
-                    </svg>
-                    ${registro.admin_salida}
-                  </span>` :
-            ''}
-              </td>
-              <td>
-                <span class="estado-registro ${registro.hora_salida ? 'salida' : 'entrada'}">
-                  ${registro.hora_salida ? 'Completado' : 'En curso'}
-                </span>
-              </td>
-            `;
-        registrosTableBody.appendChild(row);
-      });
+      registrosCache = data.data;
+      renderRegistros(data.data);
     } else {
+      registrosCache = [];
       registrosTableBody.innerHTML = `
             <tr>
               <td colspan="6" style="text-align: center; padding: 20px;">
@@ -569,6 +587,59 @@ async function cargarRegistros() {
           </tr>
         `;
   }
+}
+
+function renderRegistros(registros) {
+  const registrosTableBody = document.getElementById('registrosTableBody');
+  registrosTableBody.innerHTML = '';
+
+  registros.forEach(registro => {
+    const row = document.createElement('tr');
+    row.innerHTML = `
+          <td>${registro.matricula}</td>
+          <td>${registro.nombres} ${registro.apellidos}</td>
+          <td>${registro.nombre_carrera}</td>
+          <td class="tiempo-columna">
+            ${registro.hora_entrada || 'N/A'}
+            ${registro.admin_entrada ?
+        `<span class="admin-nombre">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                  <circle cx="12" cy="7" r="4"/>
+                </svg>
+                ${registro.admin_entrada}
+              </span>` :
+        ''}
+          </td>
+          <td class="tiempo-columna">
+            ${registro.hora_salida || 'N/A'}
+            ${registro.admin_salida ?
+        `<span class="admin-nombre">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                  <circle cx="12" cy="7" r="4"/>
+                </svg>
+                ${registro.admin_salida}
+              </span>` :
+        ''}
+          </td>
+          <td>
+            <span class="estado-registro ${registro.hora_salida ? 'salida' : 'entrada'}">
+              ${registro.hora_salida ? 'Completado' : 'En curso'}
+            </span>
+          </td>
+        `;
+    registrosTableBody.appendChild(row);
+  });
+}
+
+function filtrarRegistros() {
+  const termino = document.getElementById('busqueda-registros').value.toLowerCase();
+  const filtrados = registrosCache.filter(registro =>
+    registro.matricula.toLowerCase().includes(termino) ||
+    `${registro.nombres} ${registro.apellidos}`.toLowerCase().includes(termino)
+  );
+  renderRegistros(filtrados);
 }
 
 // Funciones de sesión
@@ -730,6 +801,13 @@ function cargarDatosPersona(persona) {
   document.getElementById('editar-curp').value = persona.curp;
   document.getElementById('editar-tipo-persona').value = persona.tipo_persona;
   document.getElementById('editar-estado').value = persona.estado;
+  document.getElementById('editar-notas').value = persona.notas || '';
+
+  const editarQrCaduca = document.getElementById('editar-qr-caduca');
+  const editarQrExpiracion = document.getElementById('editar-qr-expiracion');
+  editarQrCaduca.checked = Boolean(persona.qr_caduca);
+  editarQrExpiracion.value = persona.qr_expiracion ? new Date(persona.qr_expiracion).toISOString().slice(0, 16) : '';
+  toggleExpiracionEdicion();
 
   // Manejar campo de carrera
   const carreraGroup = document.getElementById('editar-carrera-group');
@@ -787,6 +865,7 @@ function cancelarEdicion() {
   document.getElementById('editar-form-container').style.display = 'none';
   document.getElementById('buscar-matricula').value = '';
   document.getElementById('foto-actual-container').style.display = 'none';
+  document.getElementById('editar-qr-expiracion').style.display = 'none';
 }
 
 // Manejar cambio de tipo de persona en formulario de edición
@@ -839,6 +918,9 @@ document.getElementById('editar-form').addEventListener('submit', async function
   const tipo_persona = document.getElementById('editar-tipo-persona').value;
   const id_carrera = document.getElementById('editar-id-carrera').value;
   const estado = document.getElementById('editar-estado').value;
+  const notas = document.getElementById('editar-notas').value;
+  const qr_caduca = document.getElementById('editar-qr-caduca').checked;
+  const qr_expiracion = document.getElementById('editar-qr-expiracion').value;
   const foto_perfil = document.getElementById('editar-foto-perfil').files[0];
 
   // Validaciones
@@ -857,6 +939,11 @@ document.getElementById('editar-form').addEventListener('submit', async function
     return;
   }
 
+  if (qr_caduca && !qr_expiracion) {
+    mostrarAlerta('Debe seleccionar la fecha de caducidad del QR', 'error');
+    return;
+  }
+
   // Enviar al servidor
   const formData = new FormData();
   formData.append('matricula_original', matriculaOriginal);
@@ -867,6 +954,9 @@ document.getElementById('editar-form').addEventListener('submit', async function
   formData.append('tipo_persona', tipo_persona);
   formData.append('id_carrera', id_carrera || '');
   formData.append('estado', estado);
+  formData.append('notas', notas);
+  formData.append('qr_caduca', qr_caduca);
+  formData.append('qr_expiracion', qr_caduca ? qr_expiracion : '');
 
   if (foto_perfil) {
     formData.append('foto_perfil', foto_perfil);
@@ -897,14 +987,19 @@ document.getElementById('editar-form').addEventListener('submit', async function
 });
 
 // Inicialización
-document.addEventListener('DOMContentLoaded', () => {
-  if (!verificarSesionAdmin()) return;
+  document.addEventListener('DOMContentLoaded', () => {
+    if (!verificarSesionAdmin()) return;
 
-  // Cargar carreras al inicio
-  cargarCarreras();
+    // Cargar carreras al inicio
+    cargarCarreras();
 
-  // Inicializar scanner solo si estamos en el tab del scanner
-  if (document.getElementById('scanner-tab').classList.contains('active')) {
-    inicializarScanner();
-  }
+    const scanDelayInput = document.getElementById('scan-delay');
+    if (scanDelayInput) {
+      scanCooldownMs = parseInt(scanDelayInput.value, 10) || scanCooldownMs;
+    }
+
+    // Inicializar scanner solo si estamos en el tab del scanner
+    if (document.getElementById('scanner-tab').classList.contains('active')) {
+      inicializarScanner();
+    }
 });

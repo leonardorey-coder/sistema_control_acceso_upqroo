@@ -59,6 +59,16 @@ export default async function handler(req, res) {
 
         const persona = personas[0];
 
+        // Placeholder de asistencias potenciales para estudiantes (pendiente integrar con horarios reales)
+        persona.asistencias_potenciales = [];
+        if (persona.tipo_persona === 'estudiante') {
+            persona.asistencias_potenciales.push({
+                materia: 'horario pendiente',
+                minutos_estimados: 0,
+                nota: 'TODO: mapear horario y generar graficaciones de asistencias'
+            });
+        }
+
         if (persona.estado === 'inactivo') {
             return res.status(403).json({
                 success: false,
