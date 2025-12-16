@@ -170,6 +170,7 @@ BEGIN
             es_valido := FALSE;
             mensaje := 'Hash anterior no coincide. Esperado: ' || v_hash_anterior_esperado || ', Encontrado: ' || r.hash_anterior;
             RETURN NEXT;
+            CONTINUE;
         END IF;
         
         -- Verificar que el hash del registro sea correcto
@@ -209,6 +210,9 @@ DECLARE
     v_hash_anterior VARCHAR;
     v_hash_nuevo VARCHAR;
 BEGIN
+    -- Bloquear la tabla para prevenir race conditions en el blockchain
+    LOCK TABLE registros_acceso IN EXCLUSIVE MODE;
+    
     -- Obtener último hash
     v_hash_anterior := obtener_ultimo_hash();
     
