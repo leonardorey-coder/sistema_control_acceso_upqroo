@@ -32,14 +32,10 @@ export default async function handler(req, res) {
 
     // Permitir si es cron de Vercel, o si tiene el secret correcto
     if (!isVercelCron && expectedSecret && authHeader !== `Bearer ${expectedSecret}`) {
-        // Si se configuró un secret, verificarlo para llamadas manuales
-        // Si no hay secret configurado, permitir la llamada (para desarrollo)
-        if (expectedSecret) {
-            return res.status(401).json({ 
-                success: false, 
-                message: 'No autorizado' 
-            });
-        }
+        return res.status(401).json({ 
+            success: false, 
+            message: 'No autorizado' 
+        });
     }
 
     try {
@@ -48,7 +44,7 @@ export default async function handler(req, res) {
         // 1. Encuentra registros de ayer sin hora de salida
         // 2. Los marca con hora de salida a las 23:59:59
         // 3. Establece salida_automatica = true
-        // 4. Genera el hash blockchain correspondiente
+        // Nota: No modifica hashes blockchain ya que son registros de solo salida
         await pool.execute(`CALL marcar_salidas_automaticas()`);
 
         // Obtener cuántos registros fueron actualizados
