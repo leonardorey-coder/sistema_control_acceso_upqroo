@@ -26,7 +26,7 @@ export default async function handler(req, res) {
 
     // Verificar autorización para llamadas manuales (opcional)
     // Los cron jobs de Vercel incluyen un header especial
-    const isVercelCron = req.headers['x-vercel-cron'] === 'true';
+    const isVercelCron = req.headers['x-vercel-cron'] === '1';
     const authHeader = req.headers['authorization'];
     const expectedSecret = process.env.CRON_SECRET;
 
