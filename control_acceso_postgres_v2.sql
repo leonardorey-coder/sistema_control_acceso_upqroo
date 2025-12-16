@@ -152,7 +152,7 @@ $$ LANGUAGE plpgsql;
 
 -- Función para verificar integridad de la cadena
 CREATE OR REPLACE FUNCTION verificar_integridad_cadena() 
-RETURNS TABLE(id_registro INT, es_valido BOOLEAN, mensaje TEXT) AS $$
+RETURNS TABLE(id_registro INT, matricula VARCHAR, hora_entrada TIMESTAMP, es_valido BOOLEAN, mensaje TEXT) AS $$
 DECLARE
     r RECORD;
     v_hash_calculado VARCHAR;
@@ -167,6 +167,8 @@ BEGIN
         -- Verificar que el hash anterior coincida con el esperado
         IF r.hash_anterior != v_hash_anterior_esperado THEN
             id_registro := r.id_registro;
+            matricula := r.matricula;
+            hora_entrada := r.hora_entrada;
             es_valido := FALSE;
             mensaje := 'Hash anterior no coincide. Esperado: ' || v_hash_anterior_esperado || ', Encontrado: ' || r.hash_anterior;
             RETURN NEXT;
@@ -178,11 +180,15 @@ BEGIN
         
         IF r.hash_registro != v_hash_calculado THEN
             id_registro := r.id_registro;
+            matricula := r.matricula;
+            hora_entrada := r.hora_entrada;
             es_valido := FALSE;
             mensaje := 'Hash de registro no coincide. El registro pudo haber sido alterado.';
             RETURN NEXT;
         ELSE
             id_registro := r.id_registro;
+            matricula := r.matricula;
+            hora_entrada := r.hora_entrada;
             es_valido := TRUE;
             mensaje := 'Registro válido';
             RETURN NEXT;
@@ -209,6 +215,7 @@ DECLARE
     v_id_registro INT;
     v_hash_anterior VARCHAR;
     v_hash_nuevo VARCHAR;
+    v_hora_entrada TIMESTAMP;
 BEGIN
     -- Bloquear la tabla para prevenir race conditions en el blockchain
     LOCK TABLE registros_acceso IN EXCLUSIVE MODE;
@@ -216,13 +223,13 @@ BEGIN
     -- Obtener último hash
     v_hash_anterior := obtener_ultimo_hash();
     
-    -- Insertar registro
+    -- Insertar registro y capturar hora_entrada
     INSERT INTO registros_acceso (matricula, hora_entrada, id_admin_entrada, notas, hash_anterior)
     VALUES (p_matricula, NOW(), p_id_admin, p_notas, v_hash_anterior)
-    RETURNING id_registro INTO v_id_registro;
+    RETURNING id_registro, hora_entrada INTO v_id_registro, v_hora_entrada;
     
-    -- Generar y actualizar hash del nuevo registro
-    v_hash_nuevo := generar_hash_registro(v_id_registro, p_matricula, NOW(), v_hash_anterior);
+    -- Generar y actualizar hash del nuevo registro usando la misma hora_entrada
+    v_hash_nuevo := generar_hash_registro(v_id_registro, p_matricula, v_hora_entrada, v_hash_anterior);
     
     UPDATE registros_acceso 
     SET hash_registro = v_hash_nuevo
