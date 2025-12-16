@@ -11,6 +11,14 @@ async function obtenerIdAdmin(token) {
     return rows[0].id;
 }
 
+// Verificar si el QR ha caducado
+function verificarCaducidadQR(fecha_caducidad_qr) {
+    if (!fecha_caducidad_qr) return false; // No tiene fecha de caducidad
+    const ahora = new Date();
+    const fechaCaducidad = new Date(fecha_caducidad_qr);
+    return ahora > fechaCaducidad;
+}
+
 function sanitizeOutput(persona) {
     // Handle BLOB/Buffer for foto_perfil
     if (persona.foto_perfil) {
@@ -67,6 +75,15 @@ export default async function handler(req, res) {
             });
         }
 
+        // Verificar si el QR ha caducado
+        if (verificarCaducidadQR(persona.fecha_caducidad_qr)) {
+            return res.status(403).json({
+                success: false,
+                message: 'El código QR ha caducado. Contacte al administrador.',
+                data: sanitizeOutput(persona)
+            });
+        }
+
         const [checks] = await pool.execute(`
       SELECT id_registro, hora_entrada 
       FROM registros_acceso 
@@ -77,18 +94,30 @@ export default async function handler(req, res) {
 
         let procedureName, tipoRegistro;
         if (checks.length > 0) {
-            procedureName = 'registrar_salida';
+            // Usar procedimiento v2 con blockchain
+            procedureName = 'registrar_salida_v2';
             tipoRegistro = 'salida';
             persona.tipo_registro = 'salida';
         } else {
-            procedureName = 'registrar_entrada';
+            // Usar procedimiento v2 con blockchain
+            procedureName = 'registrar_entrada_v2';
             tipoRegistro = 'entrada';
             persona.tipo_registro = 'entrada';
         }
 
-        // Call stored procedure
+        // Call stored procedure (v2 con blockchain)
         // Note: pg uses CALL for procedures
         await pool.execute(`CALL ${procedureName}($1, $2)`, [matricula, idAdmin]);
+
+        // Si es estudiante y es entrada, registrar asistencias potenciales
+        if (persona.tipo_persona === 'estudiante' && tipoRegistro === 'entrada') {
+            try {
+                await pool.execute(`SELECT registrar_asistencias_potenciales($1)`, [matricula]);
+            } catch (asistError) {
+                console.error('Error al registrar asistencias potenciales:', asistError);
+                // No lanzar error, continuar con el flujo normal
+            }
+        }
 
         // Get latest record details
         const [lastRecords] = await pool.execute(`

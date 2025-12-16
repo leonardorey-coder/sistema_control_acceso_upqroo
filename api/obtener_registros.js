@@ -11,22 +11,39 @@ export default async function handler(req, res) {
     }
 
     try {
-        const [rows] = await pool.query("SELECT * FROM registros_hoy");
-
-        // Format times if needed, or let frontend handle it.
-        // PHP did date('H:i:s'). MySQL returns Date objects or strings depending on driver config.
-        // mysql2 returns Date objects for datetime/timestamp usually.
-        // Let's ensure we return what frontend expects.
-        // The previous PHP code returned "H:i:s". 
-        // We can format it here or in frontend. Frontend expects "HH:MM:SS".
+        // Vista actualizada que incluye tipo_persona y salida_automatica
+        const [rows] = await pool.query(`
+            SELECT 
+                r.matricula,
+                p.nombres,
+                p.apellidos,
+                p.tipo_persona,
+                COALESCE(c.nombre_carrera, 'N/A') as nombre_carrera,
+                r.hora_entrada,
+                r.hora_salida,
+                r.salida_automatica,
+                r.notas,
+                a1.nombre as admin_entrada,
+                a2.nombre as admin_salida
+            FROM registros_acceso r
+            JOIN personas p ON r.matricula = p.matricula
+            LEFT JOIN carreras c ON p.id_carrera = c.id_carrera
+            LEFT JOIN administradores a1 ON r.id_admin_entrada = a1.id
+            LEFT JOIN administradores a2 ON r.id_admin_salida = a2.id
+            WHERE DATE(r.hora_entrada) = CURRENT_DATE
+            ORDER BY r.hora_entrada DESC
+        `);
 
         const registros = rows.map(row => ({
             matricula: row.matricula,
             nombres: row.nombres,
             apellidos: row.apellidos,
+            tipo_persona: row.tipo_persona,
             nombre_carrera: row.nombre_carrera || 'N/A',
             hora_entrada: row.hora_entrada ? new Date(row.hora_entrada).toLocaleTimeString('es-MX', { hour12: false }) : null,
             hora_salida: row.hora_salida ? new Date(row.hora_salida).toLocaleTimeString('es-MX', { hour12: false }) : null,
+            salida_automatica: row.salida_automatica || false,
+            notas: row.notas,
             admin_entrada: row.admin_entrada,
             admin_salida: row.admin_salida
         }));

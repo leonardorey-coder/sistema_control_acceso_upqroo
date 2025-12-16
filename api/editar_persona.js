@@ -37,9 +37,22 @@ export default async function handler(req, res) {
         const tipopersona = fields.tipo_persona?.[0];
         const estado = fields.estado?.[0];
         const idCarrera = fields.id_carrera?.[0] ? parseInt(fields.id_carrera[0]) : null;
+        const notas = fields.notas?.[0] || null;
+        let fecha_caducidad = fields.fecha_caducidad?.[0] || null;
 
         if (!matriculaOriginal || !matricula || !nombres || !apellidos || !curp || !tipopersona || !estado) {
             throw new Error('Faltan datos requeridos');
+        }
+
+        // Validar fecha de caducidad si se proporciona
+        if (fecha_caducidad) {
+            const fechaCaducidadDate = new Date(fecha_caducidad);
+            if (isNaN(fechaCaducidadDate.getTime())) {
+                throw new Error('Fecha de caducidad inválida');
+            }
+            if (fechaCaducidadDate <= new Date()) {
+                throw new Error('La fecha de caducidad debe ser una fecha futura');
+            }
         }
 
         if (!/^\d{9}$/.test(matricula)) throw new Error('La matrícula debe tener exactamente 9 dígitos');
@@ -80,15 +93,17 @@ export default async function handler(req, res) {
         if (updateFoto) {
             sql = `UPDATE personas SET 
                matricula = $1, nombres = $2, apellidos = $3, curp = $4, 
-               tipo_persona = $5, id_carrera = $6, estado = $7, foto_perfil = $8 
-               WHERE matricula = $9`;
-            params = [matricula, nombres, apellidos, curp, tipopersona, idCarrera, estado, fotoPerfil, matriculaOriginal];
+               tipo_persona = $5, id_carrera = $6, estado = $7, foto_perfil = $8,
+               notas = $9, fecha_caducidad_qr = $10
+               WHERE matricula = $11`;
+            params = [matricula, nombres, apellidos, curp, tipopersona, idCarrera, estado, fotoPerfil, notas, fecha_caducidad, matriculaOriginal];
         } else {
             sql = `UPDATE personas SET 
                matricula = $1, nombres = $2, apellidos = $3, curp = $4, 
-               tipo_persona = $5, id_carrera = $6, estado = $7 
-               WHERE matricula = $8`;
-            params = [matricula, nombres, apellidos, curp, tipopersona, idCarrera, estado, matriculaOriginal];
+               tipo_persona = $5, id_carrera = $6, estado = $7,
+               notas = $8, fecha_caducidad_qr = $9
+               WHERE matricula = $10`;
+            params = [matricula, nombres, apellidos, curp, tipopersona, idCarrera, estado, notas, fecha_caducidad, matriculaOriginal];
         }
 
         await pool.execute(sql, params);

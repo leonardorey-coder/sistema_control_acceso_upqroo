@@ -1,5 +1,8 @@
 let html5QrCode = null;
 let isScanning = true;
+let autoScanTimeout = null;
+let autoScanDelay = 3000; // Tiempo por defecto en milisegundos (3 segundos)
+let autoScanEnabled = true; // Auto-escaneo habilitado por defecto
 
 function verificarSesionAdmin() {
   const token = localStorage.getItem('adminToken');
@@ -151,6 +154,95 @@ async function onScanSuccess(decodedText) {
     mostrarAlerta(error.message || 'Error al procesar el código QR', 'error');
     reproducirSonido('error');
   }
+
+  // Auto-escaneo después del tiempo configurado
+  if (autoScanEnabled && autoScanDelay > 0) {
+    iniciarAutoScan();
+  }
+}
+
+// Función para iniciar cuenta regresiva de auto-escaneo
+function iniciarAutoScan() {
+  // Limpiar timeout anterior si existe
+  if (autoScanTimeout) {
+    clearTimeout(autoScanTimeout);
+  }
+
+  // Mostrar contador en el botón
+  const continueButton = document.getElementById('continueButton');
+  let secondsLeft = Math.ceil(autoScanDelay / 1000);
+  
+  const updateButtonText = () => {
+    if (continueButton && continueButton.style.display !== 'none') {
+      continueButton.innerHTML = `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;">
+          <circle cx="12" cy="12" r="10"/>
+          <polyline points="12 6 12 12 16 14"/>
+        </svg>
+        Escaneando en ${secondsLeft}s... (o presione para continuar ahora)
+      `;
+    }
+  };
+
+  updateButtonText();
+  
+  const countdownInterval = setInterval(() => {
+    secondsLeft--;
+    if (secondsLeft > 0) {
+      updateButtonText();
+    } else {
+      clearInterval(countdownInterval);
+    }
+  }, 1000);
+
+  autoScanTimeout = setTimeout(() => {
+    clearInterval(countdownInterval);
+    continuarEscaneando();
+  }, autoScanDelay);
+
+  // Guardar referencia al interval para limpiarlo si se presiona el botón
+  continueButton.countdownInterval = countdownInterval;
+}
+
+// Función para continuar escaneando
+function continuarEscaneando() {
+  if (autoScanTimeout) {
+    clearTimeout(autoScanTimeout);
+    autoScanTimeout = null;
+  }
+  
+  const continueButton = document.getElementById('continueButton');
+  if (continueButton.countdownInterval) {
+    clearInterval(continueButton.countdownInterval);
+  }
+  
+  isScanning = true;
+  html5QrCode.resume();
+  document.getElementById('continueButton').style.display = 'none';
+  document.getElementById('result').innerHTML = 'Esperando escanear código QR...';
+}
+
+// Función para actualizar el tiempo de auto-escaneo
+function actualizarTiempoAutoScan(nuevoTiempo) {
+  autoScanDelay = nuevoTiempo;
+  localStorage.setItem('autoScanDelay', nuevoTiempo);
+  
+  const segundos = nuevoTiempo / 1000;
+  mostrarAlerta(`Tiempo de auto-escaneo actualizado a ${segundos} segundos`, 'success');
+}
+
+// Función para toggle de auto-escaneo
+function toggleAutoScan() {
+  autoScanEnabled = !autoScanEnabled;
+  localStorage.setItem('autoScanEnabled', autoScanEnabled);
+  
+  const toggleBtn = document.getElementById('autoScanToggle');
+  if (toggleBtn) {
+    toggleBtn.textContent = autoScanEnabled ? 'Auto-escaneo: ON' : 'Auto-escaneo: OFF';
+    toggleBtn.classList.toggle('btn-active', autoScanEnabled);
+  }
+  
+  mostrarAlerta(`Auto-escaneo ${autoScanEnabled ? 'activado' : 'desactivado'}`, 'info');
 }
 
 function onScanFailure(error) {
@@ -158,10 +250,7 @@ function onScanFailure(error) {
 }
 
 document.getElementById('continueButton').addEventListener('click', () => {
-  isScanning = true;
-  html5QrCode.resume();
-  document.getElementById('continueButton').style.display = 'none';
-  document.getElementById('result').innerHTML = 'Esperando escanear código QR...';
+  continuarEscaneando();
 });
 
 function mostrarAlerta(mensaje, tipo) {
@@ -229,7 +318,34 @@ function reproducirSonido(tipo) {
   sonido.play().catch(error => console.log('Error al reproducir sonido:', error));
 }
 
+// Cargar configuración guardada
+function cargarConfiguracion() {
+  const savedDelay = localStorage.getItem('autoScanDelay');
+  const savedEnabled = localStorage.getItem('autoScanEnabled');
+  
+  if (savedDelay !== null) {
+    autoScanDelay = parseInt(savedDelay, 10);
+  }
+  
+  if (savedEnabled !== null) {
+    autoScanEnabled = savedEnabled === 'true';
+  }
+  
+  // Actualizar UI de configuración si existe
+  const delayInput = document.getElementById('autoScanDelayInput');
+  if (delayInput) {
+    delayInput.value = autoScanDelay / 1000;
+  }
+  
+  const toggleBtn = document.getElementById('autoScanToggle');
+  if (toggleBtn) {
+    toggleBtn.textContent = autoScanEnabled ? 'Auto-escaneo: ON' : 'Auto-escaneo: OFF';
+    toggleBtn.classList.toggle('btn-active', autoScanEnabled);
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   if (!verificarSesionAdmin()) return;
+  cargarConfiguracion();
   inicializarScanner();
 });

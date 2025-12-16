@@ -1,6 +1,7 @@
 
 // Variables globales
 let currentQRCode = null;
+let registrosData = []; // Almacenar registros para filtrado
 
 // Sistema de tabs
 function switchTab(tabName) {
@@ -34,6 +35,76 @@ function switchTab(tabName) {
   if (tabName === 'editar') {
     cargarCarrerasEditar();
   }
+}
+
+// Toggle para fecha de caducidad en formulario de registro
+function toggleFechaCaducidad() {
+  const switchEl = document.getElementById('fecha_caducidad_switch');
+  const fechaGroup = document.getElementById('fecha-caducidad-group');
+  const fechaInput = document.getElementById('fecha_caducidad');
+
+  if (switchEl.checked) {
+    fechaGroup.classList.remove('hidden-field');
+    // Establecer fecha mínima como ahora
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    fechaInput.min = now.toISOString().slice(0, 16);
+  } else {
+    fechaGroup.classList.add('hidden-field');
+    fechaInput.value = '';
+  }
+}
+
+// Toggle para fecha de caducidad en formulario de edición
+function toggleFechaCaducidadEditar() {
+  const switchEl = document.getElementById('editar-fecha-caducidad-switch');
+  const fechaGroup = document.getElementById('editar-fecha-caducidad-group');
+  const fechaInput = document.getElementById('editar-fecha-caducidad');
+
+  if (switchEl.checked) {
+    fechaGroup.classList.remove('hidden-field');
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    fechaInput.min = now.toISOString().slice(0, 16);
+  } else {
+    fechaGroup.classList.add('hidden-field');
+    fechaInput.value = '';
+  }
+}
+
+// Filtrar registros en la tabla
+function filtrarRegistros() {
+  const searchTerm = document.getElementById('buscar-registro').value.toLowerCase().trim();
+  const tbody = document.getElementById('registrosTableBody');
+  const filtradosSpan = document.getElementById('registros-filtrados');
+  const filtradosCount = document.getElementById('filtrados-count');
+
+  if (!searchTerm) {
+    // Mostrar todos los registros
+    renderizarRegistros(registrosData);
+    filtradosSpan.classList.add('hidden');
+    return;
+  }
+
+  // Filtrar registros
+  const filtrados = registrosData.filter(registro => {
+    const matricula = registro.matricula?.toLowerCase() || '';
+    const nombres = registro.nombres?.toLowerCase() || '';
+    const apellidos = registro.apellidos?.toLowerCase() || '';
+    const carrera = registro.nombre_carrera?.toLowerCase() || '';
+    const tipo = registro.tipo_persona?.toLowerCase() || '';
+
+    return matricula.includes(searchTerm) ||
+           nombres.includes(searchTerm) ||
+           apellidos.includes(searchTerm) ||
+           carrera.includes(searchTerm) ||
+           tipo.includes(searchTerm) ||
+           `${nombres} ${apellidos}`.includes(searchTerm);
+  });
+
+  renderizarRegistros(filtrados);
+  filtradosSpan.classList.remove('hidden');
+  filtradosCount.textContent = filtrados.length;
 }
 
 // Generador de QR
@@ -86,6 +157,9 @@ document.getElementById('qr-form').addEventListener('submit', async function (e)
   const tipo_persona = document.getElementById('tipo_persona').value;
   const id_carrera = document.getElementById('id_carrera').value;
   const foto_perfil = document.getElementById('foto_perfil').files[0];
+  const notas = document.getElementById('notas').value;
+  const fechaCaducidadSwitch = document.getElementById('fecha_caducidad_switch');
+  const fecha_caducidad = fechaCaducidadSwitch.checked ? document.getElementById('fecha_caducidad').value : null;
 
   if (!/^[A-Z]{4}[0-9]{6}[HM][A-Z]{5}[0-9]{2}$/.test(curp)) {
     mostrarAlerta('El CURP no tiene el formato correcto', 'error');
@@ -97,6 +171,15 @@ document.getElementById('qr-form').addEventListener('submit', async function (e)
     return;
   }
 
+  // Validar fecha de caducidad si está activa
+  if (fechaCaducidadSwitch.checked && fecha_caducidad) {
+    const fechaCaducidadDate = new Date(fecha_caducidad);
+    if (fechaCaducidadDate <= new Date()) {
+      mostrarAlerta('La fecha de caducidad debe ser una fecha futura', 'error');
+      return;
+    }
+  }
+
   // Enviar al servidor
   const formData = new FormData();
   formData.append('matricula', matricula);
@@ -105,6 +188,10 @@ document.getElementById('qr-form').addEventListener('submit', async function (e)
   formData.append('curp', curp);
   formData.append('tipo_persona', tipo_persona);
   formData.append('id_carrera', id_carrera || '');
+  formData.append('notas', notas || '');
+  if (fecha_caducidad) {
+    formData.append('fecha_caducidad', fecha_caducidad);
+  }
 
   if (foto_perfil) {
     formData.append('foto_perfil', foto_perfil);
@@ -262,6 +349,8 @@ function limpiarFormulario() {
   document.getElementById('qr-form').reset();
   document.getElementById('qr-result').classList.remove('show');
   document.getElementById('carrera-group').style.display = 'none';
+  document.getElementById('fecha-caducidad-group').classList.add('hidden-field');
+  document.getElementById('fecha_caducidad_switch').checked = false;
   currentQRCode = null;
 }
 
@@ -334,55 +423,27 @@ function reproducirSonido(tipo) {
 // Función para cargar registros
 async function cargarRegistros() {
   const registrosTableBody = document.getElementById('registrosTableBody');
+  const registrosCount = document.getElementById('registros-count');
+  const searchInput = document.getElementById('buscar-registro');
+
+  // Limpiar búsqueda
+  if (searchInput) searchInput.value = '';
+  document.getElementById('registros-filtrados')?.classList.add('hidden');
 
   try {
     const response = await fetch('/api/obtener_registros');
     const data = await response.json();
 
     if (data.success) {
-      registrosTableBody.innerHTML = '';
-      data.data.forEach(registro => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-              <td>${registro.matricula}</td>
-              <td>${registro.nombres} ${registro.apellidos}</td>
-              <td>${registro.nombre_carrera}</td>
-              <td class="tiempo-columna">
-                ${registro.hora_entrada || 'N/A'}
-                ${registro.admin_entrada ?
-            `<span class="admin-nombre">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;">
-                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                      <circle cx="12" cy="7" r="4"/>
-                    </svg>
-                    ${registro.admin_entrada}
-                  </span>` :
-            ''}
-              </td>
-              <td class="tiempo-columna">
-                ${registro.hora_salida || 'N/A'}
-                ${registro.admin_salida ?
-            `<span class="admin-nombre">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;">
-                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                      <circle cx="12" cy="7" r="4"/>
-                    </svg>
-                    ${registro.admin_salida}
-                  </span>` :
-            ''}
-              </td>
-              <td>
-                <span class="estado-registro ${registro.hora_salida ? 'salida' : 'entrada'}">
-                  ${registro.hora_salida ? 'Completado' : 'En curso'}
-                </span>
-              </td>
-            `;
-        registrosTableBody.appendChild(row);
-      });
+      registrosData = data.data; // Guardar para filtrado
+      registrosCount.textContent = `${registrosData.length} registros`;
+      renderizarRegistros(registrosData);
     } else {
+      registrosData = [];
+      registrosCount.textContent = '0 registros';
       registrosTableBody.innerHTML = `
             <tr>
-              <td colspan="6" style="text-align: center; padding: 20px;">
+              <td colspan="7" style="text-align: center; padding: 20px;">
                 No hay registros para el día de hoy
               </td>
             </tr>
@@ -390,14 +451,90 @@ async function cargarRegistros() {
     }
   } catch (error) {
     console.error('Error al obtener los registros:', error);
+    registrosData = [];
     registrosTableBody.innerHTML = `
           <tr>
-            <td colspan="6" style="text-align: center; padding: 20px; color: #dc3545;">
+            <td colspan="7" style="text-align: center; padding: 20px; color: #dc3545;">
               Error al cargar los registros
             </td>
           </tr>
         `;
   }
+}
+
+// Función para renderizar registros en la tabla
+function renderizarRegistros(registros) {
+  const registrosTableBody = document.getElementById('registrosTableBody');
+  registrosTableBody.innerHTML = '';
+
+  if (registros.length === 0) {
+    registrosTableBody.innerHTML = `
+      <tr>
+        <td colspan="7" style="text-align: center; padding: 20px;">
+          No se encontraron registros
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  registros.forEach(registro => {
+    const row = document.createElement('tr');
+    const tipoPersonaLabel = {
+      'estudiante': 'Estudiante',
+      'docente': 'Docente',
+      'administrativo': 'Admin.',
+      'invitado': 'Invitado',
+      'otro': 'Otro'
+    };
+
+    // Determinar el estado del registro
+    let estadoHTML = '';
+    if (registro.salida_automatica) {
+      estadoHTML = `<span class="estado-registro salida-auto">Salida Auto.</span>`;
+    } else if (registro.hora_salida) {
+      estadoHTML = `<span class="estado-registro salida">Completado</span>`;
+    } else {
+      estadoHTML = `<span class="estado-registro entrada">En curso</span>`;
+    }
+
+    row.innerHTML = `
+      <td>${registro.matricula}</td>
+      <td>${registro.nombres} ${registro.apellidos}</td>
+      <td>
+        <span class="badge badge-${registro.tipo_persona || 'otro'}">
+          ${tipoPersonaLabel[registro.tipo_persona] || 'Otro'}
+        </span>
+      </td>
+      <td>${registro.nombre_carrera || 'N/A'}</td>
+      <td class="tiempo-columna">
+        ${registro.hora_entrada || 'N/A'}
+        ${registro.admin_entrada ?
+        `<span class="admin-nombre">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+            ${registro.admin_entrada}
+          </span>` :
+        ''}
+      </td>
+      <td class="tiempo-columna">
+        ${registro.hora_salida || 'N/A'}
+        ${registro.admin_salida ?
+        `<span class="admin-nombre">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+            ${registro.admin_salida}
+          </span>` :
+        ''}
+      </td>
+      <td>${estadoHTML}</td>
+    `;
+    registrosTableBody.appendChild(row);
+  });
 }
 
 // Funciones de sesión
@@ -577,6 +714,27 @@ function cargarDatosPersona(persona) {
     carreraSelect.required = false;
   }
 
+  // Cargar notas
+  document.getElementById('editar-notas').value = persona.notas || '';
+
+  // Manejar fecha de caducidad
+  const fechaCaducidadSwitch = document.getElementById('editar-fecha-caducidad-switch');
+  const fechaCaducidadGroup = document.getElementById('editar-fecha-caducidad-group');
+  const fechaCaducidadInput = document.getElementById('editar-fecha-caducidad');
+
+  if (persona.fecha_caducidad_qr) {
+    fechaCaducidadSwitch.checked = true;
+    fechaCaducidadGroup.classList.remove('hidden-field');
+    // Convertir a formato datetime-local
+    const fecha = new Date(persona.fecha_caducidad_qr);
+    fecha.setMinutes(fecha.getMinutes() - fecha.getTimezoneOffset());
+    fechaCaducidadInput.value = fecha.toISOString().slice(0, 16);
+  } else {
+    fechaCaducidadSwitch.checked = false;
+    fechaCaducidadGroup.classList.add('hidden-field');
+    fechaCaducidadInput.value = '';
+  }
+
   // Mostrar foto actual si existe
   if (persona.foto_perfil) {
     document.getElementById('foto-actual-container').style.display = 'block';
@@ -669,6 +827,9 @@ document.getElementById('editar-form').addEventListener('submit', async function
   const id_carrera = document.getElementById('editar-id-carrera').value;
   const estado = document.getElementById('editar-estado').value;
   const foto_perfil = document.getElementById('editar-foto-perfil').files[0];
+  const notas = document.getElementById('editar-notas').value;
+  const fechaCaducidadSwitch = document.getElementById('editar-fecha-caducidad-switch');
+  const fecha_caducidad = fechaCaducidadSwitch.checked ? document.getElementById('editar-fecha-caducidad').value : null;
 
   // Validaciones
   if (!/^\d{9}$/.test(matricula)) {
@@ -696,6 +857,12 @@ document.getElementById('editar-form').addEventListener('submit', async function
   formData.append('tipo_persona', tipo_persona);
   formData.append('id_carrera', id_carrera || '');
   formData.append('estado', estado);
+  formData.append('notas', notas || '');
+  if (fecha_caducidad) {
+    formData.append('fecha_caducidad', fecha_caducidad);
+  } else {
+    formData.append('fecha_caducidad', ''); // Limpiar fecha si se desactiva
+  }
 
   if (foto_perfil) {
     formData.append('foto_perfil', foto_perfil);
