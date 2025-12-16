@@ -45,10 +45,13 @@ function toggleFechaCaducidad() {
 
   if (switchEl.checked) {
     fechaGroup.classList.remove('hidden-field');
-    // Establecer fecha mínima como ahora
     const now = new Date();
-    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-    fechaInput.min = now.toISOString().slice(0, 16);
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    fechaInput.min = `${year}-${month}-${day}T${hours}:${minutes}`;
   } else {
     fechaGroup.classList.add('hidden-field');
     fechaInput.value = '';
@@ -64,8 +67,12 @@ function toggleFechaCaducidadEditar() {
   if (switchEl.checked) {
     fechaGroup.classList.remove('hidden-field');
     const now = new Date();
-    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-    fechaInput.min = now.toISOString().slice(0, 16);
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    fechaInput.min = `${year}-${month}-${day}T${hours}:${minutes}`;
   } else {
     fechaGroup.classList.add('hidden-field');
     fechaInput.value = '';
@@ -725,10 +732,13 @@ function cargarDatosPersona(persona) {
   if (persona.fecha_caducidad_qr) {
     fechaCaducidadSwitch.checked = true;
     fechaCaducidadGroup.classList.remove('hidden-field');
-    // Convertir a formato datetime-local
     const fecha = new Date(persona.fecha_caducidad_qr);
-    fecha.setMinutes(fecha.getMinutes() - fecha.getTimezoneOffset());
-    fechaCaducidadInput.value = fecha.toISOString().slice(0, 16);
+    const year = fecha.getFullYear();
+    const month = String(fecha.getMonth() + 1).padStart(2, '0');
+    const day = String(fecha.getDate()).padStart(2, '0');
+    const hours = String(fecha.getHours()).padStart(2, '0');
+    const minutes = String(fecha.getMinutes()).padStart(2, '0');
+    fechaCaducidadInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
   } else {
     fechaCaducidadSwitch.checked = false;
     fechaCaducidadGroup.classList.add('hidden-field');

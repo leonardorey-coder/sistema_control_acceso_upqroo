@@ -13,10 +13,10 @@ async function obtenerIdAdmin(token) {
 
 // Verificar si el QR ha caducado
 function verificarCaducidadQR(fecha_caducidad_qr) {
-    if (!fecha_caducidad_qr) return false; // No tiene fecha de caducidad
+    if (!fecha_caducidad_qr) return false;
     const ahora = new Date();
     const fechaCaducidad = new Date(fecha_caducidad_qr);
-    return ahora > fechaCaducidad;
+    return ahora >= fechaCaducidad;
 }
 
 function sanitizeOutput(persona) {
@@ -109,19 +109,9 @@ export default async function handler(req, res) {
         // Note: pg uses CALL for procedures
         await pool.execute(`CALL ${procedureName}($1, $2)`, [matricula, idAdmin]);
 
-        // Si es estudiante y es entrada, registrar asistencias potenciales
-        if (persona.tipo_persona === 'estudiante' && tipoRegistro === 'entrada') {
-            try {
-                await pool.execute(`SELECT registrar_asistencias_potenciales($1)`, [matricula]);
-            } catch (asistError) {
-                console.error('Error al registrar asistencias potenciales:', asistError);
-                // No lanzar error, continuar con el flujo normal
-            }
-        }
-
         // Get latest record details
         const [lastRecords] = await pool.execute(`
-      SELECT r.hora_entrada, r.hora_salida,
+      SELECT r.id_registro, r.hora_entrada, r.hora_salida,
              a1.nombre as nombre_admin_entrada,
              a2.nombre as nombre_admin_salida
       FROM registros_acceso r
@@ -131,6 +121,17 @@ export default async function handler(req, res) {
       ORDER BY r.id_registro DESC
       LIMIT 1
     `, [matricula]);
+
+        // Si es estudiante y es entrada, registrar asistencias potenciales
+        if (persona.tipo_persona === 'estudiante' && tipoRegistro === 'entrada' && lastRecords.length > 0) {
+            try {
+                const idRegistro = lastRecords[0].id_registro;
+                const horaEntrada = lastRecords[0].hora_entrada;
+                await pool.execute(`SELECT registrar_asistencias_potenciales($1, $2, $3)`, [idRegistro, matricula, horaEntrada]);
+            } catch (asistError) {
+                console.error('Error al registrar asistencias potenciales:', asistError);
+            }
+        }
 
         if (lastRecords.length > 0) {
             const u = lastRecords[0];

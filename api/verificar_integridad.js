@@ -34,7 +34,7 @@ export default async function handler(req, res) {
         }
 
         // La función devuelve registros con problemas de integridad
-        const registrosInvalidos = resultado.filter(r => !r.hash_valido);
+        const registrosInvalidos = resultado.filter(r => !r.es_valido);
         const integridadValida = registrosInvalidos.length === 0;
 
         return res.status(200).json({
