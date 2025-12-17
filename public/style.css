@@ -1067,6 +1067,13 @@
       border-bottom: 1px solid #f0f0f0;
     }
 
+    .caducidad-switch-container .ios-switch {
+      display: inline-block;
+      margin-bottom: 0;
+      font-weight: normal;
+      font-size: inherit;
+    }
+
     .mb-2 {
       margin-bottom: 0.5rem;
     }
