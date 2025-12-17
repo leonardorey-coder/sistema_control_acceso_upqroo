@@ -251,7 +251,32 @@
       box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
       margin: 2rem 0;
       width: 100%;
-      max-width: 400px;
+      max-width: 1200px;
+    }
+
+    /* Grid layout para el formulario QR en desktop */
+    #qr-form {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.5rem 1.5rem;
+      align-items: start;
+    }
+
+    /* Campos individuales que van en columnas */
+    #qr-form>.form-group {
+      margin-bottom: 1rem;
+    }
+
+    /* Campos que ocupan todo el ancho - usando selectores de ID */
+    #qr-form>.form-group.full-width,
+    #qr-form>.button-group,
+    #fecha-caducidad-group {
+      grid-column: 1 / -1;
+    }
+
+    /* Ajustar el contenedor del resultado QR */
+    .qr-result-container {
+      grid-column: 1 / -1;
     }
 
     .section-header {
@@ -1638,6 +1663,11 @@
         box-shadow: none;
         margin: 0;
         max-width: 100%;
+      }
+
+      /* En móvil, el formulario QR vuelve a una sola columna */
+      #qr-form {
+        display: block;
       }
 
       .section-header {
