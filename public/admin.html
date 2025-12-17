@@ -239,15 +239,15 @@
 
           <!-- Switch de Fecha de Caducidad de QR -->
           <div class="form-group">
+            <label class="form-label">Fecha de Caducidad del QR</label>
+            <div class="input-helper mb-2">Configure si el código QR tendrá una fecha de expiración</div>
             <div class="caducidad-switch-container">
-              <div class="caducidad-label-container">
-                <label for="fecha_caducidad_switch">Fecha de Caducidad del QR</label>
-                <div class="input-helper mt-1">Active para establecer una fecha límite de validez</div>
-              </div>
+              <span class="switch-label" id="label-sin-caducidad">Sin Caducidad</span>
               <label class="ios-switch">
                 <input type="checkbox" id="fecha_caducidad_switch" onchange="toggleFechaCaducidad()">
                 <span class="slider"></span>
               </label>
+              <span class="switch-label inactive" id="label-con-caducidad">Con Caducidad</span>
             </div>
           </div>
 
@@ -526,15 +526,15 @@
 
             <!-- Switch de Fecha de Caducidad - Edición -->
             <div class="form-group">
+              <label class="form-label">Fecha de Caducidad del QR</label>
+              <div class="input-helper mb-2">Configure si el código QR tendrá una fecha de expiración</div>
               <div class="caducidad-switch-container">
-                <div class="caducidad-label-container">
-                  <label for="editar-fecha-caducidad-switch">Fecha de Caducidad del QR</label>
-                  <div class="input-helper mt-1">Active para establecer una fecha límite</div>
-                </div>
+                <span class="switch-label" id="label-editar-sin-caducidad">Sin Caducidad</span>
                 <label class="ios-switch">
                   <input type="checkbox" id="editar-fecha-caducidad-switch" onchange="toggleFechaCaducidadEditar()">
                   <span class="slider"></span>
                 </label>
+                <span class="switch-label inactive" id="label-editar-con-caducidad">Con Caducidad</span>
               </div>
             </div>
 

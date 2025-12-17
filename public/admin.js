@@ -2,6 +2,7 @@
 // Variables globales
 let currentQRCode = null;
 let registrosData = []; // Almacenar registros para filtrado
+const MODE_SWITCH_CONTAINER = document.querySelector('.mode-switch-container');
 
 // Sistema de tabs
 function switchTab(tabName) {
@@ -42,9 +43,13 @@ function toggleFechaCaducidad() {
   const switchEl = document.getElementById('fecha_caducidad_switch');
   const fechaGroup = document.getElementById('fecha-caducidad-group');
   const fechaInput = document.getElementById('fecha_caducidad');
+  const labelSin = document.getElementById('label-sin-caducidad');
+  const labelCon = document.getElementById('label-con-caducidad');
 
   if (switchEl.checked) {
     fechaGroup.classList.remove('hidden-field');
+    labelSin.classList.add('inactive');
+    labelCon.classList.remove('inactive');
     const now = new Date();
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -55,6 +60,8 @@ function toggleFechaCaducidad() {
   } else {
     fechaGroup.classList.add('hidden-field');
     fechaInput.value = '';
+    labelSin.classList.remove('inactive');
+    labelCon.classList.add('inactive');
   }
 }
 
@@ -63,9 +70,13 @@ function toggleFechaCaducidadEditar() {
   const switchEl = document.getElementById('editar-fecha-caducidad-switch');
   const fechaGroup = document.getElementById('editar-fecha-caducidad-group');
   const fechaInput = document.getElementById('editar-fecha-caducidad');
+  const labelSin = document.getElementById('label-editar-sin-caducidad');
+  const labelCon = document.getElementById('label-editar-con-caducidad');
 
   if (switchEl.checked) {
     fechaGroup.classList.remove('hidden-field');
+    labelSin.classList.add('inactive');
+    labelCon.classList.remove('inactive');
     const now = new Date();
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -76,6 +87,8 @@ function toggleFechaCaducidadEditar() {
   } else {
     fechaGroup.classList.add('hidden-field');
     fechaInput.value = '';
+    labelSin.classList.remove('inactive');
+    labelCon.classList.add('inactive');
   }
 }
 
@@ -658,6 +671,34 @@ function toggleMode() {
   }
 }
 
+MODE_SWITCH_CONTAINER.addEventListener('click', (e)=> {
+  const CHECKBOX_INPUT = document.getElementById('modeSwitch');
+  if (e.target.id === 'label-registro' && e.target.classList.contains('inactive')) {
+    CHECKBOX_INPUT.checked = false;
+    toggleMode();
+  } else if (e.target.id === 'label-qr' && e.target.classList.contains('inactive')) {
+    CHECKBOX_INPUT.checked = true;
+    toggleMode();
+  }
+});
+
+// Event listeners para caducidad switches (formulario de registro)
+document.addEventListener('DOMContentLoaded', () => {
+  const caducidadContainers = document.querySelectorAll('.caducidad-switch-container');
+  
+  caducidadContainers.forEach(container => {
+    container.addEventListener('click', (e) => {
+      if (e.target.classList.contains('switch-label') && e.target.classList.contains('inactive')) {
+        const switchInput = container.querySelector('input[type="checkbox"]');
+        if (switchInput) {
+          switchInput.checked = !switchInput.checked;
+          switchInput.dispatchEvent(new Event('change'));
+        }
+      }
+    });
+  });
+});
+
 // Funciones para editar persona
 async function buscarPersona() {
   const matricula = document.getElementById('buscar-matricula').value.trim();
@@ -728,10 +769,14 @@ function cargarDatosPersona(persona) {
   const fechaCaducidadSwitch = document.getElementById('editar-fecha-caducidad-switch');
   const fechaCaducidadGroup = document.getElementById('editar-fecha-caducidad-group');
   const fechaCaducidadInput = document.getElementById('editar-fecha-caducidad');
+  const labelEditarSin = document.getElementById('label-editar-sin-caducidad');
+  const labelEditarCon = document.getElementById('label-editar-con-caducidad');
 
   if (persona.fecha_caducidad_qr) {
     fechaCaducidadSwitch.checked = true;
     fechaCaducidadGroup.classList.remove('hidden-field');
+    labelEditarSin.classList.add('inactive');
+    labelEditarCon.classList.remove('inactive');
     const fecha = new Date(persona.fecha_caducidad_qr);
     const year = fecha.getFullYear();
     const month = String(fecha.getMonth() + 1).padStart(2, '0');
@@ -743,6 +788,8 @@ function cargarDatosPersona(persona) {
     fechaCaducidadSwitch.checked = false;
     fechaCaducidadGroup.classList.add('hidden-field');
     fechaCaducidadInput.value = '';
+    labelEditarSin.classList.remove('inactive');
+    labelEditarCon.classList.add('inactive');
   }
 
   // Mostrar foto actual si existe
