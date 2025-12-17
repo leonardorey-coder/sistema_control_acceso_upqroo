@@ -30,32 +30,6 @@
           Continuar Escaneando
         </button>
       </div>
-      
-      <!-- Configuración de Auto-escaneo -->
-      <div class="auto-scan-config">
-        <h4>Configuración de Auto-escaneo</h4>
-        <div class="config-row">
-          <label for="autoScanDelayInput">Tiempo de espera (segundos):</label>
-          <div class="config-input-group">
-            <input 
-              type="number" 
-              id="autoScanDelayInput" 
-              min="1" 
-              max="30" 
-              value="3"
-              class="config-input"
-            >
-            <button onclick="actualizarTiempoAutoScan(document.getElementById('autoScanDelayInput').value * 1000)" class="config-btn">
-              Aplicar
-            </button>
-          </div>
-        </div>
-        <div class="config-row">
-          <button id="autoScanToggle" onclick="toggleAutoScan()" class="toggle-btn btn-active">
-            Auto-escaneo: ON
-          </button>
-        </div>
-      </div>
     </div>
   </main>
 

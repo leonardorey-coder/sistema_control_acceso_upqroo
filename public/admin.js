@@ -5,7 +5,7 @@ let registrosData = []; // Almacenar registros para filtrado
 const MODE_SWITCH_CONTAINER = document.querySelector('.mode-switch-container');
 
 // Sistema de tabs
-function switchTab(tabName) {
+function switchTab(tabName, buttonEl) {
   // Ocultar todos los tabs
   document.querySelectorAll('.tab-content').forEach(tab => {
     tab.classList.remove('active');
@@ -20,7 +20,18 @@ function switchTab(tabName) {
   document.getElementById(`${tabName}-tab`).classList.add('active');
 
   // Activar el botón correspondiente
-  event.target.closest('.tab-button').classList.add('active');
+  const targetButton =
+    buttonEl ||
+    (typeof event !== 'undefined' ? event?.target?.closest?.('.tab-button') : null);
+
+  if (targetButton) {
+    targetButton.classList.add('active');
+    try {
+      targetButton.focus({ preventScroll: true });
+    } catch {
+      targetButton.focus();
+    }
+  }
 
   // Cargar registros si es necesario
   if (tabName === 'registros') {
@@ -949,10 +960,69 @@ document.getElementById('editar-form').addEventListener('submit', async function
   }
 });
 
+// Funciones de configuración de auto-escaneo
+function actualizarTiempoAutoScan(nuevoTiempo) {
+  localStorage.setItem('autoScanDelay', nuevoTiempo);
+  const segundos = nuevoTiempo / 1000;
+  mostrarAlerta(`Tiempo de auto-escaneo actualizado a ${segundos} segundos`, 'success');
+}
+
+function toggleAutoScan() {
+  const currentState = localStorage.getItem('autoScanEnabled');
+  const newState = currentState === 'false' ? 'true' : 'false';
+  localStorage.setItem('autoScanEnabled', newState);
+  
+  const toggleBtn = document.getElementById('autoScanToggle');
+  if (toggleBtn) {
+    const isEnabled = newState === 'true';
+    toggleBtn.classList.toggle('active-status', isEnabled);
+    toggleBtn.classList.toggle('inactive-status', !isEnabled);
+    
+    const statusText = toggleBtn.querySelector('.status-text');
+    if (statusText) {
+      statusText.innerHTML = isEnabled 
+        ? 'Auto-escaneo: <strong>Activado</strong>' 
+        : 'Auto-escaneo: <strong>Desactivado</strong>';
+    }
+  }
+  
+  mostrarAlerta(
+    `Auto-escaneo ${newState === 'true' ? 'activado' : 'desactivado'}`, 
+    'info'
+  );
+}
+
+function cargarConfiguracion() {
+  const savedDelay = localStorage.getItem('autoScanDelay');
+  const savedEnabled = localStorage.getItem('autoScanEnabled');
+  
+  const delayInput = document.getElementById('autoScanDelayInput');
+  if (delayInput && savedDelay !== null) {
+    delayInput.value = parseInt(savedDelay, 10) / 1000;
+  }
+  
+  const toggleBtn = document.getElementById('autoScanToggle');
+  if (toggleBtn) {
+    const isEnabled = savedEnabled !== 'false';
+    toggleBtn.classList.toggle('active-status', isEnabled);
+    toggleBtn.classList.toggle('inactive-status', !isEnabled);
+    
+    const statusText = toggleBtn.querySelector('.status-text');
+    if (statusText) {
+      statusText.innerHTML = isEnabled 
+        ? 'Auto-escaneo: <strong>Activado</strong>' 
+        : 'Auto-escaneo: <strong>Desactivado</strong>';
+    }
+  }
+}
+
 // Inicialización
 document.addEventListener('DOMContentLoaded', () => {
   if (!verificarSesionAdmin()) return;
 
   // Cargar carreras al inicio
   cargarCarreras();
+  
+  // Cargar configuración si estamos en la tab de config
+  cargarConfiguracion();
 });
