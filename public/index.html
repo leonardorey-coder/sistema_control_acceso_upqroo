@@ -1,38 +1,146 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Acceso - Escáner QR</title>
+  <title>Acceso - Sistema de Control</title>
   <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
   <link rel="stylesheet" href="utilities.css">
   <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
   <header>
     <div class="header-container">
       <div class="header-left">
         <img src="logo-universidad.png" alt="UPQROO" class="logo">
         <div class="divider"></div>
-        <h1 class="system-title">Escáner de Acceso</h1>
+        <h1 class="system-title">Control de Acceso</h1>
       </div>
     </div>
   </header>
 
+  <!-- Tabs de navegación cliente -->
+  <div class="client-tabs-container">
+    <div class="client-tabs">
+      <button class="client-tab-button active" data-tab="qr-scanner">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="7" height="7" />
+          <rect x="14" y="3" width="7" height="7" />
+          <rect x="3" y="14" width="7" height="7" />
+          <rect x="14" y="14" width="7" height="7" />
+        </svg>
+        <span>Escáner QR</span>
+      </button>
+      <button class="client-tab-button" data-tab="matricula-input">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="4" width="18" height="16" rx="2" />
+          <line x1="7" y1="8" x2="17" y2="8" />
+          <line x1="7" y1="12" x2="13" y2="12" />
+        </svg>
+        <span>Matrícula</span>
+      </button>
+    </div>
+  </div>
+
   <main>
-    <div class="scanner-container">
-      <h2>Escanear Código QR</h2>
-      <p class="instructions">Coloca tu código QR frente a la cámara</p>
-      <div id="reader"></div>
-      <div id="result">Esperando escanear código QR...</div>
-      <div class="scanner-controls">
-        <button id="continueButton" class="control-button" style="display: none;">
-          Continuar Escaneando
+    <!-- Tab: Escáner QR -->
+    <div id="qr-scanner" class="client-tab-content active">
+      <div class="scanner-container">
+        <h2>Escanear Código QR</h2>
+        <p class="instructions">Coloca tu código QR frente a la cámara</p>
+        <div id="reader"></div>
+        <div id="result">Esperando escanear código QR...</div>
+        <div class="scanner-controls">
+          <button id="continueButton" class="control-button" style="display: none;">
+            Continuar Escaneando
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: Entrada por Matrícula -->
+    <div id="matricula-input" class="client-tab-content">
+      <div class="matricula-container">
+        <div class="section-header">
+          <h2>Ingresa tu Matrícula</h2>
+          <p>Usa el teclado o el panel numérico para ingresar tu matrícula</p>
+        </div>
+
+        <!-- Display de matrícula -->
+        <div class="matricula-display-wrapper">
+          <div class="matricula-display">
+            <input type="text" id="matriculaInput" class="matricula-text-input" placeholder="Ej: 21A00000"
+              maxlength="15" autocomplete="off" inputmode="text">
+          </div>
+          <button id="clearMatricula" class="clear-btn" title="Limpiar">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- Teclado numérico (PIN pad) -->
+        <div class="pin-pad">
+          <button class="pin-key" data-key="1">1</button>
+          <button class="pin-key" data-key="2">2</button>
+          <button class="pin-key" data-key="3">3</button>
+          <button class="pin-key" data-key="4">4</button>
+          <button class="pin-key" data-key="5">5</button>
+          <button class="pin-key" data-key="6">6</button>
+          <button class="pin-key" data-key="7">7</button>
+          <button class="pin-key" data-key="8">8</button>
+          <button class="pin-key" data-key="9">9</button>
+          <button class="pin-key pin-key-action" data-key="backspace" title="Borrar">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z" />
+              <line x1="18" y1="9" x2="12" y2="15" />
+              <line x1="12" y1="9" x2="18" y2="15" />
+            </svg>
+          </button>
+          <button class="pin-key" data-key="0">0</button>
+          <button class="pin-key pin-key-confirm" data-key="enter" title="Verificar">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- Letras comunes para matrículas -->
+        <div class="letter-pad">
+          <button class="letter-key" data-key="A">A</button>
+          <button class="letter-key" data-key="B">B</button>
+          <button class="letter-key" data-key="I">I</button>
+          <button class="letter-key" data-key="M">M</button>
+          <button class="letter-key" data-key="P">P</button>
+        </div>
+
+        <!-- Botón de verificar -->
+        <button id="verificarMatricula" class="btn btn-primary verificar-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+            <polyline points="22 4 12 14.01 9 11.01" />
+          </svg>
+          Verificar Acceso
         </button>
+
+        <!-- Área de resultado -->
+        <div id="matriculaResult" class="matricula-result">
+          <div class="matricula-result-placeholder">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
+            <p>Ingresa tu matrícula para verificar acceso</p>
+          </div>
+        </div>
       </div>
     </div>
   </main>
 
   <script src="client.js"></script>
 </body>
+
 </html>
