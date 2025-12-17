@@ -215,7 +215,7 @@ DECLARE
     v_id_registro INT;
     v_hash_anterior VARCHAR;
     v_hash_nuevo VARCHAR;
-    v_hora_entrada TIMESTAMP;
+    v_hora_actual TIMESTAMP := NOW();
 BEGIN
     -- Bloquear la tabla para prevenir race conditions en el blockchain
     LOCK TABLE registros_acceso IN EXCLUSIVE MODE;
@@ -223,13 +223,13 @@ BEGIN
     -- Obtener último hash
     v_hash_anterior := obtener_ultimo_hash();
     
-    -- Insertar registro y capturar hora_entrada
+    -- Insertar registro
     INSERT INTO registros_acceso (matricula, hora_entrada, id_admin_entrada, notas, hash_anterior)
-    VALUES (p_matricula, NOW(), p_id_admin, p_notas, v_hash_anterior)
-    RETURNING id_registro, hora_entrada INTO v_id_registro, v_hora_entrada;
+    VALUES (p_matricula, v_hora_actual, p_id_admin, p_notas, v_hash_anterior)
+    RETURNING id_registro INTO v_id_registro;
     
-    -- Generar y actualizar hash del nuevo registro usando la misma hora_entrada
-    v_hash_nuevo := generar_hash_registro(v_id_registro, p_matricula, v_hora_entrada, v_hash_anterior);
+    -- Generar y actualizar hash del nuevo registro
+    v_hash_nuevo := generar_hash_registro(v_id_registro, p_matricula, v_hora_actual, v_hash_anterior);
     
     UPDATE registros_acceso 
     SET hash_registro = v_hash_nuevo
