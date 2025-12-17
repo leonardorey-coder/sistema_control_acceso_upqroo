@@ -519,15 +519,15 @@ function renderizarRegistros(registros) {
     }
 
     row.innerHTML = `
-      <td>${registro.matricula}</td>
-      <td>${registro.nombres} ${registro.apellidos}</td>
-      <td>
+      <td data-label="Matricula">${registro.matricula}</td>
+      <td data-label="Nombre">${registro.nombres} ${registro.apellidos}</td>
+      <td data-label="Tipo">
         <span class="badge badge-${registro.tipo_persona || 'otro'}">
           ${tipoPersonaLabel[registro.tipo_persona] || 'Otro'}
         </span>
       </td>
-      <td>${registro.nombre_carrera || 'N/A'}</td>
-      <td class="tiempo-columna">
+      <td data-label="Carrera">${registro.nombre_carrera || 'N/A'}</td>
+      <td data-label="Entrada" class="tiempo-columna">
         ${registro.hora_entrada || 'N/A'}
         ${registro.admin_entrada ?
         `<span class="admin-nombre">
@@ -539,7 +539,7 @@ function renderizarRegistros(registros) {
           </span>` :
         ''}
       </td>
-      <td class="tiempo-columna">
+      <td data-label="Salida" class="tiempo-columna">
         ${registro.hora_salida || 'N/A'}
         ${registro.admin_salida ?
         `<span class="admin-nombre">
@@ -551,7 +551,7 @@ function renderizarRegistros(registros) {
           </span>` :
         ''}
       </td>
-      <td>${estadoHTML}</td>
+      <td data-label="Estado">${estadoHTML}</td>
     `;
     registrosTableBody.appendChild(row);
   });
