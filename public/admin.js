@@ -2,6 +2,7 @@
 // Variables globales
 let currentQRCode = null;
 let registrosData = []; // Almacenar registros para filtrado
+let asistenciasData = []; // Almacenar asistencias para filtrado
 const MODE_SWITCH_CONTAINER = document.querySelector('.mode-switch-container');
 
 // Sistema de tabs
@@ -46,6 +47,11 @@ function switchTab(tabName, buttonEl) {
   // Cargar carreras si es el tab de editar
   if (tabName === 'editar') {
     cargarCarrerasEditar();
+  }
+
+  // Cargar asistencias si es el tab de asistencias
+  if (tabName === 'asistencias') {
+    cargarAsistenciasClases();
   }
 }
 
@@ -126,11 +132,11 @@ function filtrarRegistros() {
     const tipo = registro.tipo_persona?.toLowerCase() || '';
 
     return matricula.includes(searchTerm) ||
-           nombres.includes(searchTerm) ||
-           apellidos.includes(searchTerm) ||
-           carrera.includes(searchTerm) ||
-           tipo.includes(searchTerm) ||
-           `${nombres} ${apellidos}`.includes(searchTerm);
+      nombres.includes(searchTerm) ||
+      apellidos.includes(searchTerm) ||
+      carrera.includes(searchTerm) ||
+      tipo.includes(searchTerm) ||
+      `${nombres} ${apellidos}`.includes(searchTerm);
   });
 
   renderizarRegistros(filtrados);
@@ -682,7 +688,7 @@ function toggleMode() {
   }
 }
 
-MODE_SWITCH_CONTAINER.addEventListener('click', (e)=> {
+MODE_SWITCH_CONTAINER.addEventListener('click', (e) => {
   const CHECKBOX_INPUT = document.getElementById('modeSwitch');
   if (e.target.id === 'label-registro' && e.target.classList.contains('inactive')) {
     CHECKBOX_INPUT.checked = false;
@@ -696,7 +702,7 @@ MODE_SWITCH_CONTAINER.addEventListener('click', (e)=> {
 // Event listeners para caducidad switches (formulario de registro)
 document.addEventListener('DOMContentLoaded', () => {
   const caducidadContainers = document.querySelectorAll('.caducidad-switch-container');
-  
+
   caducidadContainers.forEach(container => {
     container.addEventListener('click', (e) => {
       if (e.target.classList.contains('switch-label') && e.target.classList.contains('inactive')) {
@@ -971,23 +977,23 @@ function toggleAutoScan() {
   const currentState = localStorage.getItem('autoScanEnabled');
   const newState = currentState === 'false' ? 'true' : 'false';
   localStorage.setItem('autoScanEnabled', newState);
-  
+
   const toggleBtn = document.getElementById('autoScanToggle');
   if (toggleBtn) {
     const isEnabled = newState === 'true';
     toggleBtn.classList.toggle('active-status', isEnabled);
     toggleBtn.classList.toggle('inactive-status', !isEnabled);
-    
+
     const statusText = toggleBtn.querySelector('.status-text');
     if (statusText) {
-      statusText.innerHTML = isEnabled 
-        ? 'Auto-escaneo: <strong>Activado</strong>' 
+      statusText.innerHTML = isEnabled
+        ? 'Auto-escaneo: <strong>Activado</strong>'
         : 'Auto-escaneo: <strong>Desactivado</strong>';
     }
   }
-  
+
   mostrarAlerta(
-    `Auto-escaneo ${newState === 'true' ? 'activado' : 'desactivado'}`, 
+    `Auto-escaneo ${newState === 'true' ? 'activado' : 'desactivado'}`,
     'info'
   );
 }
@@ -995,25 +1001,172 @@ function toggleAutoScan() {
 function cargarConfiguracion() {
   const savedDelay = localStorage.getItem('autoScanDelay');
   const savedEnabled = localStorage.getItem('autoScanEnabled');
-  
+
   const delayInput = document.getElementById('autoScanDelayInput');
   if (delayInput && savedDelay !== null) {
     delayInput.value = parseInt(savedDelay, 10) / 1000;
   }
-  
+
   const toggleBtn = document.getElementById('autoScanToggle');
   if (toggleBtn) {
     const isEnabled = savedEnabled !== 'false';
     toggleBtn.classList.toggle('active-status', isEnabled);
     toggleBtn.classList.toggle('inactive-status', !isEnabled);
-    
+
     const statusText = toggleBtn.querySelector('.status-text');
     if (statusText) {
-      statusText.innerHTML = isEnabled 
-        ? 'Auto-escaneo: <strong>Activado</strong>' 
+      statusText.innerHTML = isEnabled
+        ? 'Auto-escaneo: <strong>Activado</strong>'
         : 'Auto-escaneo: <strong>Desactivado</strong>';
     }
   }
+}
+
+// =====================================================
+// FUNCIONES PARA TAB DE ASISTENCIAS A CLASES
+// =====================================================
+
+// Función para cargar asistencias a clases
+async function cargarAsistenciasClases() {
+  const asistenciasTableBody = document.getElementById('asistenciasTableBody');
+  const asistenciasCount = document.getElementById('asistencias-count');
+  const searchInput = document.getElementById('buscar-asistencia');
+
+  // Limpiar búsqueda
+  if (searchInput) searchInput.value = '';
+  document.getElementById('asistencias-filtrados')?.classList.add('hidden');
+
+  try {
+    const response = await fetch('/api/obtener_asistencias_clases');
+    const data = await response.json();
+
+    if (data.success) {
+      asistenciasData = data.data;
+      asistenciasCount.textContent = `${asistenciasData.length} asistencia${asistenciasData.length !== 1 ? 's' : ''}`;
+      renderizarAsistencias(asistenciasData);
+    } else {
+      asistenciasData = [];
+      asistenciasCount.textContent = '0 asistencias';
+      asistenciasTableBody.innerHTML = `
+        <tr>
+          <td colspan="7" style="text-align: center; padding: 20px;">
+            No hay asistencias a clases registradas para el día de hoy
+          </td>
+        </tr>
+      `;
+    }
+  } catch (error) {
+    console.error('Error al obtener asistencias:', error);
+    asistenciasData = [];
+    asistenciasTableBody.innerHTML = `
+      <tr>
+        <td colspan="7" style="text-align: center; padding: 20px; color: #dc3545;">
+          Error al cargar las asistencias
+        </td>
+      </tr>
+    `;
+  }
+}
+
+// Función para renderizar asistencias en la tabla
+function renderizarAsistencias(asistencias) {
+  const asistenciasTableBody = document.getElementById('asistenciasTableBody');
+  asistenciasTableBody.innerHTML = '';
+
+  if (asistencias.length === 0) {
+    asistenciasTableBody.innerHTML = `
+      <tr>
+        <td colspan="7" style="text-align: center; padding: 20px;">
+          No se encontraron asistencias
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  asistencias.forEach(asistencia => {
+    const row = document.createElement('tr');
+
+    // Determinar clase de color según porcentaje de asistencia
+    let porcentajeClass = 'porcentaje-bajo';
+    if (asistencia.porcentaje_asistencia >= 80) {
+      porcentajeClass = 'porcentaje-alto';
+    } else if (asistencia.porcentaje_asistencia >= 60) {
+      porcentajeClass = 'porcentaje-medio';
+    }
+
+    // Determinar el estado del registro
+    let estadoHTML = '';
+    if (asistencia.salida_automatica) {
+      estadoHTML = `<span class="estado-registro salida-auto">Salida Auto.</span>`;
+    } else if (asistencia.hora_salida) {
+      estadoHTML = `<span class="estado-registro salida">Completado</span>`;
+    } else {
+      estadoHTML = `<span class="estado-registro entrada">En clase</span>`;
+    }
+
+    // Formatear horario de clase
+    const horarioClase = `${asistencia.hora_inicio_clase} - ${asistencia.hora_fin_clase}`;
+
+    row.innerHTML = `
+      <td data-label="Matrícula">${asistencia.matricula}</td>
+      <td data-label="Estudiante">${asistencia.nombres} ${asistencia.apellidos}</td>
+      <td data-label="Materia">
+        <div class="materia-info">
+          <span class="materia-nombre">${asistencia.nombre_materia}</span>
+          <span class="materia-clave">${asistencia.clave_materia}</span>
+        </div>
+      </td>
+      <td data-label="Horario" class="horario-columna">
+        ${horarioClase}
+        ${asistencia.aula && asistencia.aula !== 'N/A' ?
+        `<span class="aula-info">Aula: ${asistencia.aula}</span>` : ''}
+      </td>
+      <td data-label="Entrada">${asistencia.hora_entrada || 'N/A'}</td>
+      <td data-label="Asistencia">
+        <span class="porcentaje-badge ${porcentajeClass}">
+          ${asistencia.porcentaje_asistencia.toFixed(0)}%
+        </span>
+        <span class="minutos-info">${asistencia.minutos_asistidos}/${asistencia.minutos_totales_clase} min</span>
+      </td>
+      <td data-label="Estado">${estadoHTML}</td>
+    `;
+    asistenciasTableBody.appendChild(row);
+  });
+}
+
+// Filtrar asistencias en la tabla
+function filtrarAsistencias() {
+  const searchTerm = document.getElementById('buscar-asistencia').value.toLowerCase().trim();
+  const filtradosSpan = document.getElementById('asistencias-filtrados');
+  const filtradosCount = document.getElementById('asistencias-filtrados-count');
+
+  if (!searchTerm) {
+    // Mostrar todas las asistencias
+    renderizarAsistencias(asistenciasData);
+    filtradosSpan.classList.add('hidden');
+    return;
+  }
+
+  // Filtrar asistencias
+  const filtrados = asistenciasData.filter(asistencia => {
+    const matricula = asistencia.matricula?.toLowerCase() || '';
+    const nombres = asistencia.nombres?.toLowerCase() || '';
+    const apellidos = asistencia.apellidos?.toLowerCase() || '';
+    const materia = asistencia.nombre_materia?.toLowerCase() || '';
+    const clave = asistencia.clave_materia?.toLowerCase() || '';
+
+    return matricula.includes(searchTerm) ||
+      nombres.includes(searchTerm) ||
+      apellidos.includes(searchTerm) ||
+      materia.includes(searchTerm) ||
+      clave.includes(searchTerm) ||
+      `${nombres} ${apellidos}`.includes(searchTerm);
+  });
+
+  renderizarAsistencias(filtrados);
+  filtradosSpan.classList.remove('hidden');
+  filtradosCount.textContent = filtrados.length;
 }
 
 // Inicialización
@@ -1022,7 +1175,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Cargar carreras al inicio
   cargarCarreras();
-  
+
   // Cargar configuración si estamos en la tab de config
   cargarConfiguracion();
 });
