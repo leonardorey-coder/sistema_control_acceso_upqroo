@@ -15,7 +15,7 @@ ALTER TABLE asistencias_potenciales
 ADD COLUMN IF NOT EXISTS hora_salida_registro TIMESTAMP DEFAULT NULL;
 
 ALTER TABLE asistencias_potenciales
-ADD CONSTRAINT asistencias_estado_check 
+ADD CONSTRAINT IF NOT EXISTS asistencias_estado_check 
 CHECK (estado IN ('confirmed', 'in_progress', 'assumed', 'partial', 'unverified'));
 
 CREATE INDEX IF NOT EXISTS idx_asistencias_estado ON asistencias_potenciales(estado);

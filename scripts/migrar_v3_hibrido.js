@@ -60,12 +60,13 @@ async function migrarV3() {
         console.log(`   ✓ ${procedures.length} procedimientos actualizados/creados\n`);
 
         console.log('5. Migrando datos existentes...');
-        const [result] = await pool.query(`
+        const result = await pool.query(`
             UPDATE asistencias_potenciales
             SET estado = 'in_progress'
             WHERE estado IS NULL
         `);
-        console.log(`   ✓ ${result.rowCount || 0} registros actualizados con estado inicial\n`);
+        const rowCount = result.affectedRows || 0;
+        console.log(`   ✓ ${rowCount} registros actualizados con estado inicial\n`);
 
         console.log('6. Verificando vista creada...');
         const [views] = await pool.query(`
