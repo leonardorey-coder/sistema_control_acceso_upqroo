@@ -53,7 +53,7 @@ La función `registrar_asistencias_potenciales` registra asistencia para clases 
 
 ---
 
-## Opción 3: Híbrido (Futura)
+## Opción 3: Híbrido - IMPLEMENTADO
 
 **Comportamiento:**
 - Al entrar: registra clase inmediata + marca clases futuras como "pendientes"
@@ -70,9 +70,9 @@ La función `registrar_asistencias_potenciales` registra asistencia para clases 
 
 ## Decisión Pendiente
 
-[ ] Implementar Opción 1 (ya implementada)
+[X] Implementar Opción 1 (implementada en v2)
 [ ] Implementar Opción 2
-[ ] Implementar Opción 3 (híbrido)
+[X] Implementar Opción 3 (híbrido) - IMPLEMENTADO en v3
 
 ---
 
@@ -102,14 +102,34 @@ Cuando el sistema marca **salida automática** (el estudiante no escaneó su sal
 
 > ⚠️ El estado `assumed` indica que **no se puede confirmar** si el estudiante realmente asistió, ya que no registró su salida. Útil para reportes y auditorías.
 
-### Implementación Sugerida
+### Implementación - COMPLETADA en v3
+
+**Archivo:** `control_acceso_postgres_v3_hibrido.sql`
+
+Estados implementados:
 
 ```sql
--- Agregar columna estado a asistencias_potenciales
 ALTER TABLE asistencias_potenciales 
 ADD COLUMN IF NOT EXISTS estado VARCHAR(20) DEFAULT 'in_progress';
 
--- Estados válidos: confirmed, in_progress, assumed, partial, unverified
+ALTER TABLE asistencias_potenciales 
+ADD COLUMN IF NOT EXISTS hora_salida_registro TIMESTAMP DEFAULT NULL;
+
+ALTER TABLE asistencias_potenciales
+ADD CONSTRAINT asistencias_estado_check 
+CHECK (estado IN ('confirmed', 'in_progress', 'assumed', 'partial', 'unverified'));
+```
+
+**Nuevas funciones:**
+- `registrar_asistencias_potenciales()` - Registra TODAS las clases del día al entrar
+- `actualizar_asistencias_al_salir()` - Actualiza asistencias al registrar salida manual
+- `actualizar_asistencias_asumidas()` - Marca asistencias como 'assumed' en salida automática
+- `registrar_salida_v3()` - Procedimiento actualizado que incluye actualización de asistencias
+
+**Script de migración:** `scripts/migrar_v3_hibrido.js`
+
+```bash
+node scripts/migrar_v3_hibrido.js
 ```
 
 ---

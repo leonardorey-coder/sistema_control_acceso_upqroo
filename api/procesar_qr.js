@@ -94,12 +94,10 @@ export default async function handler(req, res) {
 
         let procedureName, tipoRegistro;
         if (checks.length > 0) {
-            // Usar procedimiento v2 con blockchain
-            procedureName = 'registrar_salida_v2';
+            procedureName = 'registrar_salida_v3';
             tipoRegistro = 'salida';
             persona.tipo_registro = 'salida';
         } else {
-            // Usar procedimiento v2 con blockchain
             procedureName = 'registrar_entrada_v2';
             tipoRegistro = 'entrada';
             persona.tipo_registro = 'entrada';

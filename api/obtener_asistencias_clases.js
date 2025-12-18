@@ -25,11 +25,21 @@ export default async function handler(req, res) {
                 he.aula,
                 ap.fecha_clase,
                 ap.hora_entrada_registro,
+                ap.hora_salida_registro,
                 ap.hora_inicio_clase,
                 ap.hora_fin_clase,
                 ap.minutos_asistidos,
                 ap.minutos_totales_clase,
                 ap.porcentaje_asistencia,
+                ap.estado,
+                CASE 
+                    WHEN ap.estado = 'confirmed' THEN 'Confirmada'
+                    WHEN ap.estado = 'in_progress' THEN 'En curso'
+                    WHEN ap.estado = 'assumed' THEN 'Asumida'
+                    WHEN ap.estado = 'partial' THEN 'Parcial'
+                    WHEN ap.estado = 'unverified' THEN 'Sin verificar'
+                    ELSE 'Desconocido'
+                END as estado_descripcion,
                 ra.hora_entrada,
                 ra.hora_salida,
                 ra.salida_automatica
@@ -57,11 +67,16 @@ export default async function handler(req, res) {
             hora_entrada_registro: row.hora_entrada_registro
                 ? new Date(row.hora_entrada_registro).toLocaleTimeString('es-MX', { hour12: false })
                 : null,
+            hora_salida_registro: row.hora_salida_registro
+                ? new Date(row.hora_salida_registro).toLocaleTimeString('es-MX', { hour12: false })
+                : null,
             hora_inicio_clase: row.hora_inicio_clase,
             hora_fin_clase: row.hora_fin_clase,
             minutos_asistidos: row.minutos_asistidos,
             minutos_totales_clase: row.minutos_totales_clase,
             porcentaje_asistencia: parseFloat(row.porcentaje_asistencia) || 0,
+            estado: row.estado,
+            estado_descripcion: row.estado_descripcion,
             hora_entrada: row.hora_entrada
                 ? new Date(row.hora_entrada).toLocaleTimeString('es-MX', { hour12: false })
                 : null,
