@@ -6,12 +6,11 @@ async function obtenerIdAdmin(token) {
         [token]
     );
     if (rows.length === 0) {
-        throw new Error('Sesión de administrador no válida');
+        throw new Error('Sesion de administrador no valida');
     }
     return rows[0].id;
 }
 
-// Verificar si el QR ha caducado
 function verificarCaducidadQR(fecha_caducidad_qr) {
     if (!fecha_caducidad_qr) return false;
     const ahora = new Date();
@@ -20,13 +19,57 @@ function verificarCaducidadQR(fecha_caducidad_qr) {
 }
 
 function sanitizeOutput(persona) {
-    // Handle BLOB/Buffer for foto_perfil
     if (persona.foto_perfil) {
         persona.foto_perfil = Buffer.from(persona.foto_perfil).toString('base64');
     } else {
         persona.foto_perfil = null;
     }
     return persona;
+}
+
+async function procesarHotQR(codigo, idAdmin) {
+    const [hotQRs] = await pool.execute(`
+        SELECT h.*, a.nombre as admin_creador_nombre
+        FROM hot_qr_codes h
+        LEFT JOIN administradores a ON h.id_admin_creador = a.id
+        WHERE h.codigo = $1
+    `, [codigo]);
+
+    if (hotQRs.length === 0) {
+        return null;
+    }
+
+    const hotQR = hotQRs[0];
+
+    if (!hotQR.activo) {
+        throw new Error('Este Hot-QR ha sido desactivado');
+    }
+
+    if (hotQR.usado) {
+        throw new Error('Este Hot-QR ya fue utilizado');
+    }
+
+    const ahora = new Date();
+    const fechaExpiracion = new Date(hotQR.fecha_expiracion);
+    if (ahora >= fechaExpiracion) {
+        throw new Error('Este Hot-QR ha expirado');
+    }
+
+    await pool.execute(`
+        UPDATE hot_qr_codes 
+        SET usado = TRUE, fecha_uso = NOW(), id_admin_registro = $1
+        WHERE id_hot_qr = $2
+    `, [idAdmin, hotQR.id_hot_qr]);
+
+    return {
+        tipo_registro: 'hot_qr',
+        nombres: hotQR.nombre_visitante,
+        apellidos: '',
+        tipo_persona: 'invitado',
+        motivo: hotQR.motivo,
+        admin_creador: hotQR.admin_creador_nombre,
+        hora_entrada: ahora.toISOString()
+    };
 }
 
 export default async function handler(req, res) {
@@ -49,10 +92,35 @@ export default async function handler(req, res) {
         const { matricula, admin_token } = req.body;
 
         if (!matricula || !admin_token) {
-            throw new Error('No se recibió matrícula o ID de administrador');
+            throw new Error('No se recibio matricula o ID de administrador');
         }
 
         const idAdmin = await obtenerIdAdmin(admin_token);
+
+        // Verificar si es un Hot-QR (formato: HQR + 6 chars hex)
+        if (matricula.startsWith('HQR') && matricula.length === 9) {
+            try {
+                const hotQRResult = await procesarHotQR(matricula, idAdmin);
+                if (hotQRResult) {
+                    return res.status(200).json({
+                        success: true,
+                        data: hotQRResult
+                    });
+                } else {
+                    return res.status(404).json({
+                        success: false,
+                        message: 'Hot-QR no encontrado',
+                        data: { tipo_registro: 'hot_qr_error' }
+                    });
+                }
+            } catch (hotQRError) {
+                return res.status(403).json({
+                    success: false,
+                    message: hotQRError.message,
+                    data: { tipo_registro: 'hot_qr_error' }
+                });
+            }
+        }
 
         const [personas] = await pool.execute(`
       SELECT p.*, c.nombre_carrera 

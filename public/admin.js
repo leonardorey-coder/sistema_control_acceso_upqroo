@@ -1,8 +1,10 @@
 
 // Variables globales
 let currentQRCode = null;
-let registrosData = []; // Almacenar registros para filtrado
-let asistenciasData = []; // Almacenar asistencias para filtrado
+let currentHotQRCode = null;
+let registrosData = [];
+let asistenciasData = [];
+let hotQRData = [];
 const MODE_SWITCH_CONTAINER = document.querySelector('.mode-switch-container');
 
 // Sistema de tabs
@@ -52,6 +54,11 @@ function switchTab(tabName, buttonEl) {
   // Cargar asistencias si es el tab de asistencias
   if (tabName === 'asistencias') {
     cargarAsistenciasClases();
+  }
+
+  // Cargar Hot-QR si es el tab de hotqr
+  if (tabName === 'hotqr') {
+    cargarHotQRs();
   }
 }
 
@@ -1169,13 +1176,456 @@ function filtrarAsistencias() {
   filtradosCount.textContent = filtrados.length;
 }
 
-// Inicialización
+// =====================================================
+// FUNCIONES PARA TAB DE HOT-QR
+// =====================================================
+
+document.getElementById('hotqr-form').addEventListener('submit', async function (e) {
+  e.preventDefault();
+
+  const nombre = document.getElementById('hotqr-nombre').value.trim();
+  const motivo = document.getElementById('hotqr-motivo').value.trim();
+  const duracion = document.getElementById('hotqr-duracion').value;
+  const adminToken = localStorage.getItem('adminToken');
+
+  if (!nombre) {
+    mostrarAlerta('El nombre del visitante es requerido', 'error');
+    return;
+  }
+
+  try {
+    const response = await fetch('/api/crear_hot_qr', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nombre_visitante: nombre,
+        motivo: motivo || null,
+        duracion_minutos: duracion,
+        admin_token: adminToken
+      })
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      mostrarAlerta('Hot-QR creado exitosamente', 'success');
+      mostrarResultadoHotQR(data.data);
+      cargarHotQRs();
+    } else {
+      mostrarAlerta(data.message, 'error');
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    mostrarAlerta('Error al crear Hot-QR', 'error');
+  }
+});
+
+function mostrarResultadoHotQR(data) {
+  const qrcodeElement = document.getElementById('hotqr-qrcode');
+  qrcodeElement.innerHTML = '';
+
+  currentHotQRCode = new QRCode(qrcodeElement, {
+    text: data.codigo,
+    width: 256,
+    height: 256,
+    colorDark: "#000000",
+    colorLight: "#ffffff",
+    correctLevel: QRCode.CorrectLevel.H
+  });
+
+  document.getElementById('hotqr-codigo').textContent = data.codigo;
+  document.getElementById('hotqr-visitante').textContent = data.nombre_visitante;
+  document.getElementById('hotqr-motivo-display').textContent = data.motivo || 'Sin especificar';
+
+  const fechaExp = new Date(data.fecha_expiracion);
+  document.getElementById('hotqr-expira').textContent = fechaExp.toLocaleString();
+
+  document.getElementById('hotqr-result').classList.add('show');
+  document.getElementById('hotqr-result').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function limpiarFormularioHotQR() {
+  document.getElementById('hotqr-form').reset();
+  document.getElementById('hotqr-result').classList.remove('show');
+  currentHotQRCode = null;
+}
+
+function descargarHotQR() {
+  const codigo = document.getElementById('hotqr-codigo').textContent;
+  const visitante = document.getElementById('hotqr-visitante').textContent;
+  const expira = document.getElementById('hotqr-expira').textContent;
+  const canvas = document.querySelector('#hotqr-qrcode canvas');
+
+  if (!canvas) {
+    mostrarAlerta('No hay Hot-QR para descargar', 'error');
+    return;
+  }
+
+  const tempCanvas = document.createElement('canvas');
+  const ctx = tempCanvas.getContext('2d');
+
+  tempCanvas.width = 400;
+  tempCanvas.height = 550;
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+
+  // Header con gradiente naranja
+  const gradient = ctx.createLinearGradient(0, 0, tempCanvas.width, 0);
+  gradient.addColorStop(0, '#FF8C00');
+  gradient.addColorStop(1, '#FFA500');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, tempCanvas.width, 70);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 24px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('QR-UPQROO', tempCanvas.width / 2, 45);
+
+  // QR
+  ctx.drawImage(canvas, 72, 90, 256, 256);
+
+  // Info
+  ctx.fillStyle = '#333333';
+  ctx.font = 'bold 16px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText(`Codigo: ${codigo}`, tempCanvas.width / 2, 375);
+
+  ctx.font = '14px Arial';
+  ctx.fillText(`Visitante: ${visitante}`, tempCanvas.width / 2, 405);
+
+  ctx.fillStyle = '#dc3545';
+  ctx.font = 'bold 14px Arial';
+  ctx.fillText(`Expira: ${expira}`, tempCanvas.width / 2, 435);
+
+  // Footer
+  ctx.fillStyle = '#666666';
+  ctx.font = '12px Arial';
+  ctx.fillText('UPQROO - Sistema de Control de Acceso', tempCanvas.width / 2, 500);
+  ctx.fillText('Este QR es de un solo uso', tempCanvas.width / 2, 520);
+
+  const link = document.createElement('a');
+  link.download = `HotQR_${codigo}_${Date.now()}.png`;
+  link.href = tempCanvas.toDataURL();
+  link.click();
+
+  mostrarAlerta('Hot-QR descargado exitosamente', 'success');
+}
+
+async function compartirHotQR() {
+  const codigo = document.getElementById('hotqr-codigo').textContent;
+  const visitante = document.getElementById('hotqr-visitante').textContent;
+  const expira = document.getElementById('hotqr-expira').textContent;
+  const canvas = document.querySelector('#hotqr-qrcode canvas');
+
+  if (!codigo || !canvas) {
+    mostrarAlerta('No hay Hot-QR para compartir', 'error');
+    return;
+  }
+
+  const mensaje = `Acceso UPQROO\n\nVisitante: ${visitante}\nCodigo: ${codigo}\nExpira: ${expira}\n\nEscanea el codigo QR o ingresa manualmente el codigo en el sistema de acceso.`;
+
+  // Generar imagen del QR
+  const qrImageDataUrl = await generarImagenQRCompartir(canvas, codigo, visitante, expira);
+
+  const shareModal = document.createElement('div');
+  shareModal.className = 'share-modal-overlay';
+  shareModal.innerHTML = `
+    <div class="share-modal">
+      <div class="share-modal-header">
+        <h3>Compartir Hot-QR</h3>
+        <button onclick="cerrarModalCompartir()" class="close-modal-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="share-modal-body">
+        <div class="share-code-display">
+          <div class="share-code-label">Codigo de acceso:</div>
+          <div class="share-code-value">${codigo}</div>
+        </div>
+        <div class="share-options">
+          <button onclick="compartirWhatsAppConImagen()" class="share-btn whatsapp">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+            </svg>
+            WhatsApp
+          </button>
+          <button onclick="compartirEmailConImagen()" class="share-btn email">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+              <polyline points="22,6 12,13 2,6"/>
+            </svg>
+            Email
+          </button>
+          <button onclick="compartirSMS('${encodeURIComponent(mensaje)}')" class="share-btn sms">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+            SMS
+          </button>
+          <button onclick="copiarCodigo('${codigo}')" class="share-btn copy">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+            Copiar Codigo
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(shareModal);
+  
+  // Guardar la imagen en el modal para acceso posterior
+  shareModal.dataset.qrImage = qrImageDataUrl;
+  shareModal.dataset.mensaje = mensaje;
+  
+  setTimeout(() => shareModal.classList.add('show'), 10);
+}
+
+async function generarImagenQRCompartir(canvas, codigo, visitante, expira) {
+  const tempCanvas = document.createElement('canvas');
+  const ctx = tempCanvas.getContext('2d');
+
+  tempCanvas.width = 400;
+  tempCanvas.height = 550;
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+
+  const gradient = ctx.createLinearGradient(0, 0, tempCanvas.width, 0);
+  gradient.addColorStop(0, '#FF8C00');
+  gradient.addColorStop(1, '#FFA500');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, tempCanvas.width, 70);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 24px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('QR-UPQROO', tempCanvas.width / 2, 45);
+
+  ctx.drawImage(canvas, 72, 90, 256, 256);
+
+  ctx.fillStyle = '#333333';
+  ctx.font = 'bold 16px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText(`Codigo: ${codigo}`, tempCanvas.width / 2, 375);
+
+  ctx.font = '14px Arial';
+  ctx.fillText(`Visitante: ${visitante}`, tempCanvas.width / 2, 405);
+
+  ctx.fillStyle = '#dc3545';
+  ctx.font = 'bold 14px Arial';
+  ctx.fillText(`Expira: ${expira}`, tempCanvas.width / 2, 435);
+
+  ctx.fillStyle = '#666666';
+  ctx.font = '12px Arial';
+  ctx.fillText('UPQROO - Sistema de Control de Acceso', tempCanvas.width / 2, 500);
+  ctx.fillText('Este QR es de un solo uso', tempCanvas.width / 2, 520);
+
+  return tempCanvas.toDataURL('image/png');
+}
+
+function cerrarModalCompartir() {
+  const modal = document.querySelector('.share-modal-overlay');
+  if (modal) {
+    modal.classList.remove('show');
+    setTimeout(() => modal.remove(), 300);
+  }
+}
+
+async function compartirWhatsAppConImagen() {
+  const modal = document.querySelector('.share-modal-overlay');
+  const qrImageDataUrl = modal.dataset.qrImage;
+  const mensaje = decodeURIComponent(modal.dataset.mensaje);
+  const codigo = document.getElementById('hotqr-codigo').textContent;
+
+  try {
+    const blob = await fetch(qrImageDataUrl).then(r => r.blob());
+    const fileName = `HotQR_${codigo}_${Date.now()}.png`;
+    const file = new File([blob], fileName, { type: 'image/png' });
+
+    // Detectar si es iOS/macOS y si soporta compartir archivos
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    
+    if (isMobile && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      // En móvil, usar Web Share API
+      await navigator.share({
+        title: 'Acceso UPQROO',
+        text: mensaje,
+        files: [file]
+      });
+      cerrarModalCompartir();
+    } else {
+      // En desktop (macOS/Windows/Linux), descargar y abrir WhatsApp Web
+      const link = document.createElement('a');
+      link.href = qrImageDataUrl;
+      link.download = fileName;
+      link.click();
+      
+      setTimeout(() => {
+        window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}%0A%0A(La imagen del QR se ha descargado, adjuntala manualmente)`, '_blank');
+      }, 500);
+      cerrarModalCompartir();
+    }
+  } catch (error) {
+    console.error('Error al compartir:', error);
+    mostrarAlerta('Descargando QR, compartelo manualmente', 'info');
+    const link = document.createElement('a');
+    link.href = qrImageDataUrl;
+    link.download = `HotQR_${codigo}_${Date.now()}.png`;
+    link.click();
+    cerrarModalCompartir();
+  }
+}
+
+async function compartirEmailConImagen() {
+  const modal = document.querySelector('.share-modal-overlay');
+  const qrImageDataUrl = modal.dataset.qrImage;
+  const mensaje = decodeURIComponent(modal.dataset.mensaje);
+  const codigo = document.getElementById('hotqr-codigo').textContent;
+
+  try {
+    const blob = await fetch(qrImageDataUrl).then(r => r.blob());
+    const fileName = `HotQR_${codigo}_${Date.now()}.png`;
+    const file = new File([blob], fileName, { type: 'image/png' });
+
+    // Detectar si es iOS/macOS y si soporta compartir archivos
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    
+    if (isMobile && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      // En móvil, usar Web Share API
+      await navigator.share({
+        title: 'Acceso UPQROO',
+        text: mensaje,
+        files: [file]
+      });
+      cerrarModalCompartir();
+    } else {
+      // En desktop (macOS/Windows/Linux), descargar y abrir Mail.app
+      const link = document.createElement('a');
+      link.href = qrImageDataUrl;
+      link.download = fileName;
+      link.click();
+      
+      setTimeout(() => {
+        window.open(`mailto:?subject=Acceso%20UPQROO&body=${encodeURIComponent(mensaje)}%0A%0A(La imagen del QR se ha descargado, adjuntala manualmente al correo)`, '_blank');
+      }, 500);
+      cerrarModalCompartir();
+    }
+  } catch (error) {
+    console.error('Error al compartir:', error);
+    mostrarAlerta('Descargando QR, compartelo manualmente', 'info');
+    const link = document.createElement('a');
+    link.href = qrImageDataUrl;
+    link.download = `HotQR_${codigo}_${Date.now()}.png`;
+    link.click();
+    cerrarModalCompartir();
+  }
+}
+
+function compartirSMS(mensaje) {
+  window.open(`sms:?body=${mensaje}`, '_blank');
+  cerrarModalCompartir();
+}
+
+function copiarCodigo(codigo) {
+  navigator.clipboard.writeText(codigo).then(() => {
+    mostrarAlerta('Codigo copiado al portapapeles', 'success');
+    cerrarModalCompartir();
+  }).catch(() => {
+    mostrarAlerta('Error al copiar codigo', 'error');
+  });
+}
+
+async function cargarHotQRs() {
+  const tbody = document.getElementById('hotqrTableBody');
+  const countSpan = document.getElementById('hotqr-count');
+
+  try {
+    const response = await fetch('/api/crear_hot_qr');
+    const data = await response.json();
+
+    if (data.success) {
+      hotQRData = data.data;
+      countSpan.textContent = `${hotQRData.length} Hot-QR`;
+      renderizarHotQRs(hotQRData);
+    } else {
+      hotQRData = [];
+      countSpan.textContent = '0 Hot-QR';
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="6" style="text-align: center; padding: 20px;">
+            No hay Hot-QR generados hoy
+          </td>
+        </tr>
+      `;
+    }
+  } catch (error) {
+    console.error('Error al cargar Hot-QRs:', error);
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="6" style="text-align: center; padding: 20px; color: #dc3545;">
+          Error al cargar Hot-QR
+        </td>
+      </tr>
+    `;
+  }
+}
+
+function renderizarHotQRs(hotQRs) {
+  const tbody = document.getElementById('hotqrTableBody');
+  tbody.innerHTML = '';
+
+  if (hotQRs.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="6" style="text-align: center; padding: 20px;">
+          No hay Hot-QR generados hoy
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  const ahora = new Date();
+
+  hotQRs.forEach(hqr => {
+    const row = document.createElement('tr');
+    const fechaExp = new Date(hqr.fecha_expiracion);
+    const expirado = ahora >= fechaExp;
+
+    let estadoHTML = '';
+    if (!hqr.activo) {
+      estadoHTML = `<span class="estado-registro salida-auto">Desactivado</span>`;
+    } else if (hqr.usado) {
+      estadoHTML = `<span class="estado-registro salida">Usado</span>`;
+    } else if (expirado) {
+      estadoHTML = `<span class="estado-registro salida-auto">Expirado</span>`;
+    } else {
+      estadoHTML = `<span class="estado-registro entrada">Activo</span>`;
+    }
+
+    row.innerHTML = `
+      <td data-label="Codigo"><code class="hotqr-code-cell">${hqr.codigo}</code></td>
+      <td data-label="Visitante">${hqr.nombre_visitante}</td>
+      <td data-label="Motivo">${hqr.motivo || '-'}</td>
+      <td data-label="Creado por">${hqr.admin_creador || '-'}</td>
+      <td data-label="Expira">${fechaExp.toLocaleString()}</td>
+      <td data-label="Estado">${estadoHTML}</td>
+    `;
+    tbody.appendChild(row);
+  });
+}
+
+// Inicializacion
 document.addEventListener('DOMContentLoaded', () => {
   if (!verificarSesionAdmin()) return;
 
-  // Cargar carreras al inicio
   cargarCarreras();
-
-  // Cargar configuración si estamos en la tab de config
   cargarConfiguracion();
 });
