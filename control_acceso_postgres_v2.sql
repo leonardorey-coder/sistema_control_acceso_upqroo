@@ -11,14 +11,14 @@
 -- MODIFICACIONES A TABLAS EXISTENTES
 -- =====================================================
 
--- Agregar tipo 'invitado' al CHECK constraint de personas
+-- Agregar tipo 'invitado' y 'aspirante' al CHECK constraint de personas
 -- Y agregar columnas: notas, fecha_caducidad_qr
 ALTER TABLE personas 
 DROP CONSTRAINT IF EXISTS personas_tipo_persona_check;
 
 ALTER TABLE personas 
 ADD CONSTRAINT personas_tipo_persona_check 
-CHECK (tipo_persona IN ('estudiante', 'docente', 'administrativo', 'invitado', 'otro'));
+CHECK (tipo_persona IN ('estudiante', 'docente', 'administrativo', 'invitado', 'aspirante', 'otro'));
 
 -- Agregar nuevas columnas a personas
 ALTER TABLE personas ADD COLUMN IF NOT EXISTS notas TEXT DEFAULT NULL;

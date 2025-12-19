@@ -106,7 +106,7 @@ CREATE TABLE `personas` (
   `curp` varchar(18) NOT NULL,
   `id_carrera` int(11) DEFAULT NULL,
   `foto_perfil` mediumblob DEFAULT NULL,
-  `tipo_persona` enum('estudiante','docente','administrativo','otro') NOT NULL,
+  `tipo_persona` enum('estudiante','docente','administrativo','invitado','aspirante','otro') NOT NULL,
   `estado` enum('activo','inactivo') DEFAULT 'activo',
   `fecha_registro` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

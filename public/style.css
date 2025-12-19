@@ -1253,6 +1253,11 @@
       color: #1565c0;
     }
 
+    .badge-aspirante {
+      background-color: #fff9c4;
+      color: #f57f17;
+    }
+
     .badge-docente {
       background-color: #f3e5f5;
       color: #7b1fa2;

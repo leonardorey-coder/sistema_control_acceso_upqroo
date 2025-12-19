@@ -27,7 +27,7 @@ CREATE TABLE personas (
     curp VARCHAR(18) NOT NULL UNIQUE,
     id_carrera INT REFERENCES carreras(id_carrera),
     foto_perfil BYTEA DEFAULT NULL,
-    tipo_persona VARCHAR(20) NOT NULL CHECK (tipo_persona IN ('estudiante', 'docente', 'administrativo', 'otro')),
+    tipo_persona VARCHAR(20) NOT NULL CHECK (tipo_persona IN ('estudiante', 'docente', 'administrativo', 'invitado', 'aspirante', 'otro')),
     estado VARCHAR(20) DEFAULT 'activo' CHECK (estado IN ('activo', 'inactivo')),
     fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
