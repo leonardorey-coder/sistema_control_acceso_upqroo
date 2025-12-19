@@ -526,6 +526,7 @@ function renderizarRegistros(registros) {
     const row = document.createElement('tr');
     const tipoPersonaLabel = {
       'estudiante': 'Estudiante',
+      'aspirante': 'Aspirante',
       'docente': 'Docente',
       'administrativo': 'Admin.',
       'invitado': 'Invitado',
