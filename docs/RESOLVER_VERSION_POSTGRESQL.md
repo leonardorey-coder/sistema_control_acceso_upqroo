@@ -163,3 +163,4 @@ pg_dump --version
 ```
 
 Ambas deben coincidir en número de versión mayor (16.x con 16.x, etc.)
+

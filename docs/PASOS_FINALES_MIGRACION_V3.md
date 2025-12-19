@@ -210,3 +210,4 @@ Si algo falla, revisa:
 2. Estado de PostgreSQL: `brew services list`
 3. Archivo de log de PostgreSQL
 4. Intenta el rollback si es necesario (ver README_MIGRACION_V3.md)
+

@@ -178,3 +178,4 @@ Después de una migración exitosa:
 ✓ Asistencias se actualizan al escanear salida
 ✓ Estados distinguen entre asistencias confirmadas y asumidas
 ✓ Sistema ready para auditoría y reportes avanzados
+
