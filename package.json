@@ -1,18 +1,23 @@
 {
-    "name": "sistema-control-acceso-upqroo",
-    "version": "1.0.0",
-    "description": "Sistema de Control de Acceso UPQROO",
-    "main": "api/index.js",
-    "scripts": {
-        "vercel:dev": "vercel dev"
-    },
-    "dependencies": {
-        "pg": "^8.11.3",
-        "dotenv": "^16.4.5",
-        "bcryptjs": "^2.4.3",
-        "formidable": "^3.5.1"
-    },
-    "devDependencies": {
-        "vercel": "^37.0.0"
-    }
+  "name": "sistema-control-acceso-upqroo-v2",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun run --filter '*' dev",
+    "dev:api": "bun run --cwd apps/api dev",
+    "dev:web": "bun run --cwd apps/web dev",
+    "check": "bun run --filter '*' check",
+    "test": "bun run --filter '*' test",
+    "db:generate": "bun run --cwd apps/api db:generate",
+    "db:migrate": "bun run --cwd apps/api db:migrate"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.17",
+    "typescript": "^5.8.3"
+  }
 }
