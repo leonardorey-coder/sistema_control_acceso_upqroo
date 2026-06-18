@@ -1,16 +1,36 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { withoutUndefined } from "../../shared/object";
-import { createAdmin, listAdmins, listAdminSessions, listAuditLog, updateAdmin } from "./admin-management.repository";
+import { issueTemporaryPassword } from "../../shared/security";
+import {
+  countActiveSuperAdmins,
+  createAdmin,
+  getAdmin,
+  listAdmins,
+  listAdminSessions,
+  listAuditLog,
+  revokeAdminSession,
+  revokeAdminSessions,
+  updateAdmin
+} from "./admin-management.repository";
 
-const adminSchema = z.object({
+const adminCreateSchema = z.object({
   username: z.string().trim().min(3).max(80),
   displayName: z.string().trim().min(1).max(160),
   email: z.string().email().optional(),
-  passwordHash: z.string().min(20),
+  temporaryPassword: z.string().min(8).optional(),
   role: z.enum(["admin", "super_admin"]).default("admin"),
   status: z.enum(["active", "disabled"]).default("active"),
   mustChangePassword: z.boolean().default(true)
+});
+
+const adminPatchSchema = z.object({
+  username: z.string().trim().min(3).max(80).optional(),
+  displayName: z.string().trim().min(1).max(160).optional(),
+  email: z.string().email().optional(),
+  role: z.enum(["admin", "super_admin"]).optional(),
+  status: z.enum(["active", "disabled"]).optional(),
+  mustChangePassword: z.boolean().optional()
 });
 
 export const adminManagementRoutes = new Hono();
@@ -21,8 +41,24 @@ adminManagementRoutes.get("/", async (c) => {
 });
 
 adminManagementRoutes.post("/", async (c) => {
-  const row = await createAdmin(adminSchema.parse(await c.req.json()));
-  return c.json({ data: row }, 201);
+  const input = adminCreateSchema.parse(await c.req.json());
+  const temporaryPassword = input.temporaryPassword ?? issueTemporaryPassword();
+  const passwordHash = await Bun.password.hash(temporaryPassword, {
+    algorithm: "bcrypt",
+    cost: 10
+  });
+
+  const row = await createAdmin({
+    username: input.username,
+    displayName: input.displayName,
+    email: input.email,
+    role: input.role,
+    status: input.status,
+    mustChangePassword: input.mustChangePassword,
+    passwordHash
+  });
+
+  return c.json({ data: { ...row, temporaryPassword } }, 201);
 });
 
 adminManagementRoutes.get("/audit", async (c) => {
@@ -30,21 +66,89 @@ adminManagementRoutes.get("/audit", async (c) => {
   return c.json({ data: { rows } });
 });
 
+adminManagementRoutes.get("/:id", async (c) => {
+  const id = z.string().uuid().parse(c.req.param("id"));
+  const row = await getAdmin(id);
+  return row ? c.json({ data: row }) : c.json({ error: { code: "ADMIN_NOT_FOUND" } }, 404);
+});
+
 adminManagementRoutes.patch("/:id", async (c) => {
   const id = z.string().uuid().parse(c.req.param("id"));
-  const row = await updateAdmin(id, withoutUndefined(adminSchema.partial().parse(await c.req.json())));
+  const input = withoutUndefined(adminPatchSchema.parse(await c.req.json()));
+  const current = await getAdmin(id);
+
+  if (!current) {
+    return c.json({ error: { code: "ADMIN_NOT_FOUND" } }, 404);
+  }
+
+  if (
+    current.role === "super_admin" &&
+    current.status === "active" &&
+    (input.role === "admin" || input.status === "disabled") &&
+    await countActiveSuperAdmins(id) === 0
+  ) {
+    return c.json({ error: { code: "LAST_SUPER_ADMIN_PROTECTED" } }, 409);
+  }
+
+  const row = await updateAdmin(id, input);
+  return row ? c.json({ data: row }) : c.json({ error: { code: "ADMIN_NOT_FOUND" } }, 404);
+});
+
+adminManagementRoutes.post("/:id/disable", async (c) => {
+  const id = z.string().uuid().parse(c.req.param("id"));
+  const current = await getAdmin(id);
+
+  if (!current) {
+    return c.json({ error: { code: "ADMIN_NOT_FOUND" } }, 404);
+  }
+
+  if (
+    current.role === "super_admin" &&
+    current.status === "active" &&
+    await countActiveSuperAdmins(id) === 0
+  ) {
+    return c.json({ error: { code: "LAST_SUPER_ADMIN_PROTECTED" } }, 409);
+  }
+
+  const row = await updateAdmin(id, { status: "disabled", disabledAt: new Date() });
+  await revokeAdminSessions(id);
+  return row ? c.json({ data: row }) : c.json({ error: { code: "ADMIN_NOT_FOUND" } }, 404);
+});
+
+adminManagementRoutes.post("/:id/enable", async (c) => {
+  const id = z.string().uuid().parse(c.req.param("id"));
+  const row = await updateAdmin(id, { status: "active", disabledAt: null });
   return row ? c.json({ data: row }) : c.json({ error: { code: "ADMIN_NOT_FOUND" } }, 404);
 });
 
 adminManagementRoutes.post("/:id/reset-password", async (c) => {
   const id = z.string().uuid().parse(c.req.param("id"));
-  const body = z.object({ passwordHash: z.string().min(20) }).parse(await c.req.json());
-  const row = await updateAdmin(id, { passwordHash: body.passwordHash, mustChangePassword: true });
-  return row ? c.json({ data: row }) : c.json({ error: { code: "ADMIN_NOT_FOUND" } }, 404);
+  const body = z.object({ temporaryPassword: z.string().min(8).optional() }).parse(await c.req.json().catch(() => ({})));
+  const temporaryPassword = body.temporaryPassword ?? issueTemporaryPassword();
+  const passwordHash = await Bun.password.hash(temporaryPassword, {
+    algorithm: "bcrypt",
+    cost: 10
+  });
+  const row = await updateAdmin(id, { passwordHash, mustChangePassword: true });
+  await revokeAdminSessions(id);
+  return row ? c.json({ data: { ...row, temporaryPassword } }) : c.json({ error: { code: "ADMIN_NOT_FOUND" } }, 404);
 });
 
 adminManagementRoutes.get("/:id/sessions", async (c) => {
   const id = z.string().uuid().parse(c.req.param("id"));
   const rows = await listAdminSessions(id);
+  return c.json({ data: { rows } });
+});
+
+adminManagementRoutes.post("/:id/sessions/:sessionId/revoke", async (c) => {
+  const id = z.string().uuid().parse(c.req.param("id"));
+  const sessionId = z.string().uuid().parse(c.req.param("sessionId"));
+  const row = await revokeAdminSession(id, sessionId);
+  return row ? c.json({ data: { ok: true } }) : c.json({ error: { code: "SESSION_NOT_FOUND" } }, 404);
+});
+
+adminManagementRoutes.get("/:id/audit", async (c) => {
+  const id = z.string().uuid().parse(c.req.param("id"));
+  const rows = await listAuditLog(id);
   return c.json({ data: { rows } });
 });

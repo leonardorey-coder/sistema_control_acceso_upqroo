@@ -5,12 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "bun --watch src/server.ts",
+    "dev:worker": "bun --watch src/worker.ts",
     "start": "bun src/server.ts",
+    "worker": "bun src/worker.ts",
     "check": "tsc --noEmit",
     "test": "bun test",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+    "db:seed": "bun src/seed.ts"
   },
   "dependencies": {
     "@control-acceso/shared": "workspace:*",

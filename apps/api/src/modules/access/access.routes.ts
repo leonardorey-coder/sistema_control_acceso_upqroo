@@ -1,23 +1,29 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { atomicBackendContracts } from "../../shared/contracts";
 import { toOperationalDateRange } from "../../shared/date-range";
 import { withoutUndefined } from "../../shared/object";
 import { paginated, parsePagination } from "../../shared/pagination";
-import { listAccessToday } from "./access.repository";
+import { broadcastEvent } from "../events/events";
+import { listAccessToday, runAccessScan, runAutoExits } from "./access.repository";
 
 export const accessRoutes = new Hono();
 
 accessRoutes.post("/scan", async (c) => {
-  const body = await c.req.json().catch(() => ({}));
+  const body = z.object({
+    token: z.string().trim().min(1).optional(),
+    manualMatricula: z.string().trim().min(1).optional(),
+    adminId: z.string().uuid().optional(),
+    scannerId: z.string().trim().optional()
+  }).refine((input) => input.token || input.manualMatricula, {
+    message: "token or manualMatricula is required"
+  }).parse(await c.req.json().catch(() => ({})));
 
-  return c.json({
-    error: {
-      code: "ATOMIC_SQL_REQUIRED",
-      message: atomicBackendContracts.scanAccess,
-      received: body
-    }
-  }, 501);
+  const result = await runAccessScan(withoutUndefined(body));
+  broadcastEvent("access.scan", { result: result as Record<string, unknown> });
+  broadcastEvent("access.table", {});
+  broadcastEvent("attendance.table", {});
+
+  return c.json({ data: result });
 });
 
 const accessTodayQuerySchema = z.object({
@@ -43,10 +49,12 @@ accessRoutes.get("/today", async (c) => {
 });
 
 accessRoutes.post("/auto-exits", async (c) => {
-  return c.json({
-    error: {
-      code: "ATOMIC_SQL_REQUIRED",
-      message: atomicBackendContracts.autoExits
-    }
-  }, 501);
+  const body = z.object({
+    targetDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
+  }).parse(await c.req.json().catch(() => ({})));
+  const result = await runAutoExits(body.targetDate);
+  broadcastEvent("access.table", { autoExits: result as Record<string, unknown> });
+  broadcastEvent("attendance.table", {});
+
+  return c.json({ data: result });
 });

@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { findPersonByMatricula, createPerson, listPeople, updatePerson } from "./people.repository";
+import { createPerson, findPersonById, findPersonByMatricula, listPeople, updatePerson } from "./people.repository";
 import { withoutUndefined } from "../../shared/object";
 import { paginated, parsePagination } from "../../shared/pagination";
 
@@ -57,6 +57,17 @@ peopleRoutes.get("/by-matricula/:matricula", async (c) => {
   return c.json({ data: person });
 });
 
+peopleRoutes.get("/:id", async (c) => {
+  const id = z.string().uuid().parse(c.req.param("id"));
+  const person = await findPersonById(id);
+
+  if (!person) {
+    return c.json({ error: { code: "PERSON_NOT_FOUND" } }, 404);
+  }
+
+  return c.json({ data: person });
+});
+
 peopleRoutes.patch("/:id", async (c) => {
   const id = z.string().uuid().parse(c.req.param("id"));
   const input = withoutUndefined(personPatchSchema.parse(await c.req.json()));
@@ -67,4 +78,16 @@ peopleRoutes.patch("/:id", async (c) => {
   }
 
   return c.json({ data: row });
+});
+
+peopleRoutes.post("/:id/disable", async (c) => {
+  const id = z.string().uuid().parse(c.req.param("id"));
+  const row = await updatePerson(id, { estado: "inactivo" });
+  return row ? c.json({ data: row }) : c.json({ error: { code: "PERSON_NOT_FOUND" } }, 404);
+});
+
+peopleRoutes.post("/:id/enable", async (c) => {
+  const id = z.string().uuid().parse(c.req.param("id"));
+  const row = await updatePerson(id, { estado: "activo" });
+  return row ? c.json({ data: row }) : c.json({ error: { code: "PERSON_NOT_FOUND" } }, 404);
 });

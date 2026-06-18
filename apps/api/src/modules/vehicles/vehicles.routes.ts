@@ -1,12 +1,17 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { withoutUndefined } from "../../shared/object";
+import { stripSecretFields } from "../../shared/sanitize";
+import { issueOpaqueToken } from "../../shared/security";
 import {
   createVehicle,
   createVehiclePermit,
   createVehiclePermitQrToken,
+  getVehicle,
   listVehiclePermits,
   listVehicles,
+  rotateVehiclePermitQrTokens,
+  updateVehiclePermit,
   updateVehicle
 } from "./vehicles.repository";
 
@@ -31,8 +36,6 @@ const permitSchema = z.object({
 });
 
 const permitQrSchema = z.object({
-  vehiclePermitId: z.string().uuid(),
-  tokenHash: z.string().min(32),
   expiresAt: z.coerce.date()
 });
 
@@ -48,12 +51,6 @@ vehiclesRoutes.post("/", async (c) => {
   return c.json({ data: row }, 201);
 });
 
-vehiclesRoutes.patch("/:id", async (c) => {
-  const id = z.string().uuid().parse(c.req.param("id"));
-  const row = await updateVehicle(id, withoutUndefined(vehicleSchema.partial().parse(await c.req.json())));
-  return row ? c.json({ data: row }) : c.json({ error: { code: "VEHICLE_NOT_FOUND" } }, 404);
-});
-
 vehiclesRoutes.get("/permits", async (c) => {
   const rows = await listVehiclePermits();
   return c.json({ data: { rows } });
@@ -64,9 +61,44 @@ vehiclesRoutes.post("/permits", async (c) => {
   return c.json({ data: row }, 201);
 });
 
-vehiclesRoutes.post("/permits/:permitId/qr-tokens", async (c) => {
+vehiclesRoutes.post("/permits/:permitId/revoke", async (c) => {
   const permitId = z.string().uuid().parse(c.req.param("permitId"));
-  const body = permitQrSchema.parse({ ...(await c.req.json()), vehiclePermitId: permitId });
-  const row = await createVehiclePermitQrToken(body);
-  return c.json({ data: row }, 201);
+  const row = await updateVehiclePermit(permitId, { status: "revoked", revokedAt: new Date() });
+  return row ? c.json({ data: row }) : c.json({ error: { code: "VEHICLE_PERMIT_NOT_FOUND" } }, 404);
+});
+
+vehiclesRoutes.post("/permits/:permitId/qr/rotate", async (c) => {
+  const permitId = z.string().uuid().parse(c.req.param("permitId"));
+  const body = permitQrSchema.parse(await c.req.json());
+  await rotateVehiclePermitQrTokens(permitId);
+  const issued = issueOpaqueToken("vehicle_permit_qr");
+  const row = await createVehiclePermitQrToken({
+    vehiclePermitId: permitId,
+    tokenHash: issued.tokenHash,
+    expiresAt: body.expiresAt
+  });
+
+  if (!row) {
+    throw new Error("Failed to create vehicle permit QR token");
+  }
+
+  return c.json({ data: { credential: stripSecretFields(row), token: issued.token } }, 201);
+});
+
+vehiclesRoutes.get("/:id", async (c) => {
+  const id = z.string().uuid().parse(c.req.param("id"));
+  const row = await getVehicle(id);
+  return row ? c.json({ data: row }) : c.json({ error: { code: "VEHICLE_NOT_FOUND" } }, 404);
+});
+
+vehiclesRoutes.patch("/:id", async (c) => {
+  const id = z.string().uuid().parse(c.req.param("id"));
+  const row = await updateVehicle(id, withoutUndefined(vehicleSchema.partial().parse(await c.req.json())));
+  return row ? c.json({ data: row }) : c.json({ error: { code: "VEHICLE_NOT_FOUND" } }, 404);
+});
+
+vehiclesRoutes.post("/:id/disable", async (c) => {
+  const id = z.string().uuid().parse(c.req.param("id"));
+  const row = await updateVehicle(id, { status: "inactive" });
+  return row ? c.json({ data: row }) : c.json({ error: { code: "VEHICLE_NOT_FOUND" } }, 404);
 });

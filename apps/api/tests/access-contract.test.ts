@@ -1,23 +1,25 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "bun:test";
 import { app } from "../src/app";
 
 describe("access atomic contracts", () => {
-  it("keeps scan behind the SQL atomic implementation boundary", async () => {
+  it("validates scan input before touching Postgres", async () => {
     const response = await app.request("/api/v1/access/scan", {
       method: "POST",
-      body: JSON.stringify({ token: "demo" })
+      body: JSON.stringify({})
     });
     const body = await response.json();
 
-    expect(response.status).toBe(501);
-    expect(body.error.code).toBe("ATOMIC_SQL_REQUIRED");
+    expect(response.status).toBe(400);
+    expect(body.error.code).toBe("VALIDATION_ERROR");
   });
 
-  it("keeps integrity verification behind the SQL implementation boundary", async () => {
-    const response = await app.request("/api/v1/integrity/access-chain");
-    const body = await response.json();
+  it("ships the SQL atomic functions in a versioned migration", () => {
+    const migration = readFileSync("drizzle/migrations/0001_access_atomic.sql", "utf8");
 
-    expect(response.status).toBe(501);
-    expect(body.error.code).toBe("ATOMIC_SQL_REQUIRED");
+    expect(migration).toContain("CREATE EXTENSION IF NOT EXISTS pgcrypto");
+    expect(migration).toContain("CREATE OR REPLACE FUNCTION access_scan_v1");
+    expect(migration).toContain("CREATE OR REPLACE FUNCTION auto_close_access_v1");
+    expect(migration).toContain("CREATE OR REPLACE FUNCTION verify_access_chain_v1");
   });
 });

@@ -3,7 +3,10 @@ import { z } from "zod";
 import { toOperationalDateRange } from "../../shared/date-range";
 import { withoutUndefined } from "../../shared/object";
 import { paginated, parsePagination } from "../../shared/pagination";
-import { listHotQrToday } from "./hot-qr.repository";
+import { stripSecretFields } from "../../shared/sanitize";
+import { issueOpaqueToken } from "../../shared/security";
+import { broadcastEvent } from "../events/events";
+import { createHotQr, listHotQrToday, revokeHotQr } from "./hot-qr.repository";
 
 const hotQrQuerySchema = z.object({
   q: z.string().trim().min(1).optional(),
@@ -13,6 +16,15 @@ const hotQrQuerySchema = z.object({
 });
 
 export const hotQrRoutes = new Hono();
+
+const hotQrCreateSchema = z.object({
+  visitorName: z.string().trim().min(1).max(160),
+  reason: z.string().trim().min(1),
+  maxUses: z.number().int().min(1).max(10).default(1),
+  validUntil: z.coerce.date(),
+  createdByAdminId: z.string().uuid().optional(),
+  metadata: z.record(z.unknown()).default({})
+});
 
 hotQrRoutes.get("/today", async (c) => {
   const pagination = parsePagination(c.req.query());
@@ -26,4 +38,32 @@ hotQrRoutes.get("/today", async (c) => {
       filtered: Boolean(query.q || query.status || query.creatorId)
     })
   });
+});
+
+hotQrRoutes.post("/", async (c) => {
+  const input = hotQrCreateSchema.parse(await c.req.json());
+  const issued = issueOpaqueToken("hot_qr");
+  const row = await createHotQr({
+    ...input,
+    tokenHash: issued.tokenHash
+  });
+
+  if (!row) {
+    throw new Error("Failed to create Hot-QR");
+  }
+
+  broadcastEvent("hot-qr.table", { action: "created", id: row.id });
+  return c.json({ data: { credential: stripSecretFields(row), token: issued.token } }, 201);
+});
+
+hotQrRoutes.post("/:id/revoke", async (c) => {
+  const id = z.string().uuid().parse(c.req.param("id"));
+  const row = await revokeHotQr(id);
+
+  if (!row) {
+    return c.json({ error: { code: "HOT_QR_NOT_FOUND" } }, 404);
+  }
+
+  broadcastEvent("hot-qr.table", { action: "revoked", id });
+  return c.json({ data: stripSecretFields(row) });
 });

@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gte, ilike, lte, or, type SQL } from "drizzle-orm";
+import { and, count, desc, eq, gte, ilike, lte, or, sql, type SQL } from "drizzle-orm";
 import { db } from "../../db/client";
 import {
   administradores,
@@ -95,4 +95,29 @@ export async function listAccessToday(filters: AccessTodayFilters, pagination: P
     rows,
     total: totalRows[0]?.total ?? 0
   };
+}
+
+export type AccessScanPayload = {
+  token?: string;
+  manualMatricula?: string;
+  adminId?: string;
+  scannerId?: string;
+};
+
+export async function runAccessScan(payload: AccessScanPayload) {
+  const [row] = await db.execute<{ result: unknown }>(
+    sql`select access_scan_v1(${JSON.stringify(payload)}::jsonb) as result`
+  );
+
+  return row?.result;
+}
+
+export async function runAutoExits(targetDate?: string) {
+  const [row] = await db.execute<{ result: unknown }>(
+    targetDate
+      ? sql`select auto_close_access_v1(${targetDate}::date) as result`
+      : sql`select auto_close_access_v1() as result`
+  );
+
+  return row?.result;
 }

@@ -72,3 +72,18 @@ export async function listHotQrToday(filters: HotQrFilters, pagination: Paginati
     total: totalRows[0]?.total ?? 0
   };
 }
+
+export async function createHotQr(input: typeof hotQrTokens.$inferInsert) {
+  const [row] = await db.insert(hotQrTokens).values(input).returning();
+  return row;
+}
+
+export async function revokeHotQr(id: string) {
+  const [row] = await db
+    .update(hotQrTokens)
+    .set({ status: "revoked", revokedAt: new Date() })
+    .where(eq(hotQrTokens.id, id))
+    .returning();
+
+  return row;
+}

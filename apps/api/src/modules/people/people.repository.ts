@@ -80,6 +80,12 @@ export function findPersonByMatricula(matricula: string) {
   });
 }
 
+export function findPersonById(id: string) {
+  return db.query.personas.findFirst({
+    where: eq(personas.id, id)
+  });
+}
+
 export async function createPerson(input: typeof personas.$inferInsert) {
   const [row] = await db.insert(personas).values(input).returning();
   return row;

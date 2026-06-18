@@ -1,13 +1,15 @@
 import { Hono } from "hono";
-import { atomicBackendContracts } from "../../shared/contracts";
+import { z } from "zod";
+import { verifyAccessChain } from "./integrity.repository";
 
 export const integrityRoutes = new Hono();
 
 integrityRoutes.get("/access-chain", async (c) => {
-  return c.json({
-    error: {
-      code: "ATOMIC_SQL_REQUIRED",
-      message: atomicBackendContracts.integrityVerification
-    }
-  }, 501);
+  const query = z.object({
+    from: z.string().datetime().optional(),
+    to: z.string().datetime().optional()
+  }).parse(c.req.query());
+
+  const result = await verifyAccessChain(query.from, query.to);
+  return c.json({ data: result });
 });

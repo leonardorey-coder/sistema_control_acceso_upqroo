@@ -10,11 +10,15 @@
   "scripts": {
     "dev": "bun run --filter '*' dev",
     "dev:api": "bun run --cwd apps/api dev",
+    "dev:worker": "bun run --cwd apps/api dev:worker",
     "dev:web": "bun run --cwd apps/web dev",
+    "build": "bun run --cwd apps/web build",
     "check": "bun run --filter '*' check",
     "test": "bun run --filter '*' test",
     "db:generate": "bun run --cwd apps/api db:generate",
-    "db:migrate": "bun run --cwd apps/api db:migrate"
+    "db:migrate": "bun run --cwd apps/api db:migrate",
+    "db:seed": "bun run --cwd apps/api db:seed",
+    "worker": "bun run --cwd apps/api worker"
   },
   "devDependencies": {
     "@types/bun": "^1.2.17",
