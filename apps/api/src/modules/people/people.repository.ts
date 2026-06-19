@@ -88,7 +88,7 @@ export function findPersonById(id: string) {
 
 export async function createPerson(input: typeof personas.$inferInsert) {
   const [row] = await db.insert(personas).values(input).returning();
-  return row;
+  return row!;
 }
 
 export async function updatePerson(id: string, input: Partial<typeof personas.$inferInsert>) {

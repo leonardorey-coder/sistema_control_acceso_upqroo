@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { app } from "../src/app";
 import { hashScannerToken, issueOpaqueToken } from "../src/shared/security";
 import { stripSecretFields } from "../src/shared/sanitize";
 
@@ -22,5 +23,13 @@ describe("security helpers", () => {
       id: "1",
       visible: true
     });
+  });
+
+  it("requires an admin session for protected administrative routes", async () => {
+    const response = await app.request("/api/v1/admins");
+    const body = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(body.error.code).toBe("SESSION_REQUIRED");
   });
 });

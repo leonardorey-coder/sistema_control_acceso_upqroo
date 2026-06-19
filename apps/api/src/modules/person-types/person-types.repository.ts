@@ -6,6 +6,12 @@ export function listPersonTypes() {
   return db.select().from(personTypes).orderBy(asc(personTypes.label));
 }
 
+export function findPersonType(code: string) {
+  return db.query.personTypes.findFirst({
+    where: eq(personTypes.code, code)
+  });
+}
+
 export async function createPersonType(input: typeof personTypes.$inferInsert) {
   const [row] = await db.insert(personTypes).values(input).returning();
   return row;

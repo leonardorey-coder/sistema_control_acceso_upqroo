@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import { z } from "zod";
 import { env } from "../../config/env";
+import { recordAudit } from "../../shared/audit";
 import { HttpError } from "../../shared/http-error";
 import { hashSessionToken, issueSessionToken } from "../../shared/security";
 import {
@@ -66,12 +67,27 @@ authRoutes.post("/login", async (c) => {
   const admin = await findAdminForLogin(input.identity);
 
   if (!admin || admin.status !== "active") {
+    await recordAudit({
+      action: "admin.login_failed",
+      entityType: "admin_session",
+      ipAddress: c.req.header("x-forwarded-for") ?? undefined,
+      userAgent: c.req.header("user-agent") ?? undefined,
+      metadata: { identity: input.identity, reason: "not_found_or_disabled" }
+    });
     throw new HttpError(401, "INVALID_CREDENTIALS", "Invalid credentials.");
   }
 
   const passwordOk = await Bun.password.verify(input.password, admin.passwordHash);
 
   if (!passwordOk) {
+    await recordAudit({
+      actorAdminId: admin.id,
+      action: "admin.login_failed",
+      entityType: "admin_session",
+      ipAddress: c.req.header("x-forwarded-for") ?? undefined,
+      userAgent: c.req.header("user-agent") ?? undefined,
+      metadata: { identity: input.identity, reason: "bad_password" }
+    });
     throw new HttpError(401, "INVALID_CREDENTIALS", "Invalid credentials.");
   }
 
@@ -85,6 +101,15 @@ authRoutes.post("/login", async (c) => {
     ipAddress: c.req.header("x-forwarded-for") ?? undefined,
     userAgent: c.req.header("user-agent") ?? undefined,
     expiresAt
+  });
+
+  await recordAudit({
+    actorAdminId: admin.id,
+    action: "admin.login_success",
+    entityType: "admin_session",
+    ipAddress: c.req.header("x-forwarded-for") ?? undefined,
+    userAgent: c.req.header("user-agent") ?? undefined,
+    metadata: { username: admin.username }
   });
 
   setCookie(c, env.SESSION_COOKIE_NAME, token, sessionCookieOptions(expiresAt));
@@ -108,7 +133,17 @@ authRoutes.post("/logout", async (c) => {
   const token = getCookie(c, env.SESSION_COOKIE_NAME);
 
   if (token) {
-    await revokeSession(hashSessionToken(token));
+    const sessionHash = hashSessionToken(token);
+    const session = await getSessionByHash(sessionHash);
+    await revokeSession(sessionHash);
+    await recordAudit({
+      actorAdminId: session?.adminId,
+      action: "admin.logout",
+      entityType: "admin_session",
+      entityId: session?.sessionId,
+      ipAddress: c.req.header("x-forwarded-for") ?? undefined,
+      userAgent: c.req.header("user-agent") ?? undefined
+    });
   }
 
   deleteCookie(c, env.SESSION_COOKIE_NAME, { path: "/" });

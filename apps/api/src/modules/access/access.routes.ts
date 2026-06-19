@@ -1,5 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
+import { getActorMetadata } from "../../http/middleware/session";
+import { recordAudit } from "../../shared/audit";
 import { toOperationalDateRange } from "../../shared/date-range";
 import { withoutUndefined } from "../../shared/object";
 import { paginated, parsePagination } from "../../shared/pagination";
@@ -19,6 +21,13 @@ accessRoutes.post("/scan", async (c) => {
   }).parse(await c.req.json().catch(() => ({})));
 
   const result = await runAccessScan(withoutUndefined(body));
+  await recordAudit({
+    ...getActorMetadata(c),
+    action: "access.scan",
+    entityType: "access",
+    entityId: typeof result === "object" && result && "registroId" in result ? String(result.registroId) : undefined,
+    metadata: { result }
+  });
   broadcastEvent("access.scan", { result: result as Record<string, unknown> });
   broadcastEvent("access.table", {});
   broadcastEvent("attendance.table", {});
@@ -53,6 +62,12 @@ accessRoutes.post("/auto-exits", async (c) => {
     targetDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
   }).parse(await c.req.json().catch(() => ({})));
   const result = await runAutoExits(body.targetDate);
+  await recordAudit({
+    ...getActorMetadata(c),
+    action: "access.auto_exits",
+    entityType: "access",
+    metadata: { targetDate: body.targetDate, result }
+  });
   broadcastEvent("access.table", { autoExits: result as Record<string, unknown> });
   broadcastEvent("attendance.table", {});
 

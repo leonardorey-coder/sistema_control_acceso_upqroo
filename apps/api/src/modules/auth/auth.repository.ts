@@ -1,4 +1,4 @@
-import { and, eq, gt, or } from "drizzle-orm";
+import { and, eq, gt, isNull, or } from "drizzle-orm";
 import { db } from "../../db/client";
 import { administradores, adminSessions } from "../../db/schema";
 
@@ -33,6 +33,7 @@ export async function getSessionByHash(sessionHash: string) {
     .innerJoin(administradores, eq(adminSessions.adminId, administradores.id))
     .where(and(
       eq(adminSessions.sessionHash, sessionHash),
+      isNull(adminSessions.revokedAt),
       eq(administradores.status, "active"),
       gt(adminSessions.expiresAt, new Date())
     ))

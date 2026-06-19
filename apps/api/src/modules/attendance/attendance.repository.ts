@@ -100,7 +100,7 @@ export function listSubjects() {
 
 export async function createSubject(input: typeof subjects.$inferInsert) {
   const [row] = await db.insert(subjects).values(input).returning();
-  return row;
+  return row!;
 }
 
 export async function updateSubject(id: string, input: Partial<typeof subjects.$inferInsert>) {
@@ -114,7 +114,7 @@ export function listSchedules() {
 
 export async function createSchedule(input: typeof schedules.$inferInsert) {
   const [row] = await db.insert(schedules).values(input).returning();
-  return row;
+  return row!;
 }
 
 export async function updateSchedule(id: string, input: Partial<typeof schedules.$inferInsert>) {

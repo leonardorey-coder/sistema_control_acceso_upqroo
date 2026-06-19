@@ -99,6 +99,11 @@ export const adminStatus = pgEnum("admin_status", [
   "disabled"
 ]);
 
+export const userAccountStatus = pgEnum("user_account_status", [
+  "active",
+  "disabled"
+]);
+
 export const personTypes = pgTable("person_types", {
   code: varchar("code", { length: 40 }).primaryKey(),
   label: varchar("label", { length: 80 }).notNull(),
@@ -185,12 +190,30 @@ export const userAccounts = pgTable("user_accounts", {
   personId: uuid("person_id").notNull().references(() => personas.id),
   email: varchar("email", { length: 180 }),
   passwordHash: text("password_hash").notNull(),
+  status: userAccountStatus("status").notNull().default("active"),
   mustChangePassword: boolean("must_change_password").notNull().default(false),
+  lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   disabledAt: timestamp("disabled_at", { withTimezone: true })
 }, (table) => ({
   emailUnique: uniqueIndex("user_accounts_email_unique").on(table.email),
   personIdx: index("user_accounts_person_idx").on(table.personId)
+}));
+
+export const userSessions = pgTable("user_sessions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  accountId: uuid("account_id").notNull().references(() => userAccounts.id),
+  sessionHash: text("session_hash").notNull(),
+  ipAddress: varchar("ip_address", { length: 80 }),
+  userAgent: text("user_agent"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+}, (table) => ({
+  sessionHashUnique: uniqueIndex("user_sessions_hash_unique").on(table.sessionHash),
+  accountIdx: index("user_sessions_account_idx").on(table.accountId, table.expiresAt)
 }));
 
 export const adminSessions = pgTable("admin_sessions", {
@@ -243,6 +266,7 @@ export const qrTokens = pgTable("qr_tokens", {
   personId: uuid("person_id").notNull().references(() => personas.id),
   tokenHash: text("token_hash").notNull(),
   jti: uuid("jti").notNull().defaultRandom(),
+  tokenVersion: integer("token_version").notNull().default(1),
   status: qrTokenStatus("status").notNull().default("active"),
   issuedAt: timestamp("issued_at", { withTimezone: true }).notNull().defaultNow(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
@@ -292,6 +316,7 @@ export const vehiclePermitQrTokens = pgTable("vehicle_permit_qr_tokens", {
   vehiclePermitId: uuid("vehicle_permit_id").notNull().references(() => vehiclePermits.id),
   tokenHash: text("token_hash").notNull(),
   jti: uuid("jti").notNull().defaultRandom(),
+  tokenVersion: integer("token_version").notNull().default(1),
   status: qrTokenStatus("status").notNull().default("active"),
   issuedAt: timestamp("issued_at", { withTimezone: true }).notNull().defaultNow(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
@@ -345,7 +370,7 @@ export const temporaryDailyQrTokens = pgTable("temporary_daily_qr_tokens", {
   oneDailyCredential: uniqueIndex("temporary_daily_qr_unique").on(
     table.personId,
     table.operationalDate
-  ),
+  ).where(sql`${table.status} = 'active'`),
   hashUnique: uniqueIndex("temporary_daily_qr_hash_unique").on(table.tokenHash)
 }));
 
@@ -443,6 +468,8 @@ export const auditLog = pgTable("audit_log", {
   action: varchar("action", { length: 120 }).notNull(),
   entityType: varchar("entity_type", { length: 80 }).notNull(),
   entityId: uuid("entity_id"),
+  ipAddress: varchar("ip_address", { length: 80 }),
+  userAgent: text("user_agent"),
   metadata: jsonb("metadata").notNull().default(sql`'{}'::jsonb`),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
 }, (table) => ({

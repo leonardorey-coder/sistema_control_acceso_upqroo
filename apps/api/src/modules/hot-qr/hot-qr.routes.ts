@@ -1,5 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
+import { getActorMetadata } from "../../http/middleware/session";
+import { recordAudit } from "../../shared/audit";
 import { toOperationalDateRange } from "../../shared/date-range";
 import { withoutUndefined } from "../../shared/object";
 import { paginated, parsePagination } from "../../shared/pagination";
@@ -52,6 +54,14 @@ hotQrRoutes.post("/", async (c) => {
     throw new Error("Failed to create Hot-QR");
   }
 
+  await recordAudit({
+    ...getActorMetadata(c),
+    action: "hot_qr.created",
+    entityType: "hot_qr",
+    entityId: row.id,
+    metadata: { visitorName: row.visitorName, validUntil: row.validUntil }
+  });
+
   broadcastEvent("hot-qr.table", { action: "created", id: row.id });
   return c.json({ data: { credential: stripSecretFields(row), token: issued.token } }, 201);
 });
@@ -63,6 +73,13 @@ hotQrRoutes.post("/:id/revoke", async (c) => {
   if (!row) {
     return c.json({ error: { code: "HOT_QR_NOT_FOUND" } }, 404);
   }
+
+  await recordAudit({
+    ...getActorMetadata(c),
+    action: "hot_qr.revoked",
+    entityType: "hot_qr",
+    entityId: id
+  });
 
   broadcastEvent("hot-qr.table", { action: "revoked", id });
   return c.json({ data: stripSecretFields(row) });

@@ -1,5 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
+import { getActorMetadata } from "../../http/middleware/session";
+import { recordAudit } from "../../shared/audit";
 import { toOperationalDateRange } from "../../shared/date-range";
 import { withoutUndefined } from "../../shared/object";
 import { paginated, parsePagination } from "../../shared/pagination";
@@ -71,12 +73,27 @@ subjectsRoutes.get("/", async (c) => {
 
 subjectsRoutes.post("/", async (c) => {
   const row = await createSubject(subjectSchema.parse(await c.req.json()));
+  await recordAudit({
+    ...getActorMetadata(c),
+    action: "subject.created",
+    entityType: "subject",
+    entityId: row.id,
+    metadata: { clave: row.clave }
+  });
   return c.json({ data: row }, 201);
 });
 
 subjectsRoutes.patch("/:id", async (c) => {
   const id = z.string().uuid().parse(c.req.param("id"));
   const row = await updateSubject(id, withoutUndefined(subjectSchema.partial().parse(await c.req.json())));
+  if (row) {
+    await recordAudit({
+      ...getActorMetadata(c),
+      action: "subject.updated",
+      entityType: "subject",
+      entityId: id
+    });
+  }
   return row ? c.json({ data: row }) : c.json({ error: { code: "SUBJECT_NOT_FOUND" } }, 404);
 });
 
@@ -87,11 +104,26 @@ schedulesRoutes.get("/", async (c) => {
 
 schedulesRoutes.post("/", async (c) => {
   const row = await createSchedule(scheduleSchema.parse(await c.req.json()));
+  await recordAudit({
+    ...getActorMetadata(c),
+    action: "schedule.created",
+    entityType: "schedule",
+    entityId: row.id,
+    metadata: { personId: row.personId, subjectId: row.subjectId }
+  });
   return c.json({ data: row }, 201);
 });
 
 schedulesRoutes.patch("/:id", async (c) => {
   const id = z.string().uuid().parse(c.req.param("id"));
   const row = await updateSchedule(id, withoutUndefined(scheduleSchema.partial().parse(await c.req.json())));
+  if (row) {
+    await recordAudit({
+      ...getActorMetadata(c),
+      action: "schedule.updated",
+      entityType: "schedule",
+      entityId: id
+    });
+  }
   return row ? c.json({ data: row }) : c.json({ error: { code: "SCHEDULE_NOT_FOUND" } }, 404);
 });

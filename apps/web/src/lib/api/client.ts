@@ -24,13 +24,16 @@ export async function apiRequest<T>(
   init: RequestInit = {},
   fetcher: typeof fetch = fetch
 ): Promise<T> {
+  const headers = new Headers(init.headers);
+
+  if (!(init.body instanceof FormData) && !headers.has("content-type")) {
+    headers.set("content-type", "application/json");
+  }
+
   const response = await fetcher(`${apiBaseUrl}${path}`, {
     ...init,
     credentials: "include",
-    headers: {
-      "content-type": "application/json",
-      ...init.headers
-    }
+    headers
   });
   const payload = await response.json().catch(() => ({})) as ApiResult<T>;
 

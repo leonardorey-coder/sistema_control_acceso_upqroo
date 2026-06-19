@@ -12,8 +12,10 @@ import { hotQrRoutes } from "./modules/hot-qr/hot-qr.routes";
 import { integrityRoutes } from "./modules/integrity/integrity.routes";
 import { peopleRoutes } from "./modules/people/people.routes";
 import { personTypesRoutes } from "./modules/person-types/person-types.routes";
+import { userPortalRoutes } from "./modules/user-portal/user-portal.routes";
 import { vehiclesRoutes } from "./modules/vehicles/vehicles.routes";
 import { healthRoutes } from "./http/routes/health.routes";
+import { requireAdminRole, requireAdminSession } from "./http/middleware/session";
 
 export const app = new Hono();
 
@@ -26,6 +28,38 @@ app.use("*", cors({
 
 app.route("/health", healthRoutes);
 app.route("/api/v1/auth", authRoutes);
+app.route("/api/v1/portal", userPortalRoutes);
+
+for (const path of [
+  "/api/v1/people",
+  "/api/v1/people/*",
+  "/api/v1/person-types",
+  "/api/v1/person-types/*",
+  "/api/v1/access",
+  "/api/v1/access/*",
+  "/api/v1/attendance",
+  "/api/v1/attendance/*",
+  "/api/v1/subjects",
+  "/api/v1/subjects/*",
+  "/api/v1/schedules",
+  "/api/v1/schedules/*",
+  "/api/v1/hot-qr",
+  "/api/v1/hot-qr/*",
+  "/api/v1/vehicles",
+  "/api/v1/vehicles/*",
+  "/api/v1/config",
+  "/api/v1/config/*",
+  "/api/v1/integrity",
+  "/api/v1/integrity/*",
+  "/api/v1/credentials",
+  "/api/v1/credentials/*"
+]) {
+  app.use(path, requireAdminSession);
+}
+
+app.use("/api/v1/admins", requireAdminRole("super_admin"));
+app.use("/api/v1/admins/*", requireAdminRole("super_admin"));
+
 app.route("/api/v1/people", peopleRoutes);
 app.route("/api/v1/person-types", personTypesRoutes);
 app.route("/api/v1/access", accessRoutes);

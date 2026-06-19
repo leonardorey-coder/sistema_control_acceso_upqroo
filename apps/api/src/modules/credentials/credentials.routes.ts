@@ -1,5 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
+import { getActorMetadata } from "../../http/middleware/session";
+import { recordAudit } from "../../shared/audit";
 import { stripSecretFields } from "../../shared/sanitize";
 import { issueOpaqueToken } from "../../shared/security";
 import {
@@ -7,6 +9,7 @@ import {
   createTemporaryDailyQr,
   listPersonQrTokens,
   listTemporaryDailyQr,
+  revokeActivePersonQrTokens,
   revokeTemporaryDailyQr
 } from "./credentials.repository";
 
@@ -47,7 +50,51 @@ credentialsRoutes.post("/person", async (c) => {
     throw new Error("Failed to create person QR token");
   }
 
+  await recordAudit({
+    ...getActorMetadata(c),
+    action: "credential.person_qr_issued",
+    entityType: "qr_token",
+    entityId: row.id,
+    metadata: { personId: input.personId }
+  });
+
   return c.json({ data: { credential: stripSecretFields(row), token: issued.token } }, 201);
+});
+
+credentialsRoutes.post("/person/:personId/rotate", async (c) => {
+  const personId = z.string().uuid().parse(c.req.param("personId"));
+  const body = personQrSchema.omit({ personId: true }).parse(await c.req.json());
+  await revokeActivePersonQrTokens(personId);
+  const issued = issueOpaqueToken("person_qr");
+  const row = await createPersonQrToken({
+    personId,
+    expiresAt: body.expiresAt,
+    tokenHash: issued.tokenHash
+  });
+
+  await recordAudit({
+    ...getActorMetadata(c),
+    action: "credential.person_qr_rotated",
+    entityType: "qr_token",
+    entityId: row.id,
+    metadata: { personId }
+  });
+
+  return c.json({ data: { credential: stripSecretFields(row), token: issued.token } }, 201);
+});
+
+credentialsRoutes.post("/person/:personId/revoke", async (c) => {
+  const personId = z.string().uuid().parse(c.req.param("personId"));
+  const rows = await revokeActivePersonQrTokens(personId);
+  await recordAudit({
+    ...getActorMetadata(c),
+    action: "credential.person_qr_revoked",
+    entityType: "person",
+    entityId: personId,
+    metadata: { revoked: rows.length }
+  });
+
+  return c.json({ data: { rows } });
 });
 
 credentialsRoutes.get("/temporary-daily", async (c) => {
@@ -67,11 +114,27 @@ credentialsRoutes.post("/temporary-daily", async (c) => {
     throw new Error("Failed to create temporary daily QR");
   }
 
+  await recordAudit({
+    ...getActorMetadata(c),
+    action: "credential.temporary_daily_qr_issued",
+    entityType: "temporary_daily_qr",
+    entityId: row.id,
+    metadata: { personId: input.personId, operationalDate: input.operationalDate }
+  });
+
   return c.json({ data: { credential: stripSecretFields(row), token: issued.token } }, 201);
 });
 
 credentialsRoutes.post("/temporary-daily/:id/revoke", async (c) => {
   const id = z.string().uuid().parse(c.req.param("id"));
   const row = await revokeTemporaryDailyQr(id);
+  if (row) {
+    await recordAudit({
+      ...getActorMetadata(c),
+      action: "credential.temporary_daily_qr_revoked",
+      entityType: "temporary_daily_qr",
+      entityId: id
+    });
+  }
   return row ? c.json({ data: row }) : c.json({ error: { code: "TEMPORARY_DAILY_QR_NOT_FOUND" } }, 404);
 });

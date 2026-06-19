@@ -1,5 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
+import { getActorMetadata } from "../../http/middleware/session";
+import { recordAudit } from "../../shared/audit";
 import { getOperationalConfig, upsertOperationalConfig } from "./config.repository";
 
 const defaultScannerConfig = {
@@ -31,6 +33,13 @@ configRoutes.patch("/operational", async (c) => {
     value: input.value,
     description: input.description,
     updatedByAdminId: input.updatedByAdminId
+  });
+
+  await recordAudit({
+    ...getActorMetadata(c),
+    action: "config.operational_updated",
+    entityType: "operational_config",
+    metadata: { key: "scanner" }
   });
 
   return c.json({ data: row });

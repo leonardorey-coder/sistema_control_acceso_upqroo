@@ -13,6 +13,7 @@ export async function runWorkerCycle() {
     vehiclePermitQr: number;
     personQr: number;
     sessions: number;
+    userSessions: number;
   }>(sql`
     with hot_qr as (
       update hot_qr_tokens
@@ -43,13 +44,20 @@ export async function runWorkerCycle() {
       set revoked_at = now()
       where revoked_at is null and expires_at <= now()
       returning id
+    ),
+    user_sessions_expired as (
+      update user_sessions
+      set revoked_at = now()
+      where revoked_at is null and expires_at <= now()
+      returning id
     )
     select
       (select count(*)::int from hot_qr) as "hotQr",
       (select count(*)::int from temporary_daily_qr) as "temporaryDailyQr",
       (select count(*)::int from vehicle_permit_qr) as "vehiclePermitQr",
       (select count(*)::int from person_qr) as "personQr",
-      (select count(*)::int from sessions) as "sessions"
+      (select count(*)::int from sessions) as "sessions",
+      (select count(*)::int from user_sessions_expired) as "userSessions"
   `);
 
   return {

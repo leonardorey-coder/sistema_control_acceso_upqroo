@@ -1,9 +1,15 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import AdminShell from "$lib/components/AdminShell.svelte";
-  import DataTable from "$lib/components/DataTable.svelte";
-  import QrPreview from "$lib/components/QrPreview.svelte";
+  import AccessTab from "$lib/components/AccessTab.svelte";
+  import AdminsTab from "$lib/components/AdminsTab.svelte";
+  import AttendanceTab from "$lib/components/AttendanceTab.svelte";
+  import ConfigTab from "$lib/components/ConfigTab.svelte";
+  import EditPersonTab from "$lib/components/EditPersonTab.svelte";
+  import GeneratorTab from "$lib/components/GeneratorTab.svelte";
+  import HotQrTab from "$lib/components/HotQrTab.svelte";
   import ScannerView from "$lib/components/ScannerView.svelte";
+  import VehiclesTab from "$lib/components/VehiclesTab.svelte";
   import { apiBaseUrl, apiRequest, toQuery, type PaginatedRows } from "$lib/api/client";
   import type { PageData } from "./$types";
 
@@ -130,7 +136,7 @@
   }
 
   async function refreshVehicles() {
-    vehicleRows = (await apiRequest<{ rows: Row[] }>("/api/v1/vehicles")).rows;
+    vehicleRows = (await apiRequest<PaginatedRows<Row>>(`/api/v1/vehicles${toQuery({ page: 1, pageSize: 100 })}`)).rows;
   }
 
   async function refreshAdmins() {
@@ -313,210 +319,41 @@
     {#if notice}<p class="notice">{notice}</p>{/if}
 
     {#if activeTab === "generator"}
-      <section class="grid two">
-        <form class="panel form-grid" onsubmit={(event) => { event.preventDefault(); createPersonAndQr(); }}>
-          <div class="section-header">
-            <h2>Generador de Codigo QR</h2>
-            <p>Cree credenciales personales con registro nuevo o matricula existente</p>
-          </div>
-          <input bind:value={personForm.matricula} placeholder="Matricula" required />
-          <input bind:value={personForm.nombres} placeholder="Nombres" />
-          <input bind:value={personForm.apellidos} placeholder="Apellidos" />
-          <input bind:value={personForm.curp} placeholder="CURP" oninput={() => (personForm.curp = personForm.curp.toUpperCase())} />
-          <select bind:value={personForm.tipoPersona}>
-            <option value="estudiante">Estudiante</option>
-            <option value="aspirante">Aspirante</option>
-            <option value="docente">Docente</option>
-            <option value="administrativo">Administrativo</option>
-            <option value="invitado">Invitado</option>
-            <option value="otro">Otro</option>
-          </select>
-          <input bind:value={personForm.expiresAt} type="datetime-local" />
-          <textarea bind:value={personForm.notas} placeholder="Notas"></textarea>
-          <button>Registrar y Generar</button>
-        </form>
-        <section class="panel">
-          <QrPreview token={generatedToken} title={generatedTitle || "QR"} subtitle="El token visible se muestra solo en esta respuesta" />
-        </section>
-      </section>
+      <GeneratorTab {personForm} {generatedToken} {generatedTitle} onSubmit={createPersonAndQr} />
     {/if}
 
     {#if activeTab === "edit"}
-      <section class="grid two">
-        <form class="panel" onsubmit={(event) => { event.preventDefault(); searchPerson(); }}>
-          <h2>Editar persona</h2>
-          <input bind:value={editMatricula} placeholder="Buscar por matricula" />
-          <button>Buscar</button>
-        </form>
-        {#if editPerson}
-          <form class="panel form-grid" onsubmit={(event) => { event.preventDefault(); saveEditPerson(); }}>
-            <input bind:value={editPerson.matricula} placeholder="Matricula" />
-            <input bind:value={editPerson.nombres} placeholder="Nombres" />
-            <input bind:value={editPerson.apellidos} placeholder="Apellidos" />
-            <select bind:value={editPerson.tipoPersona}>
-              <option value="estudiante">Estudiante</option>
-              <option value="aspirante">Aspirante</option>
-              <option value="docente">Docente</option>
-              <option value="administrativo">Administrativo</option>
-              <option value="invitado">Invitado</option>
-              <option value="otro">Otro</option>
-            </select>
-            <select bind:value={editPerson.estado}>
-              <option value="activo">Activo</option>
-              <option value="inactivo">Inactivo</option>
-              <option value="suspendido">Suspendido</option>
-              <option value="egresado">Egresado</option>
-              <option value="baja">Baja</option>
-            </select>
-            <textarea bind:value={editPerson.notas} placeholder="Notas"></textarea>
-            <button>Guardar cambios</button>
-          </form>
-        {/if}
-      </section>
+      <EditPersonTab bind:editMatricula {editPerson} onSearch={searchPerson} onSave={saveEditPerson} />
     {/if}
 
     {#if activeTab === "access"}
-      <section class="panel">
-        <div class="tabla-header">
-          <h2>Registros del dia</h2>
-          <span>{accessTotal} registros</span>
-        </div>
-        <div class="toolbar">
-          <input bind:value={filters.q} placeholder="Buscar matricula, nombre, placa" />
-          <input bind:value={filters.date} type="date" />
-          <button onclick={refreshAccess}>Filtrar</button>
-        </div>
-        <DataTable rows={accessRows} columns={[
-          { key: "matricula", label: "Matricula" },
-          { key: "nombres", label: "Nombre", kind: "name" },
-          { key: "tipoPersona", label: "Tipo" },
-          { key: "carrera", label: "Carrera" },
-          { key: "entradaAt", label: "Entrada", kind: "date" },
-          { key: "salidaAt", label: "Salida", kind: "date" },
-          { key: "status", label: "Estado", kind: "status" },
-          { key: "accessMode", label: "Modo" },
-          { key: "vehiclePlate", label: "Vehiculo" }
-        ]} />
-      </section>
+      <AccessTab rows={accessRows} total={accessTotal} {filters} onFilter={refreshAccess} />
     {/if}
 
     {#if activeTab === "attendance"}
-      <section class="panel">
-        <div class="tabla-header">
-          <h2>Asistencias del dia</h2>
-          <span>{attendanceTotal} asistencias</span>
-        </div>
-        <div class="toolbar">
-          <input bind:value={filters.q} placeholder="Buscar alumno o materia" />
-          <input bind:value={filters.date} type="date" />
-          <button onclick={refreshAttendance}>Filtrar</button>
-        </div>
-        <DataTable rows={attendanceRows} columns={[
-          { key: "matricula", label: "Matricula" },
-          { key: "nombres", label: "Estudiante", kind: "name" },
-          { key: "subjectName", label: "Materia" },
-          { key: "aula", label: "Aula" },
-          { key: "horaInicio", label: "Inicio" },
-          { key: "horaFin", label: "Fin" },
-          { key: "porcentaje", label: "%" },
-          { key: "estado", label: "Estado", kind: "status" }
-        ]} />
-      </section>
+      <AttendanceTab rows={attendanceRows} total={attendanceTotal} {filters} onFilter={refreshAttendance} />
     {/if}
 
     {#if activeTab === "hotqr"}
-      <section class="grid two">
-        <form class="panel" onsubmit={(event) => { event.preventDefault(); createHotQr(); }}>
-          <h2>Hot-QR</h2>
-          <input bind:value={hotQrForm.visitorName} placeholder="Visitante" required />
-          <input bind:value={hotQrForm.reason} placeholder="Motivo" required />
-          <select bind:value={hotQrForm.minutes}>
-            <option value={15}>15 min</option>
-            <option value={30}>30 min</option>
-            <option value={60}>1 hora</option>
-            <option value={120}>2 horas</option>
-            <option value={240}>4 horas</option>
-            <option value={480}>8 horas</option>
-          </select>
-          <button>Generar Hot-QR</button>
-        </form>
-        <section class="panel">
-          <DataTable rows={hotQrRows} columns={[
-            { key: "visitorName", label: "Visitante" },
-            { key: "reason", label: "Motivo" },
-            { key: "status", label: "Estado", kind: "status" },
-            { key: "validUntil", label: "Expira", kind: "date" },
-            { key: "creator", label: "Creador" }
-          ]} />
-        </section>
-      </section>
+      <HotQrTab rows={hotQrRows} form={hotQrForm} onCreate={createHotQr} />
     {/if}
 
     {#if activeTab === "vehicles"}
-      <section class="grid two">
-        <form class="panel" onsubmit={(event) => { event.preventDefault(); createVehicle(); }}>
-          <h2>Registrar vehiculo</h2>
-          <input bind:value={vehicleForm.ownerPersonId} placeholder="ID persona propietaria" required />
-          <input bind:value={vehicleForm.plate} placeholder="Placa" required />
-          <input bind:value={vehicleForm.make} placeholder="Marca" />
-          <input bind:value={vehicleForm.model} placeholder="Modelo" />
-          <input bind:value={vehicleForm.color} placeholder="Color" />
-          <button>Guardar vehiculo</button>
-        </form>
-        <form class="panel" onsubmit={(event) => { event.preventDefault(); createPermitQr(); }}>
-          <h2>Permiso vehicular</h2>
-          <input bind:value={permitForm.personId} placeholder="ID persona autorizada" required />
-          <input bind:value={permitForm.vehicleId} placeholder="ID vehiculo" required />
-          <input bind:value={permitForm.validUntil} type="datetime-local" />
-          <button>Generar QR vehicular</button>
-        </form>
-      </section>
-      <section class="panel">
-        <DataTable rows={vehicleRows} columns={[
-          { key: "plate", label: "Placa" },
-          { key: "make", label: "Marca" },
-          { key: "model", label: "Modelo" },
-          { key: "color", label: "Color" },
-          { key: "status", label: "Estado", kind: "status" },
-          { key: "ownerPersonId", label: "Propietario" }
-        ]} />
-      </section>
+      <VehiclesTab
+        rows={vehicleRows}
+        {vehicleForm}
+        {permitForm}
+        onCreateVehicle={createVehicle}
+        onCreatePermitQr={createPermitQr}
+      />
     {/if}
 
-    {#if activeTab === "admins" && session.admin.role === "super_admin"}
-      <section class="grid two">
-        <form class="panel" onsubmit={(event) => { event.preventDefault(); createAdmin(); }}>
-          <h2>Crear administrador</h2>
-          <input bind:value={adminForm.username} placeholder="Usuario" required />
-          <input bind:value={adminForm.displayName} placeholder="Nombre" required />
-          <input bind:value={adminForm.email} placeholder="Correo" />
-          <select bind:value={adminForm.role}>
-            <option value="admin">Admin</option>
-            <option value="super_admin">Super admin</option>
-          </select>
-          <input bind:value={adminForm.temporaryPassword} placeholder="Password temporal opcional" />
-          <button>Crear admin</button>
-        </form>
-        <section class="panel">
-          <DataTable rows={adminRows} columns={[
-            { key: "username", label: "Usuario" },
-            { key: "displayName", label: "Nombre" },
-            { key: "email", label: "Correo" },
-            { key: "role", label: "Rol" },
-            { key: "status", label: "Estado", kind: "status" }
-          ]} />
-        </section>
-      </section>
-    {:else if activeTab === "admins"}
-      <section class="panel"><p class="muted">Modulo disponible para super administradores.</p></section>
+    {#if activeTab === "admins"}
+      <AdminsTab rows={adminRows} form={adminForm} isSuperAdmin={session.admin.role === "super_admin"} onCreate={createAdmin} />
     {/if}
 
     {#if activeTab === "config"}
-      <form class="panel" onsubmit={(event) => { event.preventDefault(); saveConfig(); }}>
-        <h2>Configuracion operativa</h2>
-        <textarea bind:value={configValue} rows="12"></textarea>
-        <button>Guardar configuracion</button>
-      </form>
+      <ConfigTab bind:value={configValue} onSave={saveConfig} />
     {/if}
 
     {#if activeTab === "generator" || activeTab === "access"}

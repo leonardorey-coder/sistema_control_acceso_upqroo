@@ -75,7 +75,7 @@ export async function listHotQrToday(filters: HotQrFilters, pagination: Paginati
 
 export async function createHotQr(input: typeof hotQrTokens.$inferInsert) {
   const [row] = await db.insert(hotQrTokens).values(input).returning();
-  return row;
+  return row!;
 }
 
 export async function revokeHotQr(id: string) {

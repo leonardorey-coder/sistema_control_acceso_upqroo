@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "../../db/client";
 import { qrTokens, temporaryDailyQrTokens } from "../../db/schema";
 
@@ -10,18 +10,32 @@ export function listPersonQrTokens(personId: string) {
     issuedAt: qrTokens.issuedAt,
     expiresAt: qrTokens.expiresAt,
     lastUsedAt: qrTokens.lastUsedAt,
-    revokedAt: qrTokens.revokedAt
+    revokedAt: qrTokens.revokedAt,
+    tokenVersion: qrTokens.tokenVersion
   }).from(qrTokens).where(eq(qrTokens.personId, personId)).limit(20);
 }
 
 export async function createPersonQrToken(input: typeof qrTokens.$inferInsert) {
   const [row] = await db.insert(qrTokens).values(input).returning();
-  return row;
+  return row!;
+}
+
+export async function revokeActivePersonQrTokens(personId: string) {
+  return db
+    .update(qrTokens)
+    .set({ status: "revoked", revokedAt: new Date() })
+    .where(and(eq(qrTokens.personId, personId), eq(qrTokens.status, "active")))
+    .returning({
+      id: qrTokens.id,
+      personId: qrTokens.personId,
+      status: qrTokens.status,
+      revokedAt: qrTokens.revokedAt
+    });
 }
 
 export async function createTemporaryDailyQr(input: typeof temporaryDailyQrTokens.$inferInsert) {
   const [row] = await db.insert(temporaryDailyQrTokens).values(input).returning();
-  return row;
+  return row!;
 }
 
 export function listTemporaryDailyQr() {

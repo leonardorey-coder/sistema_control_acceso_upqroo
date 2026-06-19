@@ -27,7 +27,7 @@ export async function getAdmin(id: string) {
 
 export async function createAdmin(input: typeof administradores.$inferInsert) {
   const [row] = await db.insert(administradores).values(input).returning(adminPublicColumns);
-  return row;
+  return row!;
 }
 
 export async function updateAdmin(id: string, input: Partial<typeof administradores.$inferInsert>) {

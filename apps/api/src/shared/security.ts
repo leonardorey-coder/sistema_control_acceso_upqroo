@@ -6,7 +6,7 @@ export type IssuedToken = {
   tokenHash: string;
 };
 
-export function sha256Hex(value: string) {
+export function sha256Hex(value: string | Uint8Array) {
   return createHash("sha256").update(value).digest("hex");
 }
 
