@@ -13,8 +13,27 @@ const defaultScannerConfig = {
   autoExitEnabled: true
 };
 
+const defaultSignedQrConfig = {
+  enabled: false,
+  ttlSeconds: 30,
+  clockToleranceSeconds: 5,
+  compatibilityOpaqueTokens: true
+};
+
 const operationalConfigSchema = z.object({
   value: z.record(z.unknown()).default(defaultScannerConfig),
+  description: z.string().trim().optional(),
+  updatedByAdminId: z.string().uuid().optional()
+});
+
+const signedQrConfigSchema = z.object({
+  value: z.object({
+    enabled: z.boolean().default(defaultSignedQrConfig.enabled),
+    ttlSeconds: z.number().int().min(15).max(30).default(defaultSignedQrConfig.ttlSeconds),
+    clockToleranceSeconds: z.number().int().min(0).max(30).default(defaultSignedQrConfig.clockToleranceSeconds),
+    compatibilityOpaqueTokens: z.boolean().default(defaultSignedQrConfig.compatibilityOpaqueTokens),
+    requireDeviceBinding: z.boolean().default(false)
+  }).default(defaultSignedQrConfig),
   description: z.string().trim().optional(),
   updatedByAdminId: z.string().uuid().optional()
 });
@@ -40,6 +59,30 @@ configRoutes.patch("/operational", async (c) => {
     action: "config.operational_updated",
     entityType: "operational_config",
     metadata: { key: "scanner" }
+  });
+
+  return c.json({ data: row });
+});
+
+configRoutes.get("/signed-qr", async (c) => {
+  const [row] = await getOperationalConfig("signed_qr");
+  return c.json({ data: row ?? { key: "signed_qr", value: defaultSignedQrConfig } });
+});
+
+configRoutes.patch("/signed-qr", async (c) => {
+  const input = signedQrConfigSchema.parse(await c.req.json());
+  const row = await upsertOperationalConfig({
+    key: "signed_qr",
+    value: input.value,
+    description: input.description ?? "Signed dynamic QR settings",
+    updatedByAdminId: input.updatedByAdminId
+  });
+
+  await recordAudit({
+    ...getActorMetadata(c),
+    action: "config.signed_qr_updated",
+    entityType: "operational_config",
+    metadata: { key: "signed_qr" }
   });
 
   return c.json({ data: row });

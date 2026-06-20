@@ -2,8 +2,8 @@ import { eq } from "drizzle-orm";
 import { db } from "../../db/client";
 import { operationalConfig } from "../../db/schema";
 
-export async function getOperationalConfig() {
-  return db.select().from(operationalConfig).where(eq(operationalConfig.key, "scanner")).limit(1);
+export async function getOperationalConfig(key = "scanner") {
+  return db.select().from(operationalConfig).where(eq(operationalConfig.key, key)).limit(1);
 }
 
 export async function upsertOperationalConfig(input: typeof operationalConfig.$inferInsert) {

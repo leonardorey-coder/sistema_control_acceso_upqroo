@@ -102,6 +102,13 @@ export type AccessScanPayload = {
   manualMatricula?: string;
   adminId?: string;
   scannerId?: string;
+  preVerifiedPersonId?: string;
+  preVerifiedJti?: string;
+  signatureVerified?: boolean;
+  kid?: string;
+  sigAlg?: string;
+  iat?: number;
+  exp?: number;
 };
 
 export async function runAccessScan(payload: AccessScanPayload) {

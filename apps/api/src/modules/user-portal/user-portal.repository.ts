@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, isNull, max } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, max, sql } from "drizzle-orm";
 import { db } from "../../db/client";
 import {
   asistenciasPotenciales,
@@ -7,6 +7,8 @@ import {
   registrosAcceso,
   temporaryDailyQrTokens,
   userAccounts,
+  userDeviceChallenges,
+  userDeviceKeys,
   userSessions
 } from "../../db/schema";
 
@@ -208,4 +210,101 @@ export function listPortalTemporaryDailyQrHistory(personId: string) {
 export async function createPortalTemporaryDailyQr(input: typeof temporaryDailyQrTokens.$inferInsert) {
   const [row] = await db.insert(temporaryDailyQrTokens).values(input).returning();
   return row!;
+}
+
+export async function createUserDevice(input: typeof userDeviceKeys.$inferInsert) {
+  const [row] = await db.insert(userDeviceKeys).values(input).returning({
+    id: userDeviceKeys.id,
+    accountId: userDeviceKeys.accountId,
+    algorithm: userDeviceKeys.algorithm,
+    label: userDeviceKeys.label,
+    status: userDeviceKeys.status,
+    createdAt: userDeviceKeys.createdAt
+  });
+
+  return row!;
+}
+
+export function listUserDevices(accountId: string) {
+  return db.select({
+    id: userDeviceKeys.id,
+    algorithm: userDeviceKeys.algorithm,
+    label: userDeviceKeys.label,
+    status: userDeviceKeys.status,
+    lastUsedAt: userDeviceKeys.lastUsedAt,
+    createdAt: userDeviceKeys.createdAt
+  })
+    .from(userDeviceKeys)
+    .where(eq(userDeviceKeys.accountId, accountId))
+    .orderBy(desc(userDeviceKeys.createdAt));
+}
+
+export async function createUserDeviceChallenge(input: {
+  accountId: string;
+  deviceId: string;
+  challenge: string;
+  expiresAt: Date;
+}) {
+  const [row] = await db.execute<{
+    id: string;
+    challenge: string;
+    expires_at: Date;
+  }>(sql`
+    INSERT INTO user_device_challenges (account_id, device_id, challenge, expires_at)
+    SELECT ${input.accountId}, ${input.deviceId}, ${input.challenge}, ${input.expiresAt}
+    FROM user_device_keys
+    WHERE id = ${input.deviceId}
+      AND account_id = ${input.accountId}
+      AND status = 'active'
+    RETURNING id, challenge, expires_at
+  `);
+
+  if (!row) return null;
+
+  return {
+    id: row.id,
+    challenge: row.challenge,
+    expiresAt: row.expires_at
+  };
+}
+
+export async function consumeUserDeviceChallenge(input: {
+  accountId: string;
+  deviceId: string;
+  challengeId: string;
+}) {
+  const [row] = await db.execute<{
+    challenge_id: string;
+    challenge: string;
+    public_key_jwk: Record<string, unknown>;
+    algorithm: string;
+  }>(sql`
+    WITH consumed AS (
+      UPDATE user_device_challenges c
+      SET used_at = now()
+      FROM user_device_keys d
+      WHERE c.id = ${input.challengeId}
+        AND c.device_id = ${input.deviceId}
+        AND c.account_id = ${input.accountId}
+        AND c.used_at IS NULL
+        AND c.expires_at > now()
+        AND d.id = c.device_id
+        AND d.account_id = c.account_id
+        AND d.status = 'active'
+      RETURNING c.id, c.challenge, d.public_key_jwk, d.algorithm
+    )
+    SELECT id as challenge_id, challenge, public_key_jwk, algorithm
+    FROM consumed
+  `);
+
+  return row;
+}
+
+export async function markUserDeviceUsed(deviceId: string) {
+  const [row] = await db.update(userDeviceKeys)
+    .set({ lastUsedAt: new Date() })
+    .where(eq(userDeviceKeys.id, deviceId))
+    .returning();
+
+  return row;
 }

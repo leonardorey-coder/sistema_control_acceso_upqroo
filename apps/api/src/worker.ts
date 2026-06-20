@@ -14,6 +14,9 @@ export async function runWorkerCycle() {
     personQr: number;
     sessions: number;
     userSessions: number;
+    qrJtiConsumptions: number;
+    qrSigningKeys: number;
+    userDeviceChallenges: number;
   }>(sql`
     with hot_qr as (
       update hot_qr_tokens
@@ -50,6 +53,24 @@ export async function runWorkerCycle() {
       set revoked_at = now()
       where revoked_at is null and expires_at <= now()
       returning id
+    ),
+    qr_jti_consumptions_expired as (
+      delete from qr_jti_consumptions
+      where expires_at < now() - interval '7 days'
+      returning jti
+    ),
+    qr_signing_keys_expired as (
+      update qr_signing_keys
+      set status = 'expired'
+      where status = 'rotated'
+        and coalesce(expires_at, rotated_at + interval '7 days') <= now()
+      returning kid
+    ),
+    user_device_challenges_expired as (
+      delete from user_device_challenges
+      where used_at is not null
+         or expires_at < now() - interval '1 day'
+      returning id
     )
     select
       (select count(*)::int from hot_qr) as "hotQr",
@@ -57,7 +78,10 @@ export async function runWorkerCycle() {
       (select count(*)::int from vehicle_permit_qr) as "vehiclePermitQr",
       (select count(*)::int from person_qr) as "personQr",
       (select count(*)::int from sessions) as "sessions",
-      (select count(*)::int from user_sessions_expired) as "userSessions"
+      (select count(*)::int from user_sessions_expired) as "userSessions",
+      (select count(*)::int from qr_jti_consumptions_expired) as "qrJtiConsumptions",
+      (select count(*)::int from qr_signing_keys_expired) as "qrSigningKeys",
+      (select count(*)::int from user_device_challenges_expired) as "userDeviceChallenges"
   `);
 
   return {

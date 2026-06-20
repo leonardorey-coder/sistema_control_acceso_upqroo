@@ -32,4 +32,12 @@ describe("security helpers", () => {
     expect(response.status).toBe(401);
     expect(body.error.code).toBe("SESSION_REQUIRED");
   });
+
+  it("keeps QR signing key rotation behind super admin auth", async () => {
+    const response = await app.request("/api/v1/qr-keys/rotate", { method: "POST" });
+    const body = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(body.error.code).toBe("SESSION_REQUIRED");
+  });
 });

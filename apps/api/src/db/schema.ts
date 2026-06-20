@@ -216,6 +216,33 @@ export const userSessions = pgTable("user_sessions", {
   accountIdx: index("user_sessions_account_idx").on(table.accountId, table.expiresAt)
 }));
 
+export const userDeviceKeys = pgTable("user_device_keys", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  accountId: uuid("account_id").notNull().references(() => userAccounts.id),
+  publicKeyJwk: jsonb("public_key_jwk").notNull(),
+  algorithm: varchar("algorithm", { length: 20 }).notNull().default("ES256"),
+  label: varchar("label", { length: 120 }),
+  status: varchar("status", { length: 20 }).notNull().default("active"),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+}, (table) => ({
+  accountStatusIdx: index("user_device_keys_account_status_idx").on(table.accountId, table.status)
+}));
+
+export const userDeviceChallenges = pgTable("user_device_challenges", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  deviceId: uuid("device_id").notNull().references(() => userDeviceKeys.id),
+  accountId: uuid("account_id").notNull().references(() => userAccounts.id),
+  challenge: text("challenge").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+}, (table) => ({
+  challengeUnique: uniqueIndex("user_device_challenges_challenge_unique").on(table.challenge),
+  deviceIdx: index("user_device_challenges_device_idx").on(table.deviceId, table.expiresAt)
+}));
+
 export const adminSessions = pgTable("admin_sessions", {
   id: uuid("id").primaryKey().defaultRandom(),
   adminId: uuid("admin_id").notNull().references(() => administradores.id),
@@ -422,13 +449,18 @@ export const accessScanEvents = pgTable("access_scan_events", {
   accessMode: accessMode("access_mode").notNull().default("pedestrian"),
   accepted: boolean("accepted").notNull(),
   reasonCode: varchar("reason_code", { length: 80 }).notNull(),
+  jti: uuid("jti"),
+  kid: varchar("kid", { length: 80 }),
+  signatureAlg: varchar("signature_alg", { length: 20 }),
+  signatureVerified: boolean("signature_verified"),
   displayPayload: jsonb("display_payload").notNull().default(sql`'{}'::jsonb`),
   metadata: jsonb("metadata").notNull().default(sql`'{}'::jsonb`),
   scannedAt: timestamp("scanned_at", { withTimezone: true }).notNull().defaultNow()
 }, (table) => ({
   scannedAtIdx: index("access_scan_events_scanned_at_idx").on(table.scannedAt),
   personScannedIdx: index("access_scan_events_person_scanned_idx").on(table.personId, table.scannedAt),
-  vehicleScannedIdx: index("access_scan_events_vehicle_scanned_idx").on(table.vehicleId, table.scannedAt)
+  vehicleScannedIdx: index("access_scan_events_vehicle_scanned_idx").on(table.vehicleId, table.scannedAt),
+  jtiIdx: index("access_scan_events_jti_idx").on(table.jti)
 }));
 
 export const asistenciasPotenciales = pgTable("asistencias_potenciales", {
@@ -475,4 +507,35 @@ export const auditLog = pgTable("audit_log", {
 }, (table) => ({
   auditCreatedIdx: index("audit_log_created_idx").on(table.createdAt),
   auditEntityIdx: index("audit_log_entity_idx").on(table.entityType, table.entityId)
+}));
+
+export const qrSigningKeys = pgTable("qr_signing_keys", {
+  kid: varchar("kid", { length: 80 }).primaryKey(),
+  algorithm: varchar("algorithm", { length: 20 }).notNull().default("ES256"),
+  publicKeyJwk: jsonb("public_key_jwk").notNull(),
+  status: varchar("status", { length: 20 }).notNull().default("active"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  rotatedAt: timestamp("rotated_at", { withTimezone: true }),
+  expiresAt: timestamp("expires_at", { withTimezone: true })
+}, (table) => ({
+  statusIdx: index("qr_signing_keys_status_idx").on(table.status)
+}));
+
+export const qrJtiConsumptions = pgTable("qr_jti_consumptions", {
+  jti: uuid("jti").primaryKey(),
+  credentialType: credentialType("credential_type").notNull(),
+  personId: uuid("person_id").references(() => personas.id),
+  vehiclePermitId: uuid("vehicle_permit_id").references(() => vehiclePermits.id),
+  hotQrId: uuid("hot_qr_id").references(() => hotQrTokens.id),
+  temporaryDailyQrId: uuid("temporary_daily_qr_id").references(() => temporaryDailyQrTokens.id),
+  scannerId: varchar("scanner_id", { length: 120 }),
+  accessRecordId: uuid("access_record_id").references(() => registrosAcceso.id),
+  issuedAt: timestamp("issued_at", { withTimezone: true }).notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  consumedAt: timestamp("consumed_at", { withTimezone: true }).notNull().defaultNow(),
+  rejectedReason: varchar("rejected_reason", { length: 80 }),
+  metadata: jsonb("metadata").notNull().default(sql`'{}'::jsonb`)
+}, (table) => ({
+  expiresIdx: index("qr_jti_expires_idx").on(table.expiresAt),
+  personIdx: index("qr_jti_person_idx").on(table.personId, table.consumedAt)
 }));

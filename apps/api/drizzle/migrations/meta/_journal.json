@@ -22,6 +22,20 @@
       "when": 1781821800000,
       "tag": "0002_schema_alignment",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1781830000000,
+      "tag": "0003_signed_dynamic_qr",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1781831800000,
+      "tag": "0004_user_device_binding",
+      "breakpoints": true
     }
   ]
 }

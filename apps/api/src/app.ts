@@ -13,6 +13,7 @@ import { hotQrRoutes } from "./modules/hot-qr/hot-qr.routes";
 import { integrityRoutes } from "./modules/integrity/integrity.routes";
 import { peopleRoutes } from "./modules/people/people.routes";
 import { personTypesRoutes } from "./modules/person-types/person-types.routes";
+import { qrKeysRoutes } from "./modules/qr-signing/qr-signing.routes";
 import { userPortalRoutes } from "./modules/user-portal/user-portal.routes";
 import { vehiclesRoutes } from "./modules/vehicles/vehicles.routes";
 import { healthRoutes } from "./http/routes/health.routes";
@@ -30,6 +31,8 @@ app.use("*", cors({
 app.route("/health", healthRoutes);
 app.route("/api/v1/auth", authRoutes);
 app.route("/api/v1/portal", userPortalRoutes);
+// JWKS is public (scanners need it to verify signatures)
+app.route("/api/v1/qr-keys", qrKeysRoutes);
 
 for (const path of [
   "/api/v1/people",

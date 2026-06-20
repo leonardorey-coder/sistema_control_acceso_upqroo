@@ -33,4 +33,25 @@ describe("access atomic contracts", () => {
     expect(migration).toContain("ALTER TABLE \"audit_log\" ADD COLUMN IF NOT EXISTS \"ip_address\"");
     expect(migration).toContain("CREATE TABLE IF NOT EXISTS \"user_sessions\"");
   });
+
+  it("ships signed dynamic QR schema and anti-replay contracts", () => {
+    const migration = readFileSync("drizzle/migrations/0003_signed_dynamic_qr.sql", "utf8");
+
+    expect(migration).toContain("CREATE TABLE IF NOT EXISTS \"qr_signing_keys\"");
+    expect(migration).toContain("CREATE TABLE IF NOT EXISTS \"qr_jti_consumptions\"");
+    expect(migration).toContain("ADD COLUMN IF NOT EXISTS \"jti\" uuid");
+    expect(migration).toContain("v_safe_payload jsonb := payload - 'token' - 'signedQr'");
+    expect(migration).toContain("WHERE NOT EXISTS (SELECT 1 FROM qr_jti_consumptions WHERE jti = v_pre_verified_jti)");
+    expect(migration).toContain("'JTI_ALREADY_CONSUMED'");
+  });
+
+  it("ships user device binding schema for client-side QR proof", () => {
+    const migration = readFileSync("drizzle/migrations/0004_user_device_binding.sql", "utf8");
+
+    expect(migration).toContain("CREATE TABLE IF NOT EXISTS \"user_device_keys\"");
+    expect(migration).toContain("CREATE TABLE IF NOT EXISTS \"user_device_challenges\"");
+    expect(migration).toContain("\"public_key_jwk\" jsonb NOT NULL");
+    expect(migration).toContain("\"used_at\" timestamptz");
+    expect(migration).toContain("\"requireDeviceBinding\":false");
+  });
 });
