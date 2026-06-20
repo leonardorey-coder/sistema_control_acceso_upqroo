@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import LegacyHeader from "$lib/components/LegacyHeader.svelte";
   import ScannerView from "$lib/components/ScannerView.svelte";
   import { apiBaseUrl, apiRequest, toQuery, type PaginatedRows } from "$lib/api/client";
 
@@ -45,16 +46,7 @@
   <title>Acceso - Sistema de Control</title>
 </svelte:head>
 
-<header class="legacy-header">
-  <div class="header-left">
-    <div class="logo-mark">UP</div>
-    <div class="divider"></div>
-    <h1>Control de Acceso</h1>
-  </div>
-  <div class="header-right">
-    <a class="view-switch" href="/">Panel Administrativo</a>
-  </div>
-</header>
+<LegacyHeader title="Escaner de Acceso" actionHref="/" actionLabel="Panel Administrativo" />
 
 <main class="legacy-main">
   <div class="api-state">

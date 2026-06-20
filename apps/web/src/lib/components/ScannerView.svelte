@@ -102,11 +102,11 @@
     <button class:active={active === "manual"} onclick={() => (active = "manual")}>Matricula</button>
   </div>
 
-  <div class="grid two">
+  <div class="scanner-stack">
     {#if active === "qr"}
       <form class="panel scanner-card" onsubmit={(event) => { event.preventDefault(); submitScan({ token }); }}>
         <h2>Escanear Codigo QR</h2>
-        <p class="muted">Coloca el codigo QR frente a la camara o pega el token escaneado.</p>
+        <p class="muted">Coloca el codigo QR frente a la camara</p>
         <div class="camera-box" id={readerId}>Camara QR</div>
         <div class="scanner-actions">
           <button type="button" onclick={startCamera} disabled={cameraActive}>Iniciar camara</button>
@@ -147,9 +147,15 @@
           <StatusBadge value={result.credentialType} />
           <StatusBadge value={result.accessMode} />
         </div>
+        <dl class="detail-list">
+          <div><dt>Tipo</dt><dd>{result.personType ?? "-"}</dd></div>
+          <div><dt>Carrera</dt><dd>{result.career ?? "-"}</dd></div>
+          <div><dt>Vehiculo</dt><dd>{result.vehiclePlate ?? "-"}</dd></div>
+          <div><dt>Estado</dt><dd>{result.reasonCode ?? (result.accepted ? "ACEPTADO" : "RECHAZADO")}</dd></div>
+        </dl>
         <small>{result.timestamp ? new Date(String(result.timestamp)).toLocaleString("es-MX") : ""}</small>
       {:else}
-        <p class="muted">Esperando escaneo</p>
+        <p class="muted">Esperando escanear codigo QR...</p>
       {/if}
     </section>
   </div>

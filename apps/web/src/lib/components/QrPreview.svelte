@@ -24,7 +24,7 @@
       margin: 2,
       scale: 8,
       color: {
-        dark: "#1f2d26",
+        dark: "#333333",
         light: "#ffffff"
       }
     }).then((value) => {
