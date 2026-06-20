@@ -3,6 +3,7 @@
   import { onMount } from "svelte";
   import { apiRequest } from "$lib/api/client";
   import DataTable from "$lib/components/DataTable.svelte";
+  import LegacyHeader from "$lib/components/LegacyHeader.svelte";
   import QrPreview from "$lib/components/QrPreview.svelte";
 
   type Row = Record<string, unknown>;
@@ -23,6 +24,10 @@
   let session = $state<PortalSession | null>(null);
   let qrToken = $state("");
   let qrCredential = $state<Row | null>(null);
+  let temporaryToken = $state("");
+  let temporaryCredential = $state<Row | null>(null);
+  let temporaryHistory = $state<Row[]>([]);
+  let temporaryForm = $state({ reasonCode: "credential_unavailable", reasonText: "" });
   let accessRows = $state<Row[]>([]);
   let attendanceRows = $state<Row[]>([]);
   let error = $state("");
@@ -32,6 +37,8 @@
       session = await apiRequest<PortalSession>("/api/v1/portal/me");
       const qr = await apiRequest<{ credential: Row | null }>("/api/v1/portal/qr");
       qrCredential = qr.credential;
+      temporaryCredential = (await apiRequest<{ credential: Row | null }>("/api/v1/portal/temporary-daily-qr/current")).credential;
+      temporaryHistory = (await apiRequest<{ rows: Row[] }>("/api/v1/portal/temporary-daily-qr/history")).rows;
       accessRows = (await apiRequest<{ rows: Row[] }>("/api/v1/portal/access/recent")).rows;
       attendanceRows = (await apiRequest<{ rows: Row[] }>("/api/v1/portal/attendance/recent")).rows;
     } catch (loadError) {
@@ -48,6 +55,16 @@
     qrToken = result.token;
   }
 
+  async function requestTemporaryQr() {
+    const result = await apiRequest<{ credential: Row; token: string }>("/api/v1/portal/temporary-daily-qr/request", {
+      method: "POST",
+      body: JSON.stringify(temporaryForm)
+    });
+    temporaryCredential = result.credential;
+    temporaryToken = result.token;
+    temporaryHistory = (await apiRequest<{ rows: Row[] }>("/api/v1/portal/temporary-daily-qr/history")).rows;
+  }
+
   async function logout() {
     await apiRequest("/api/v1/portal/auth/logout", { method: "POST" }).catch(() => null);
     await goto("/portal/login");
@@ -60,17 +77,13 @@
   <title>Mi QR - Sistema de Control</title>
 </svelte:head>
 
-<header class="legacy-header">
-  <div class="header-left">
-    <div class="logo-mark">UP</div>
-    <div class="divider"></div>
-    <h1>Mi QR</h1>
-  </div>
-  <div class="header-right">
-    <a class="view-switch" href="/">Panel Administrativo</a>
-    <button class="ghost" onclick={logout}>Salir</button>
-  </div>
-</header>
+<LegacyHeader
+  title="Mi QR"
+  actionHref="/"
+  actionLabel="Panel Administrativo"
+  session={session}
+  onLogout={logout}
+/>
 
 <main class="legacy-main">
   {#if error}<p class="error">{error}</p>{/if}
@@ -81,7 +94,10 @@
         <h2>{session.user.fullName}</h2>
         <p>Estado: {session.user.status}</p>
       </div>
-      <button onclick={rotateQr}>Generar QR vigente</button>
+      <div class="button-row">
+        <a class="view-switch-button" href="/portal/qr">Ver QR</a>
+        <a class="view-switch-button" href="/portal/historial">Historial</a>
+      </div>
     </section>
 
     <section class="grid two">
@@ -105,6 +121,36 @@
           <p class="muted">No hay credencial activa.</p>
         {/if}
       </section>
+    </section>
+
+    <section class="grid two">
+      <form class="panel form-grid" onsubmit={(event) => { event.preventDefault(); requestTemporaryQr(); }}>
+        <h2>QR temporal diario</h2>
+        <select bind:value={temporaryForm.reasonCode}>
+          <option value="credential_unavailable">Credencial no disponible</option>
+          <option value="credential_lost">Credencial extraviada</option>
+          <option value="credential_damaged">Credencial dañada</option>
+        </select>
+        <textarea bind:value={temporaryForm.reasonText} placeholder="Detalle opcional"></textarea>
+        <button>Solicitar QR temporal</button>
+      </form>
+      <section class="panel qr-focus">
+        <QrPreview
+          token={temporaryToken}
+          title="QR temporal diario"
+          subtitle={temporaryToken ? "Token visible solo en esta solicitud" : temporaryCredential ? "Ya existe un QR temporal vigente para hoy." : "No hay QR temporal activo."}
+        />
+      </section>
+    </section>
+
+    <section class="panel">
+      <h2>Temporales recientes</h2>
+      <DataTable rows={temporaryHistory} columns={[
+        { key: "operationalDate", label: "Fecha" },
+        { key: "reasonCode", label: "Motivo" },
+        { key: "status", label: "Estado", kind: "status" },
+        { key: "validUntil", label: "Expira", kind: "date" }
+      ]} />
     </section>
 
     <section class="panel">
