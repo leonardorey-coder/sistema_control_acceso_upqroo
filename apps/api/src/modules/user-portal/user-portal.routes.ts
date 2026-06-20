@@ -8,12 +8,15 @@ import { HttpError } from "../../shared/http-error";
 import { hashSessionToken, issueOpaqueToken, issueSessionToken } from "../../shared/security";
 import { stripSecretFields } from "../../shared/sanitize";
 import {
+  createPortalTemporaryDailyQr,
   createUserSession,
   findUserAccountForLogin,
   getActivePortalQr,
+  getCurrentPortalTemporaryDailyQr,
   getUserSessionByHash,
   listPortalAccess,
   listPortalAttendance,
+  listPortalTemporaryDailyQrHistory,
   revokeUserSession,
   rotatePortalQr,
   touchUserSession
@@ -22,6 +25,14 @@ import {
 const loginSchema = z.object({
   identity: z.string().trim().email(),
   password: z.string().min(1)
+});
+
+const temporaryDailyRequestSchema = z.object({
+  missingCredentialType: z.string().trim().min(1).max(80).default("personal_qr"),
+  reasonCode: z.string().trim().min(1).max(80).default("credential_unavailable"),
+  reasonText: z.string().trim().max(500).optional(),
+  maxUses: z.number().int().min(1).max(10).default(1),
+  validUntil: z.coerce.date().optional()
 });
 
 function userSessionCookieOptions(expires: Date) {
@@ -68,6 +79,10 @@ async function requirePortalSession(c: Context) {
 }
 
 export const userPortalRoutes = new Hono();
+
+function operationalDateToday() {
+  return new Date().toISOString().slice(0, 10);
+}
 
 userPortalRoutes.post("/auth/login", async (c) => {
   const input = loginSchema.parse(await c.req.json());
@@ -189,5 +204,45 @@ userPortalRoutes.get("/access/recent", async (c) => {
 userPortalRoutes.get("/attendance/recent", async (c) => {
   const { session } = await requirePortalSession(c);
   const rows = await listPortalAttendance(session.personId);
+  return c.json({ data: { rows } });
+});
+
+userPortalRoutes.get("/temporary-daily-qr/current", async (c) => {
+  const { session } = await requirePortalSession(c);
+  const [credential] = await getCurrentPortalTemporaryDailyQr(session.personId, operationalDateToday());
+  return c.json({ data: { credential: credential ?? null } });
+});
+
+userPortalRoutes.post("/temporary-daily-qr/request", async (c) => {
+  const { session } = await requirePortalSession(c);
+  const input = temporaryDailyRequestSchema.parse(await c.req.json().catch(() => ({})));
+  const issued = issueOpaqueToken("temporary_daily_qr");
+  const operationalDate = operationalDateToday();
+  const validUntil = input.validUntil ?? new Date(Date.now() + 1000 * 60 * 60 * 8);
+  const row = await createPortalTemporaryDailyQr({
+    personId: session.personId,
+    tokenHash: issued.tokenHash,
+    operationalDate,
+    missingCredentialType: input.missingCredentialType,
+    reasonCode: input.reasonCode,
+    reasonText: input.reasonText,
+    maxUses: input.maxUses,
+    validUntil
+  });
+
+  await recordAudit({
+    actorAccountId: session.accountId,
+    action: "user.temporary_daily_qr_requested",
+    entityType: "temporary_daily_qr",
+    entityId: row.id,
+    metadata: { personId: session.personId, operationalDate }
+  });
+
+  return c.json({ data: { credential: stripSecretFields(row), token: issued.token } }, 201);
+});
+
+userPortalRoutes.get("/temporary-daily-qr/history", async (c) => {
+  const { session } = await requirePortalSession(c);
+  const rows = await listPortalTemporaryDailyQrHistory(session.personId);
   return c.json({ data: { rows } });
 });

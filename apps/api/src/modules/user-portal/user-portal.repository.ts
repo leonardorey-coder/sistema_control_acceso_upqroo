@@ -5,6 +5,7 @@ import {
   personas,
   qrTokens,
   registrosAcceso,
+  temporaryDailyQrTokens,
   userAccounts,
   userSessions
 } from "../../db/schema";
@@ -154,5 +155,57 @@ export async function rotatePortalQr(personId: string, tokenHash: string, expire
     tokenVersion: Number(versionRow?.value ?? 0) + 1
   }).returning();
 
+  return row!;
+}
+
+export function getCurrentPortalTemporaryDailyQr(personId: string, operationalDate: string) {
+  return db.select({
+    id: temporaryDailyQrTokens.id,
+    personId: temporaryDailyQrTokens.personId,
+    operationalDate: temporaryDailyQrTokens.operationalDate,
+    missingCredentialType: temporaryDailyQrTokens.missingCredentialType,
+    reasonCode: temporaryDailyQrTokens.reasonCode,
+    reasonText: temporaryDailyQrTokens.reasonText,
+    maxUses: temporaryDailyQrTokens.maxUses,
+    useCount: temporaryDailyQrTokens.useCount,
+    status: temporaryDailyQrTokens.status,
+    validUntil: temporaryDailyQrTokens.validUntil,
+    revokedAt: temporaryDailyQrTokens.revokedAt,
+    createdAt: temporaryDailyQrTokens.createdAt
+  })
+    .from(temporaryDailyQrTokens)
+    .where(and(
+      eq(temporaryDailyQrTokens.personId, personId),
+      eq(temporaryDailyQrTokens.operationalDate, operationalDate),
+      eq(temporaryDailyQrTokens.status, "active"),
+      gt(temporaryDailyQrTokens.validUntil, new Date())
+    ))
+    .orderBy(desc(temporaryDailyQrTokens.createdAt))
+    .limit(1);
+}
+
+export function listPortalTemporaryDailyQrHistory(personId: string) {
+  return db.select({
+    id: temporaryDailyQrTokens.id,
+    personId: temporaryDailyQrTokens.personId,
+    operationalDate: temporaryDailyQrTokens.operationalDate,
+    missingCredentialType: temporaryDailyQrTokens.missingCredentialType,
+    reasonCode: temporaryDailyQrTokens.reasonCode,
+    reasonText: temporaryDailyQrTokens.reasonText,
+    maxUses: temporaryDailyQrTokens.maxUses,
+    useCount: temporaryDailyQrTokens.useCount,
+    status: temporaryDailyQrTokens.status,
+    validUntil: temporaryDailyQrTokens.validUntil,
+    revokedAt: temporaryDailyQrTokens.revokedAt,
+    createdAt: temporaryDailyQrTokens.createdAt
+  })
+    .from(temporaryDailyQrTokens)
+    .where(eq(temporaryDailyQrTokens.personId, personId))
+    .orderBy(desc(temporaryDailyQrTokens.operationalDate), desc(temporaryDailyQrTokens.createdAt))
+    .limit(20);
+}
+
+export async function createPortalTemporaryDailyQr(input: typeof temporaryDailyQrTokens.$inferInsert) {
+  const [row] = await db.insert(temporaryDailyQrTokens).values(input).returning();
   return row!;
 }

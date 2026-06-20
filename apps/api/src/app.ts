@@ -6,6 +6,7 @@ import { accessRoutes } from "./modules/access/access.routes";
 import { adminManagementRoutes } from "./modules/admin-management/admin-management.routes";
 import { attendanceRoutes, schedulesRoutes, subjectsRoutes } from "./modules/attendance/attendance.routes";
 import { authRoutes } from "./modules/auth/auth.routes";
+import { careersRoutes } from "./modules/careers/careers.routes";
 import { configRoutes } from "./modules/config/config.routes";
 import { credentialsRoutes } from "./modules/credentials/credentials.routes";
 import { hotQrRoutes } from "./modules/hot-qr/hot-qr.routes";
@@ -35,6 +36,8 @@ for (const path of [
   "/api/v1/people/*",
   "/api/v1/person-types",
   "/api/v1/person-types/*",
+  "/api/v1/careers",
+  "/api/v1/careers/*",
   "/api/v1/access",
   "/api/v1/access/*",
   "/api/v1/attendance",
@@ -62,6 +65,7 @@ app.use("/api/v1/admins/*", requireAdminRole("super_admin"));
 
 app.route("/api/v1/people", peopleRoutes);
 app.route("/api/v1/person-types", personTypesRoutes);
+app.route("/api/v1/careers", careersRoutes);
 app.route("/api/v1/access", accessRoutes);
 app.route("/api/v1/attendance", attendanceRoutes);
 app.route("/api/v1/subjects", subjectsRoutes);
