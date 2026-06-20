@@ -8,7 +8,7 @@
   import EditPersonTab from "$lib/components/EditPersonTab.svelte";
   import GeneratorTab from "$lib/components/GeneratorTab.svelte";
   import HotQrTab from "$lib/components/HotQrTab.svelte";
-  import ScannerView from "$lib/components/ScannerView.svelte";
+  import LoginCard from "$lib/components/LoginCard.svelte";
   import VehiclesTab from "$lib/components/VehiclesTab.svelte";
   import { apiBaseUrl, apiRequest, toQuery, type PaginatedRows } from "$lib/api/client";
   import type { PageData } from "./$types";
@@ -33,7 +33,6 @@
   let loginPassword = $state("");
   let loginError = $state("");
   let notice = $state("");
-  let scannerResult = $state<Row | null>(null);
   let generatedToken = $state("");
   let generatedTitle = $state("");
 
@@ -42,16 +41,39 @@
   let attendanceRows = $state<Row[]>([]);
   let attendanceTotal = $state(0);
   let peopleRows = $state<Row[]>([]);
+  let personTypeRows = $state<Row[]>([]);
+  let careerRows = $state<Row[]>([]);
+  let credentialRows = $state<Row[]>([]);
+  let temporaryQrRows = $state<Row[]>([]);
   let hotQrRows = $state<Row[]>([]);
   let vehicleRows = $state<Row[]>([]);
+  let permitRows = $state<Row[]>([]);
   let adminRows = $state<Row[]>([]);
-  let configValue = $state("{}");
+  let adminSessionRows = $state<Row[]>([]);
+  let adminAuditRows = $state<Row[]>([]);
+  let subjectRows = $state<Row[]>([]);
+  let scheduleRows = $state<Row[]>([]);
+  let configForm = $state({
+    retryEnabled: true,
+    retryDelayMs: 1200,
+    cameraEnabled: true,
+    manualEntryEnabled: true,
+    soundsEnabled: true,
+    autoExitEnabled: true
+  });
 
   let filters = $state({
     q: "",
     date: new Date().toISOString().slice(0, 10),
     page: 1,
-    pageSize: 25
+    pageSize: 25,
+    personType: "",
+    accessMode: "",
+    status: "",
+    subject: "",
+    careerId: "",
+    hotQrStatus: "",
+    vehicleStatus: ""
   });
 
   let personForm = $state({
@@ -60,6 +82,7 @@
     apellidos: "",
     curp: "",
     tipoPersona: "estudiante",
+    carreraId: "",
     estado: "activo",
     notas: "",
     expiresAt: ""
@@ -67,10 +90,21 @@
 
   let editMatricula = $state("");
   let editPerson = $state<Row | null>(null);
+  let temporaryQrForm = $state({
+    personId: "",
+    operationalDate: new Date().toISOString().slice(0, 10),
+    missingCredentialType: "personal_qr",
+    reasonCode: "credential_unavailable",
+    reasonText: "",
+    maxUses: 1,
+    validUntil: ""
+  });
   let hotQrForm = $state({ visitorName: "", reason: "", minutes: 60 });
   let vehicleForm = $state({ ownerPersonId: "", plate: "", make: "", model: "", color: "" });
   let permitForm = $state({ personId: "", vehicleId: "", validUntil: "" });
   let adminForm = $state({ username: "", displayName: "", email: "", role: "admin", temporaryPassword: "" });
+  let subjectForm = $state({ clave: "", nombre: "" });
+  let scheduleForm = $state({ personId: "", subjectId: "", weekday: 1, horaInicio: "08:00", horaFin: "09:00", aula: "", validFrom: new Date().toISOString().slice(0, 10), validUntil: "" });
 
   const tabs = [
     { id: "generator", label: "Generar QR" },
@@ -114,58 +148,106 @@
   }
 
   async function refreshAccess() {
-    const result = await apiRequest<PaginatedRows<Row>>(`/api/v1/access/today${toQuery(filters)}`);
+    const result = await apiRequest<PaginatedRows<Row>>(`/api/v1/access/today${toQuery({
+      q: filters.q,
+      date: filters.date,
+      page: filters.page,
+      pageSize: filters.pageSize,
+      personType: filters.personType,
+      accessMode: filters.accessMode,
+      status: filters.status
+    })}`);
     accessRows = result.rows;
     accessTotal = result.total;
   }
 
   async function refreshAttendance() {
-    const result = await apiRequest<PaginatedRows<Row>>(`/api/v1/attendance/today${toQuery(filters)}`);
+    const result = await apiRequest<PaginatedRows<Row>>(`/api/v1/attendance/today${toQuery({
+      q: filters.q,
+      date: filters.date,
+      page: filters.page,
+      pageSize: filters.pageSize,
+      subject: filters.subject,
+      status: filters.status,
+      careerId: filters.careerId
+    })}`);
     attendanceRows = result.rows;
     attendanceTotal = result.total;
   }
 
   async function refreshPeople() {
-    const result = await apiRequest<PaginatedRows<Row>>(`/api/v1/people${toQuery({ q: filters.q, page: filters.page, pageSize: filters.pageSize })}`);
+    const result = await apiRequest<PaginatedRows<Row>>(`/api/v1/people${toQuery({ q: filters.q, personType: filters.personType, status: filters.status, careerId: filters.careerId, page: filters.page, pageSize: filters.pageSize })}`);
     peopleRows = result.rows;
   }
 
+  async function refreshPersonTypes() {
+    personTypeRows = (await apiRequest<{ rows: Row[] }>("/api/v1/person-types")).rows;
+  }
+
+  async function refreshCareers() {
+    careerRows = (await apiRequest<{ rows: Row[] }>("/api/v1/careers")).rows;
+  }
+
+  async function refreshCredentials(personId = editPerson?.id ? String(editPerson.id) : "") {
+    if (!personId) {
+      credentialRows = [];
+      return;
+    }
+    credentialRows = (await apiRequest<{ rows: Row[] }>(`/api/v1/credentials/person/${personId}`)).rows;
+  }
+
+  async function refreshTemporaryQr() {
+    temporaryQrRows = (await apiRequest<{ rows: Row[] }>("/api/v1/credentials/temporary-daily")).rows;
+  }
+
   async function refreshHotQr() {
-    const result = await apiRequest<PaginatedRows<Row>>(`/api/v1/hot-qr/today${toQuery(filters)}`);
+    const result = await apiRequest<PaginatedRows<Row>>(`/api/v1/hot-qr/today${toQuery({ q: filters.q, status: filters.hotQrStatus, date: filters.date, page: filters.page, pageSize: filters.pageSize })}`);
     hotQrRows = result.rows;
   }
 
   async function refreshVehicles() {
-    vehicleRows = (await apiRequest<PaginatedRows<Row>>(`/api/v1/vehicles${toQuery({ page: 1, pageSize: 100 })}`)).rows;
+    vehicleRows = (await apiRequest<PaginatedRows<Row>>(`/api/v1/vehicles${toQuery({ q: filters.q, status: filters.vehicleStatus, page: filters.page, pageSize: filters.pageSize })}`)).rows;
+  }
+
+  async function refreshPermits() {
+    permitRows = (await apiRequest<PaginatedRows<Row>>(`/api/v1/vehicles/permits${toQuery({ page: filters.page, pageSize: filters.pageSize })}`)).rows;
   }
 
   async function refreshAdmins() {
+    if (session?.admin.role !== "super_admin") return;
     adminRows = (await apiRequest<{ rows: Row[] }>("/api/v1/admins")).rows;
+    adminAuditRows = (await apiRequest<{ rows: Row[] }>("/api/v1/admins/audit")).rows;
   }
 
   async function refreshConfig() {
     const result = await apiRequest<Row>("/api/v1/config/operational");
-    configValue = JSON.stringify(result.value ?? {}, null, 2);
+    configForm = { ...configForm, ...(result.value as Partial<typeof configForm> ?? {}) };
+  }
+
+  async function refreshSubjects() {
+    subjectRows = (await apiRequest<{ rows: Row[] }>("/api/v1/subjects")).rows;
+  }
+
+  async function refreshSchedules() {
+    scheduleRows = (await apiRequest<{ rows: Row[] }>("/api/v1/schedules")).rows;
   }
 
   async function refreshAll() {
     await Promise.allSettled([
+      refreshPersonTypes(),
+      refreshCareers(),
       refreshAccess(),
       refreshAttendance(),
       refreshPeople(),
+      refreshTemporaryQr(),
       refreshHotQr(),
       refreshVehicles(),
+      refreshPermits(),
       refreshAdmins(),
-      refreshConfig()
+      refreshConfig(),
+      refreshSubjects(),
+      refreshSchedules()
     ]);
-  }
-
-  async function scan(payload: { token?: string; manualMatricula?: string }) {
-    scannerResult = await apiRequest<Row>("/api/v1/access/scan", {
-      method: "POST",
-      body: JSON.stringify({ ...payload, adminId: session?.admin.id })
-    });
-    await Promise.allSettled([refreshAccess(), refreshAttendance()]);
   }
 
   async function createPersonAndQr() {
@@ -180,6 +262,7 @@
           apellidos: personForm.apellidos,
           curp: personForm.curp || undefined,
           tipoPersona: personForm.tipoPersona,
+          carreraId: personForm.carreraId || undefined,
           estado: personForm.estado,
           notas: personForm.notas || undefined
         })
@@ -199,11 +282,15 @@
     generatedToken = result.token;
     generatedTitle = "QR personal";
     notice = "QR generado";
-    await refreshPeople();
+    await Promise.allSettled([refreshPeople(), refreshCredentials(personId)]);
   }
 
   async function searchPerson() {
     editPerson = await apiRequest<Row>(`/api/v1/people/by-matricula/${editMatricula}`);
+    temporaryQrForm.personId = String(editPerson.id ?? "");
+    permitForm.personId = String(editPerson.id ?? permitForm.personId);
+    vehicleForm.ownerPersonId = String(editPerson.id ?? vehicleForm.ownerPersonId);
+    await refreshCredentials(String(editPerson.id));
   }
 
   async function saveEditPerson() {
@@ -214,6 +301,63 @@
     });
     notice = "Persona actualizada";
     await refreshPeople();
+  }
+
+  async function disableEditPerson() {
+    if (!editPerson?.id) return;
+    editPerson = await apiRequest<Row>(`/api/v1/people/${editPerson.id}/disable`, { method: "POST" });
+    notice = "Persona desactivada";
+    await refreshPeople();
+  }
+
+  async function enableEditPerson() {
+    if (!editPerson?.id) return;
+    editPerson = await apiRequest<Row>(`/api/v1/people/${editPerson.id}/enable`, { method: "POST" });
+    notice = "Persona activada";
+    await refreshPeople();
+  }
+
+  async function rotatePersonQr() {
+    if (!editPerson?.id) return;
+    const result = await apiRequest<{ token: string }>(`/api/v1/credentials/person/${editPerson.id}/rotate`, {
+      method: "POST",
+      body: JSON.stringify({ expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString() })
+    });
+    generatedToken = result.token;
+    generatedTitle = "QR personal rotado";
+    await refreshCredentials(String(editPerson.id));
+  }
+
+  async function revokePersonQr() {
+    if (!editPerson?.id) return;
+    await apiRequest(`/api/v1/credentials/person/${editPerson.id}/revoke`, { method: "POST" });
+    notice = "QR personal revocado";
+    await refreshCredentials(String(editPerson.id));
+  }
+
+  async function uploadPersonPhoto(file: File) {
+    if (!editPerson?.id) return;
+    const body = new FormData();
+    body.set("file", file);
+    const result = await apiRequest<{ person: Row }>(`/api/v1/people/${editPerson.id}/photo`, { method: "POST", body });
+    editPerson = result.person;
+    notice = "Foto actualizada";
+  }
+
+  async function createTemporaryQr() {
+    const validUntil = temporaryQrForm.validUntil ? new Date(temporaryQrForm.validUntil).toISOString() : new Date(Date.now() + 1000 * 60 * 60 * 8).toISOString();
+    const result = await apiRequest<{ token: string }>("/api/v1/credentials/temporary-daily", {
+      method: "POST",
+      body: JSON.stringify({ ...temporaryQrForm, validUntil, maxUses: Number(temporaryQrForm.maxUses), createdByAdminId: session?.admin.id })
+    });
+    generatedToken = result.token;
+    generatedTitle = "QR temporal diario";
+    await refreshTemporaryQr();
+  }
+
+  async function revokeTemporaryQr(row: Row) {
+    await apiRequest(`/api/v1/credentials/temporary-daily/${row.id}/revoke`, { method: "POST" });
+    await refreshTemporaryQr();
   }
 
   async function createHotQr() {
@@ -230,6 +374,11 @@
     generatedToken = result.token;
     generatedTitle = "Hot-QR";
     hotQrForm = { visitorName: "", reason: "", minutes: 60 };
+    await refreshHotQr();
+  }
+
+  async function revokeHotQr(row: Row) {
+    await apiRequest(`/api/v1/hot-qr/${row.id}/revoke`, { method: "POST" });
     await refreshHotQr();
   }
 
@@ -256,6 +405,17 @@
     });
     generatedToken = result.token;
     generatedTitle = "QR vehicular";
+    await Promise.allSettled([refreshPermits(), refreshVehicles()]);
+  }
+
+  async function revokePermit(row: Row) {
+    await apiRequest(`/api/v1/vehicles/permits/${row.id}/revoke`, { method: "POST" });
+    await refreshPermits();
+  }
+
+  async function disableVehicle(row: Row) {
+    await apiRequest(`/api/v1/vehicles/${row.id}/disable`, { method: "POST" });
+    await refreshVehicles();
   }
 
   async function createAdmin() {
@@ -272,12 +432,57 @@
     await refreshAdmins();
   }
 
+  async function disableAdmin(row: Row) {
+    await apiRequest(`/api/v1/admins/${row.id}/disable`, { method: "POST" });
+    await refreshAdmins();
+  }
+
+  async function enableAdmin(row: Row) {
+    await apiRequest(`/api/v1/admins/${row.id}/enable`, { method: "POST" });
+    await refreshAdmins();
+  }
+
+  async function resetAdminPassword(row: Row) {
+    const result = await apiRequest<{ temporaryPassword: string }>(`/api/v1/admins/${row.id}/reset-password`, { method: "POST", body: JSON.stringify({}) });
+    notice = `Password temporal: ${result.temporaryPassword}`;
+    await refreshAdmins();
+  }
+
+  async function loadAdminSessions(row: Row) {
+    adminSessionRows = (await apiRequest<{ rows: Row[] }>(`/api/v1/admins/${row.id}/sessions`)).rows;
+  }
+
+  async function revokeAdminSession(row: Row) {
+    if (!row.adminId || !row.id) return;
+    await apiRequest(`/api/v1/admins/${row.adminId}/sessions/${row.id}/revoke`, { method: "POST" });
+    adminSessionRows = adminSessionRows.filter((sessionRow) => sessionRow.id !== row.id);
+  }
+
   async function saveConfig() {
     await apiRequest("/api/v1/config/operational", {
       method: "PATCH",
-      body: JSON.stringify({ value: JSON.parse(configValue), updatedByAdminId: session?.admin.id })
+      body: JSON.stringify({ value: configForm, updatedByAdminId: session?.admin.id })
     });
     notice = "Configuracion guardada";
+  }
+
+  async function createSubject() {
+    await apiRequest("/api/v1/subjects", { method: "POST", body: JSON.stringify(subjectForm) });
+    subjectForm = { clave: "", nombre: "" };
+    await refreshSubjects();
+  }
+
+  async function createSchedule() {
+    await apiRequest("/api/v1/schedules", {
+      method: "POST",
+      body: JSON.stringify({
+        ...scheduleForm,
+        weekday: Number(scheduleForm.weekday),
+        aula: scheduleForm.aula || undefined,
+        validUntil: scheduleForm.validUntil || undefined
+      })
+    });
+    await refreshSchedules();
   }
 
   onMount(() => {
@@ -297,16 +502,15 @@
 </svelte:head>
 
 {#if !session}
-  <main class="login-page">
-    <form class="panel login-card" onsubmit={(event) => { event.preventDefault(); login(); }}>
-      <div class="logo-mark large">UP</div>
-      <h1>Sistema de Control de Acceso</h1>
-      <input bind:value={loginIdentity} placeholder="Usuario o correo" autocomplete="username" />
-      <input bind:value={loginPassword} placeholder="Password" type="password" autocomplete="current-password" />
-      <button>Entrar</button>
-      {#if loginError}<p class="error">{loginError}</p>{/if}
-    </form>
-  </main>
+  <LoginCard
+    bind:identity={loginIdentity}
+    bind:password={loginPassword}
+    title="Acceso Administrativo"
+    identityPlaceholder="Usuario o correo"
+    passwordPlaceholder="Contrasena"
+    error={loginError}
+    onSubmit={login}
+  />
 {:else}
   <AdminShell
     {activeTab}
@@ -319,48 +523,99 @@
     {#if notice}<p class="notice">{notice}</p>{/if}
 
     {#if activeTab === "generator"}
-      <GeneratorTab {personForm} {generatedToken} {generatedTitle} onSubmit={createPersonAndQr} />
+      <GeneratorTab
+        {personForm}
+        {personTypeRows}
+        {careerRows}
+        {generatedToken}
+        {generatedTitle}
+        {temporaryQrForm}
+        temporaryRows={temporaryQrRows}
+        onSubmit={createPersonAndQr}
+        onCreateTemporaryQr={createTemporaryQr}
+        onRevokeTemporaryQr={revokeTemporaryQr}
+      />
     {/if}
 
     {#if activeTab === "edit"}
-      <EditPersonTab bind:editMatricula {editPerson} onSearch={searchPerson} onSave={saveEditPerson} />
+      <EditPersonTab
+        bind:editMatricula
+        {editPerson}
+        {personTypeRows}
+        {careerRows}
+        credentialRows={credentialRows}
+        {generatedToken}
+        {generatedTitle}
+        onSearch={searchPerson}
+        onSave={saveEditPerson}
+        onDisable={disableEditPerson}
+        onEnable={enableEditPerson}
+        onRotateQr={rotatePersonQr}
+        onRevokeQr={revokePersonQr}
+        onPhoto={uploadPersonPhoto}
+      />
     {/if}
 
     {#if activeTab === "access"}
-      <AccessTab rows={accessRows} total={accessTotal} {filters} onFilter={refreshAccess} />
+      <AccessTab rows={accessRows} total={accessTotal} {filters} {personTypeRows} onFilter={refreshAccess} />
     {/if}
 
     {#if activeTab === "attendance"}
-      <AttendanceTab rows={attendanceRows} total={attendanceTotal} {filters} onFilter={refreshAttendance} />
+      <AttendanceTab
+        rows={attendanceRows}
+        total={attendanceTotal}
+        {filters}
+        {careerRows}
+        {subjectRows}
+        {scheduleRows}
+        {subjectForm}
+        {scheduleForm}
+        onFilter={refreshAttendance}
+        onCreateSubject={createSubject}
+        onCreateSchedule={createSchedule}
+      />
     {/if}
 
     {#if activeTab === "hotqr"}
-      <HotQrTab rows={hotQrRows} form={hotQrForm} onCreate={createHotQr} />
+      <HotQrTab rows={hotQrRows} form={hotQrForm} {generatedToken} {generatedTitle} {filters} onCreate={createHotQr} onFilter={refreshHotQr} onRevoke={revokeHotQr} />
     {/if}
 
     {#if activeTab === "vehicles"}
       <VehiclesTab
         rows={vehicleRows}
+        permitRows={permitRows}
         {vehicleForm}
         {permitForm}
+        {peopleRows}
+        {generatedToken}
+        {generatedTitle}
+        {filters}
         onCreateVehicle={createVehicle}
         onCreatePermitQr={createPermitQr}
+        onRevokePermit={revokePermit}
+        onDisableVehicle={disableVehicle}
+        onFilter={refreshVehicles}
       />
     {/if}
 
     {#if activeTab === "admins"}
-      <AdminsTab rows={adminRows} form={adminForm} isSuperAdmin={session.admin.role === "super_admin"} onCreate={createAdmin} />
+      <AdminsTab
+        rows={adminRows}
+        form={adminForm}
+        isSuperAdmin={session.admin.role === "super_admin"}
+        sessionRows={adminSessionRows}
+        auditRows={adminAuditRows}
+        onCreate={createAdmin}
+        onDisable={disableAdmin}
+        onEnable={enableAdmin}
+        onResetPassword={resetAdminPassword}
+        onLoadSessions={loadAdminSessions}
+        onRevokeSession={revokeAdminSession}
+      />
     {/if}
 
     {#if activeTab === "config"}
-      <ConfigTab bind:value={configValue} onSave={saveConfig} />
-    {/if}
-
-    {#if activeTab === "generator" || activeTab === "access"}
-      <section class="panel">
-        <h2>Scanner embebido</h2>
-        <ScannerView result={scannerResult} recentRows={accessRows} onScan={scan} />
-      </section>
+      <ConfigTab bind:config={configForm} onSave={saveConfig} />
     {/if}
   </AdminShell>
 {/if}

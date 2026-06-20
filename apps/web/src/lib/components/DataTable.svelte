@@ -6,11 +6,13 @@
   let {
     rows,
     columns,
-    empty = "Sin datos"
+    empty = "Sin datos",
+    actions = []
   }: {
     rows: Row[];
     columns: Array<{ key: string; label: string; kind?: "status" | "date" | "name" }>;
     empty?: string;
+    actions?: Array<{ label: string; onClick: (row: Row) => void | Promise<void>; tone?: "default" | "ghost" }>;
   } = $props();
 
   function formatDate(value: unknown) {
@@ -30,6 +32,7 @@
         {#each columns as column}
           <th>{column.label}</th>
         {/each}
+        {#if actions.length}<th>Acciones</th>{/if}
       </tr>
     </thead>
     <tbody>
@@ -48,10 +51,21 @@
               {/if}
             </td>
           {/each}
+          {#if actions.length}
+            <td>
+              <div class="row-actions">
+                {#each actions as action}
+                  <button class={action.tone === "ghost" ? "ghost" : ""} onclick={() => action.onClick(row)}>
+                    {action.label}
+                  </button>
+                {/each}
+              </div>
+            </td>
+          {/if}
         </tr>
       {:else}
         <tr>
-          <td colspan={columns.length} class="muted">{empty}</td>
+          <td colspan={columns.length + (actions.length ? 1 : 0)} class="muted">{empty}</td>
         </tr>
       {/each}
     </tbody>
