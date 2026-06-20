@@ -1,6 +1,6 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, gt, sql } from "drizzle-orm";
 import { db } from "../../db/client";
-import { qrTokens, temporaryDailyQrTokens } from "../../db/schema";
+import { carreras, personas, qrTokens, registrosAcceso, temporaryDailyQrTokens } from "../../db/schema";
 
 export function listPersonQrTokens(personId: string) {
   return db.select({
@@ -68,5 +68,44 @@ export async function revokeTemporaryDailyQr(id: string) {
       revokedAt: temporaryDailyQrTokens.revokedAt
     });
 
+  return row;
+}
+
+export async function getTemporaryDailyQrSigningContext(id: string) {
+  const [row] = await db.select({
+    id: temporaryDailyQrTokens.id,
+    personId: temporaryDailyQrTokens.personId,
+    operationalDate: temporaryDailyQrTokens.operationalDate,
+    status: temporaryDailyQrTokens.status,
+    validUntil: temporaryDailyQrTokens.validUntil,
+    useCount: temporaryDailyQrTokens.useCount,
+    maxUses: temporaryDailyQrTokens.maxUses,
+    matricula: personas.matricula,
+    nombres: personas.nombres,
+    apellidos: personas.apellidos,
+    tipoPersona: personas.tipoPersona,
+    estado: personas.estado,
+    carrera: carreras.nombre,
+    hasOpenAccess: sql<boolean>`exists (
+      select 1
+      from ${registrosAcceso}
+      where ${registrosAcceso.personId} = ${temporaryDailyQrTokens.personId}
+        and ${registrosAcceso.temporaryDailyQrTokenId} = ${temporaryDailyQrTokens.id}
+        and ${registrosAcceso.status} = 'in_progress'
+        and ${registrosAcceso.salidaAt} is null
+    )`
+  })
+    .from(temporaryDailyQrTokens)
+    .innerJoin(personas, eq(temporaryDailyQrTokens.personId, personas.id))
+    .leftJoin(carreras, eq(personas.carreraId, carreras.id))
+    .where(and(
+      eq(temporaryDailyQrTokens.id, id),
+      eq(temporaryDailyQrTokens.status, "active"),
+      gt(temporaryDailyQrTokens.validUntil, new Date()),
+      eq(personas.estado, "activo")
+    ))
+    .limit(1);
+
+  if (!row || (row.useCount >= row.maxUses && !row.hasOpenAccess)) return null;
   return row;
 }

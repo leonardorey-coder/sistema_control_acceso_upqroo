@@ -54,4 +54,17 @@ describe("access atomic contracts", () => {
     expect(migration).toContain("\"used_at\" timestamptz");
     expect(migration).toContain("\"requireDeviceBinding\":false");
   });
+
+  it("extends signed QR scope to temporary daily and vehicle permits", () => {
+    const migration = readFileSync("drizzle/migrations/0005_signed_qr_scope_extension.sql", "utf8");
+
+    expect(migration).toContain("preVerifiedCredentialType");
+    expect(migration).toContain("preVerifiedTemporaryDailyQrId");
+    expect(migration).toContain("preVerifiedVehiclePermitId");
+    expect(migration).toContain("v_pre_verified_credential_type = 'temporary_daily_qr'");
+    expect(migration).toContain("v_pre_verified_credential_type = 'vehicle_permit_qr'");
+    expect(migration).toContain("vehicle_permit_id");
+    expect(migration).toContain("temporary_daily_qr_id");
+    expect(migration).toContain("scanned_token_jti");
+  });
 });

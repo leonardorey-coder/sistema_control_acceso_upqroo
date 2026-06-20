@@ -2,14 +2,19 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { getActorMetadata } from "../../http/middleware/session";
 import { recordAudit } from "../../shared/audit";
+import { HttpError } from "../../shared/http-error";
 import { withoutUndefined } from "../../shared/object";
 import { paginated, parsePagination } from "../../shared/pagination";
 import { stripSecretFields } from "../../shared/sanitize";
 import { issueOpaqueToken } from "../../shared/security";
+import { getOperationalConfig } from "../config/config.repository";
+import { signDynamicQr } from "../qr-signing/qr-signing.service";
 import {
   createVehicle,
   createVehiclePermit,
   createVehiclePermitQrToken,
+  getVehiclePermitEligibility,
+  getVehiclePermitSigningContext,
   getVehicle,
   listVehiclePermits,
   listVehicles,
@@ -74,7 +79,22 @@ vehiclesRoutes.get("/permits", async (c) => {
 });
 
 vehiclesRoutes.post("/permits", async (c) => {
-  const row = await createVehiclePermit(permitSchema.parse(await c.req.json()));
+  const input = permitSchema.parse(await c.req.json());
+  const eligibility = await getVehiclePermitEligibility(input.personId);
+
+  if (!eligibility) {
+    throw new HttpError(404, "PERSON_NOT_FOUND", "Person was not found.");
+  }
+
+  if (eligibility.estado !== "activo") {
+    throw new HttpError(409, "PERSON_NOT_ACTIVE", "Vehicle permits require an active person.");
+  }
+
+  if (!eligibility.canHaveVehiclePermit) {
+    throw new HttpError(409, "PERSON_TYPE_VEHICLE_PERMIT_NOT_ALLOWED", "This person type cannot have vehicle permits.");
+  }
+
+  const row = await createVehiclePermit(input);
   await recordAudit({
     ...getActorMetadata(c),
     action: "vehicle_permit.created",
@@ -123,6 +143,47 @@ vehiclesRoutes.post("/permits/:permitId/qr/rotate", async (c) => {
   });
 
   return c.json({ data: { credential: stripSecretFields(row), token: issued.token } }, 201);
+});
+
+vehiclesRoutes.post("/permits/:permitId/qr/dynamic", async (c) => {
+  const permitId = z.string().uuid().parse(c.req.param("permitId"));
+  const [configRow] = await getOperationalConfig("signed_qr");
+  const config = (configRow?.value as Record<string, unknown> | undefined) ?? {};
+  if (config.enabled !== true) {
+    throw new HttpError(409, "SIGNED_QR_DISABLED", "Signed dynamic QR is disabled.");
+  }
+
+  const permit = await getVehiclePermitSigningContext(permitId);
+  if (!permit) {
+    throw new HttpError(404, "VEHICLE_PERMIT_NOT_SIGNABLE", "Vehicle permit is not active or signable.");
+  }
+
+  const configuredTtl = typeof config.ttlSeconds === "number" ? config.ttlSeconds : 30;
+  const ttlSeconds = Math.min(30, Math.max(15, Math.floor(configuredTtl)));
+  const { token, expiresAt, jti } = await signDynamicQr({
+    sub: permit.personId,
+    uid: permit.matricula,
+    typ: "vehicle_permit_qr",
+    vehiclePermitId: permit.permitId
+  }, ttlSeconds);
+
+  await recordAudit({
+    ...getActorMetadata(c),
+    action: "vehicle_permit_qr.dynamic_issued",
+    entityType: "vehicle_permit",
+    entityId: permit.permitId,
+    metadata: { personId: permit.personId, vehicleId: permit.vehicleId, jti }
+  });
+
+  return c.json({
+    data: {
+      permit: stripSecretFields(permit),
+      token,
+      expiresAt,
+      refreshAfterMs: Math.max(5000, (ttlSeconds - 5) * 1000),
+      jti
+    }
+  }, 201);
 });
 
 vehiclesRoutes.get("/:id", async (c) => {

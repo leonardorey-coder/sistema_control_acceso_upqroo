@@ -104,6 +104,9 @@ export type AccessScanPayload = {
   scannerId?: string;
   preVerifiedPersonId?: string;
   preVerifiedJti?: string;
+  preVerifiedCredentialType?: "person_qr" | "temporary_daily_qr" | "vehicle_permit_qr";
+  preVerifiedTemporaryDailyQrId?: string;
+  preVerifiedVehiclePermitId?: string;
   signatureVerified?: boolean;
   kid?: string;
   sigAlg?: string;

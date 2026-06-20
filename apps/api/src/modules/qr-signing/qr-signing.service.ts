@@ -14,13 +14,25 @@ import { db } from "../../db/client";
 import { sql } from "drizzle-orm";
 import { env } from "../../config/env";
 
-export type QrSigningPayload = {
+type QrSigningPayloadBase = {
   sub: string;      // person_id
   uid: string;      // matricula (display only, not secret)
-  typ: string;      // person_qr
   sid?: string;     // session id (optional)
   did?: string;     // user device id (optional possession proof)
 };
+
+export type QrSigningPayload =
+  | (QrSigningPayloadBase & {
+      typ: "person_qr";
+    })
+  | (QrSigningPayloadBase & {
+      typ: "temporary_daily_qr";
+      temporaryDailyQrId: string;
+    })
+  | (QrSigningPayloadBase & {
+      typ: "vehicle_permit_qr";
+      vehiclePermitId: string;
+    });
 
 type ActiveKey = {
   kid: string;
@@ -91,12 +103,20 @@ export async function signDynamicQr(
   const exp = now + ttlSeconds;
   const jti = randomUUID();
 
-  const token = await new SignJWT({
+  const claims: Record<string, string | undefined> = {
     uid: payload.uid,
     typ: payload.typ,
     sid: payload.sid,
     did: payload.did
-  })
+  };
+  if (payload.typ === "temporary_daily_qr") {
+    claims.tid = payload.temporaryDailyQrId;
+  }
+  if (payload.typ === "vehicle_permit_qr") {
+    claims.vpid = payload.vehiclePermitId;
+  }
+
+  const token = await new SignJWT(claims)
     .setProtectedHeader({ alg: key.alg, kid: key.kid })
     .setSubject(payload.sub)
     .setIssuer("control-acceso-upqroo")
@@ -114,12 +134,15 @@ export type VerifiedQrPayload = {
   sub: string;
   jti: string;
   uid: string;
-  typ: string;
+  typ: "person_qr" | "temporary_daily_qr" | "vehicle_permit_qr";
   kid: string;
   alg: string;
   iat: number;
   exp: number;
   sid?: string | undefined;
+  did?: string | undefined;
+  temporaryDailyQrId?: string | undefined;
+  vehiclePermitId?: string | undefined;
 };
 
 export async function verifyDynamicQr(
@@ -148,8 +171,20 @@ export async function verifyDynamicQr(
 
   const uid = (payload as Record<string, unknown>).uid;
   const typ = (payload as Record<string, unknown>).typ;
+  const allowedTypes = new Set(["person_qr", "temporary_daily_qr", "vehicle_permit_qr"]);
 
-  if (!payload.sub || !payload.jti || typeof uid !== "string" || typ !== "person_qr") {
+  if (!payload.sub || !payload.jti || typeof uid !== "string" || typeof typ !== "string" || !allowedTypes.has(typ)) {
+    throw new Error("SIGNED_QR_CLAIM_INVALID");
+  }
+
+  const temporaryDailyQrId = (payload as Record<string, unknown>).tid;
+  const vehiclePermitId = (payload as Record<string, unknown>).vpid;
+
+  if (typ === "temporary_daily_qr" && typeof temporaryDailyQrId !== "string") {
+    throw new Error("SIGNED_QR_CLAIM_INVALID");
+  }
+
+  if (typ === "vehicle_permit_qr" && typeof vehiclePermitId !== "string") {
     throw new Error("SIGNED_QR_CLAIM_INVALID");
   }
 
@@ -157,12 +192,15 @@ export async function verifyDynamicQr(
     sub: payload.sub,
     jti: payload.jti,
     uid,
-    typ,
+    typ: typ as VerifiedQrPayload["typ"],
     kid,
     alg: protectedHeader.alg,
     iat: payload.iat as number,
     exp: payload.exp as number,
-    sid: (payload as Record<string, unknown>).sid as string | undefined
+    sid: (payload as Record<string, unknown>).sid as string | undefined,
+    did: (payload as Record<string, unknown>).did as string | undefined,
+    temporaryDailyQrId: temporaryDailyQrId as string | undefined,
+    vehiclePermitId: vehiclePermitId as string | undefined
   };
 }
 

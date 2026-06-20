@@ -14,6 +14,12 @@
   import type { PageData } from "./$types";
 
   type Row = Record<string, unknown>;
+  type DynamicQrResult = {
+    token: string;
+    expiresAt: string;
+    refreshAfterMs: number;
+    jti: string;
+  };
   type Session = {
     admin: {
       id: string;
@@ -96,7 +102,7 @@
     missingCredentialType: "personal_qr",
     reasonCode: "credential_unavailable",
     reasonText: "",
-    maxUses: 1,
+    maxUses: 10,
     validUntil: ""
   });
   let hotQrForm = $state({ visitorName: "", reason: "", minutes: 60 });
@@ -346,13 +352,27 @@
 
   async function createTemporaryQr() {
     const validUntil = temporaryQrForm.validUntil ? new Date(temporaryQrForm.validUntil).toISOString() : new Date(Date.now() + 1000 * 60 * 60 * 8).toISOString();
-    const result = await apiRequest<{ token: string }>("/api/v1/credentials/temporary-daily", {
+    const result = await apiRequest<{ credential: Row; token: string }>("/api/v1/credentials/temporary-daily", {
       method: "POST",
       body: JSON.stringify({ ...temporaryQrForm, validUntil, maxUses: Number(temporaryQrForm.maxUses), createdByAdminId: session?.admin.id })
     });
-    generatedToken = result.token;
-    generatedTitle = "QR temporal diario";
+    await showTemporaryQr(result.credential, result.token);
     await refreshTemporaryQr();
+  }
+
+  async function showTemporaryQr(row: Row, fallbackToken = "") {
+    try {
+      const result = await apiRequest<DynamicQrResult>(`/api/v1/credentials/temporary-daily/${row.id}/dynamic`, { method: "POST" });
+      generatedToken = result.token;
+      generatedTitle = "QR temporal diario dinamico";
+      notice = `QR temporal dinamico generado. Expira: ${new Date(result.expiresAt).toLocaleTimeString("es-MX")}`;
+    } catch (error) {
+      const code = error instanceof Error && "code" in error ? String(error.code) : "";
+      if (code && code !== "SIGNED_QR_DISABLED") throw error;
+      generatedToken = fallbackToken;
+      generatedTitle = "QR temporal diario";
+      notice = "QR temporal generado en modo compatible";
+    }
   }
 
   async function revokeTemporaryQr(row: Row) {
@@ -403,9 +423,23 @@
         expiresAt: permitForm.validUntil ? new Date(permitForm.validUntil).toISOString() : new Date(Date.now() + 1000 * 60 * 60 * 24 * 180).toISOString()
       })
     });
-    generatedToken = result.token;
-    generatedTitle = "QR vehicular";
+    await showDynamicPermitQr(permit, result.token);
     await Promise.allSettled([refreshPermits(), refreshVehicles()]);
+  }
+
+  async function showDynamicPermitQr(row: Row, fallbackToken = "") {
+    try {
+      const result = await apiRequest<DynamicQrResult>(`/api/v1/vehicles/permits/${row.id}/qr/dynamic`, { method: "POST" });
+      generatedToken = result.token;
+      generatedTitle = "QR vehicular dinamico";
+      notice = `QR vehicular dinamico generado. Expira: ${new Date(result.expiresAt).toLocaleTimeString("es-MX")}`;
+    } catch (error) {
+      const code = error instanceof Error && "code" in error ? String(error.code) : "";
+      if (code && code !== "SIGNED_QR_DISABLED") throw error;
+      generatedToken = fallbackToken;
+      generatedTitle = "QR vehicular";
+      notice = "QR vehicular generado en modo compatible";
+    }
   }
 
   async function revokePermit(row: Row) {
@@ -533,6 +567,7 @@
         temporaryRows={temporaryQrRows}
         onSubmit={createPersonAndQr}
         onCreateTemporaryQr={createTemporaryQr}
+        onShowTemporaryQr={showTemporaryQr}
         onRevokeTemporaryQr={revokeTemporaryQr}
       />
     {/if}
@@ -592,6 +627,7 @@
         {filters}
         onCreateVehicle={createVehicle}
         onCreatePermitQr={createPermitQr}
+        onCreateDynamicPermitQr={showDynamicPermitQr}
         onRevokePermit={revokePermit}
         onDisableVehicle={disableVehicle}
         onFilter={refreshVehicles}

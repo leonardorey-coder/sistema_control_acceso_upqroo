@@ -78,6 +78,9 @@ accessRoutes.post("/scan", async (c) => {
     scanPayload = {
       preVerifiedPersonId: verified.sub,
       preVerifiedJti: verified.jti,
+      preVerifiedCredentialType: verified.typ,
+      preVerifiedTemporaryDailyQrId: verified.temporaryDailyQrId,
+      preVerifiedVehiclePermitId: verified.vehiclePermitId,
       signatureVerified: true,
       kid: verified.kid,
       sigAlg: verified.alg,

@@ -14,6 +14,7 @@
     temporaryRows,
     onSubmit,
     onCreateTemporaryQr,
+    onShowTemporaryQr,
     onRevokeTemporaryQr
   }: {
     personForm: {
@@ -43,6 +44,7 @@
     temporaryRows: Row[];
     onSubmit: () => void;
     onCreateTemporaryQr: () => void;
+    onShowTemporaryQr: (row: Row) => void;
     onRevokeTemporaryQr: (row: Row) => void;
   } = $props();
 
@@ -128,7 +130,10 @@
         { key: "status", label: "Estado", kind: "status" },
         { key: "validUntil", label: "Expira", kind: "date" }
       ]}
-      actions={[{ label: "Revocar", onClick: onRevokeTemporaryQr, tone: "ghost" }]}
+      actions={[
+        { label: "QR dinamico", onClick: onShowTemporaryQr },
+        { label: "Revocar", onClick: onRevokeTemporaryQr, tone: "ghost" }
+      ]}
     />
   </section>
 </section>

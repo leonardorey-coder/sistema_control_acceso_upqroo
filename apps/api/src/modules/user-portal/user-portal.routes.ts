@@ -12,6 +12,7 @@ import { hashSessionToken, issueOpaqueToken, issueSessionToken } from "../../sha
 import { stripSecretFields } from "../../shared/sanitize";
 import { signDynamicQr } from "../qr-signing/qr-signing.service";
 import { getOperationalConfig } from "../config/config.repository";
+import { getTemporaryDailyQrSigningContext } from "../credentials/credentials.repository";
 import {
   consumeUserDeviceChallenge,
   createUserDevice,
@@ -41,7 +42,7 @@ const temporaryDailyRequestSchema = z.object({
   missingCredentialType: z.string().trim().min(1).max(80).default("personal_qr"),
   reasonCode: z.string().trim().min(1).max(80).default("credential_unavailable"),
   reasonText: z.string().trim().max(500).optional(),
-  maxUses: z.number().int().min(1).max(10).default(1),
+  maxUses: z.number().int().min(1).max(10).default(10),
   validUntil: z.coerce.date().optional()
 });
 
@@ -366,13 +367,13 @@ userPortalRoutes.post("/qr/dynamic", async (c) => {
     throw new HttpError(401, "DEVICE_PROOF_REQUIRED", "A valid device proof is required.");
   }
 
-  const { token, expiresAt, jti } = await signDynamicQr(withoutUndefined({
+  const { token, expiresAt, jti } = await signDynamicQr({
     sub: session.personId,
     uid: session.matricula,
     typ: "person_qr",
     sid: session.accountId,
-    did: deviceId ?? undefined
-  }), ttlSeconds);
+    ...(deviceId ? { did: deviceId } : {})
+  }, ttlSeconds);
 
   const refreshAfterMs = Math.max(5000, (ttlSeconds - 5) * 1000);
 
@@ -425,6 +426,70 @@ userPortalRoutes.post("/temporary-daily-qr/request", async (c) => {
   });
 
   return c.json({ data: { credential: stripSecretFields(row), token: issued.token } }, 201);
+});
+
+userPortalRoutes.post("/temporary-daily-qr/dynamic", async (c) => {
+  const { session } = await requirePortalSession(c);
+  const proofInput = dynamicQrSchema.parse(await c.req.json().catch(() => ({})));
+  const operationalDate = operationalDateToday();
+  const [credential] = await getCurrentPortalTemporaryDailyQr(session.personId, operationalDate);
+
+  if (!credential) {
+    throw new HttpError(404, "TEMPORARY_DAILY_QR_NOT_FOUND", "No active temporary daily QR exists for this operational day.");
+  }
+
+  const signableCredential = await getTemporaryDailyQrSigningContext(credential.id);
+  if (!signableCredential || signableCredential.personId !== session.personId) {
+    throw new HttpError(409, "TEMPORARY_DAILY_QR_NOT_SIGNABLE", "Temporary daily QR is not active or signable.");
+  }
+
+  const [configRow] = await getOperationalConfig("signed_qr");
+  const config = (configRow?.value as Record<string, unknown> | undefined) ?? {};
+  if (config.enabled !== true) {
+    throw new HttpError(409, "SIGNED_QR_DISABLED", "Signed dynamic QR is disabled.");
+  }
+
+  const configuredTtl = typeof config.ttlSeconds === "number" ? config.ttlSeconds : 30;
+  const ttlSeconds = Math.min(30, Math.max(15, Math.floor(configuredTtl)));
+  const deviceId = await verifyDeviceProof(withoutUndefined({
+    accountId: session.accountId,
+    personId: session.personId,
+    deviceId: proofInput.deviceId,
+    challengeId: proofInput.challengeId,
+    signature: proofInput.signature
+  }));
+
+  if (config.requireDeviceBinding === true && !deviceId) {
+    throw new HttpError(401, "DEVICE_PROOF_REQUIRED", "A valid device proof is required.");
+  }
+
+  const { token, expiresAt, jti } = await signDynamicQr({
+    sub: session.personId,
+    uid: session.matricula,
+    typ: "temporary_daily_qr",
+    sid: session.accountId,
+    temporaryDailyQrId: signableCredential.id,
+    ...(deviceId ? { did: deviceId } : {})
+  }, ttlSeconds);
+
+  await recordAudit({
+    actorAccountId: session.accountId,
+    action: "user.temporary_daily_qr_dynamic_issued",
+    entityType: "temporary_daily_qr",
+    entityId: signableCredential.id,
+    metadata: { operationalDate, jti }
+  });
+
+  return c.json({
+    data: {
+      credential: stripSecretFields(signableCredential),
+      token,
+      expiresAt,
+      refreshAfterMs: Math.max(5000, (ttlSeconds - 5) * 1000),
+      jti,
+      deviceId
+    }
+  }, 201);
 });
 
 userPortalRoutes.get("/temporary-daily-qr/history", async (c) => {

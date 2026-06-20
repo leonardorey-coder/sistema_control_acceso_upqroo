@@ -15,6 +15,7 @@
     filters,
     onCreateVehicle,
     onCreatePermitQr,
+    onCreateDynamicPermitQr,
     onRevokePermit,
     onDisableVehicle,
     onFilter
@@ -29,6 +30,7 @@
     filters: { q: string; vehicleStatus: string };
     onCreateVehicle: () => void;
     onCreatePermitQr: () => void;
+    onCreateDynamicPermitQr: (row: Row) => void;
     onRevokePermit: (row: Row) => void;
     onDisableVehicle: (row: Row) => void;
     onFilter: () => void;
@@ -104,5 +106,8 @@
     { key: "vehicleId", label: "Vehiculo" },
     { key: "status", label: "Estado", kind: "status" },
     { key: "validUntil", label: "Vigencia", kind: "date" }
-  ]} actions={[{ label: "Revocar", onClick: onRevokePermit, tone: "ghost" }]} />
+  ]} actions={[
+    { label: "QR dinamico", onClick: onCreateDynamicPermitQr },
+    { label: "Revocar", onClick: onRevokePermit, tone: "ghost" }
+  ]} />
 </section>
