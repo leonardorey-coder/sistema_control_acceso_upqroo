@@ -12,7 +12,7 @@
   }: {
     result: Row | null;
     recentRows: Row[];
-    onScan: (payload: { token?: string; manualMatricula?: string }) => Promise<void>;
+    onScan: (payload: { token?: string; signedQr?: string; manualMatricula?: string }) => Promise<void>;
   } = $props();
 
   let active = $state<"qr" | "manual">("qr");
@@ -24,7 +24,12 @@
   let scanner: import("html5-qrcode").Html5Qrcode | null = null;
   const readerId = `reader-${Math.random().toString(36).slice(2)}`;
 
-  async function submitScan(payload: { token?: string; manualMatricula?: string }) {
+  function payloadFromQr(value: string) {
+    const trimmed = value.trim();
+    return trimmed.split(".").length === 3 ? { signedQr: trimmed } : { token: trimmed };
+  }
+
+  async function submitScan(payload: { token?: string; signedQr?: string; manualMatricula?: string }) {
     busy = true;
     error = "";
 
@@ -71,7 +76,7 @@
           scanner?.stop().catch(() => null);
           scanner = null;
           cameraActive = false;
-          submitScan({ token: decodedText });
+          submitScan(payloadFromQr(decodedText));
         },
         () => undefined
       );
@@ -104,7 +109,7 @@
 
   <div class="scanner-stack">
     {#if active === "qr"}
-      <form class="panel scanner-card" onsubmit={(event) => { event.preventDefault(); submitScan({ token }); }}>
+      <form class="panel scanner-card" onsubmit={(event) => { event.preventDefault(); submitScan(payloadFromQr(token)); }}>
         <h2>Escanear Codigo QR</h2>
         <p class="muted">Coloca el codigo QR frente a la camara</p>
         <div class="camera-box" id={readerId}>Camara QR</div>

@@ -18,7 +18,7 @@
     recentRows = response.rows;
   }
 
-  async function scan(payload: { token?: string; manualMatricula?: string }) {
+  async function scan(payload: { token?: string; signedQr?: string; manualMatricula?: string }) {
     result = await apiRequest<Row>("/api/v1/access/scan", {
       method: "POST",
       body: JSON.stringify(payload)

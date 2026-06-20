@@ -39,7 +39,7 @@ export async function apiRequest<T>(
 
   if (!response.ok || payload.error) {
     const message = payload.error?.message ?? payload.error?.code ?? "API request failed";
-    throw new Error(message);
+    throw Object.assign(new Error(message), { code: payload.error?.code });
   }
 
   return payload.data as T;

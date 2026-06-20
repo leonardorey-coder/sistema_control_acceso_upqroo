@@ -4,11 +4,13 @@
   let {
     token = "",
     title = "QR generado",
-    subtitle = ""
+    subtitle = "",
+    showToken = true
   }: {
     token?: string;
     title?: string;
     subtitle?: string;
+    showToken?: boolean;
   } = $props();
 
   let dataUrl = $state("");
@@ -44,6 +46,6 @@
   <div>
     <strong>{title}</strong>
     {#if subtitle}<p>{subtitle}</p>{/if}
-    {#if token}<code>{token}</code>{/if}
+    {#if token && showToken}<code>{token}</code>{/if}
   </div>
 </div>
