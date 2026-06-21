@@ -5,7 +5,9 @@ import { recordAudit } from "../../shared/audit";
 import { toOperationalDateRange } from "../../shared/date-range";
 import { withoutUndefined } from "../../shared/object";
 import { paginated, parsePagination } from "../../shared/pagination";
+import { broadcastEvent } from "../events/events";
 import {
+  adjustAttendance,
   createSchedule,
   createSubject,
   listAttendanceByPerson,
@@ -42,6 +44,13 @@ const scheduleSchema = z.object({
   active: z.boolean().default(true)
 });
 
+const attendanceAdjustSchema = z.object({
+  estado: z.enum(["confirmed", "partial", "unverified", "assumed"]),
+  minutosAsistidos: z.number().int().min(0).optional(),
+  porcentaje: z.number().int().min(0).max(100).optional(),
+  reason: z.string().trim().max(500).optional()
+});
+
 export const attendanceRoutes = new Hono();
 export const subjectsRoutes = new Hono();
 export const schedulesRoutes = new Hono();
@@ -64,6 +73,36 @@ attendanceRoutes.get("/person/:personId", async (c) => {
   const personId = z.string().uuid().parse(c.req.param("personId"));
   const rows = await listAttendanceByPerson(personId);
   return c.json({ data: rows });
+});
+
+attendanceRoutes.patch("/:id/adjust", async (c) => {
+  const id = z.string().uuid().parse(c.req.param("id"));
+  const input = attendanceAdjustSchema.parse(await c.req.json());
+  const row = await adjustAttendance(id, withoutUndefined({
+    estado: input.estado,
+    minutosAsistidos: input.minutosAsistidos,
+    porcentaje: input.porcentaje
+  }));
+
+  if (!row) {
+    return c.json({ error: { code: "ATTENDANCE_NOT_FOUND" } }, 404);
+  }
+
+  await recordAudit({
+    ...getActorMetadata(c),
+    action: "attendance.adjusted",
+    entityType: "attendance",
+    entityId: id,
+    metadata: {
+      estado: input.estado,
+      minutosAsistidos: input.minutosAsistidos,
+      porcentaje: input.porcentaje,
+      reason: input.reason
+    }
+  });
+  broadcastEvent("attendance.table", { action: "adjusted", id, estado: input.estado });
+
+  return c.json({ data: row });
 });
 
 subjectsRoutes.get("/", async (c) => {

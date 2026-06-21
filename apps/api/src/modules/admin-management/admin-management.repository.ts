@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, isNull, ne, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, ilike, isNull, lte, ne, or, type SQL } from "drizzle-orm";
 import { db } from "../../db/client";
 import { administradores, adminSessions, auditLog } from "../../db/schema";
 
@@ -92,9 +92,47 @@ export async function revokeAdminSession(adminId: string, sessionId: string) {
   return row;
 }
 
-export function listAuditLog(adminId?: string) {
+export type AuditLogFilters = {
+  adminId?: string;
+  action?: string;
+  entityType?: string;
+  q?: string;
+  from?: Date;
+  to?: Date;
+};
+
+export function listAuditLog(filters: AuditLogFilters = {}) {
+  const predicates: SQL[] = [];
+
+  if (filters.adminId) {
+    predicates.push(eq(auditLog.actorAdminId, filters.adminId));
+  }
+
+  if (filters.action) {
+    predicates.push(ilike(auditLog.action, `%${filters.action}%`));
+  }
+
+  if (filters.entityType) {
+    predicates.push(eq(auditLog.entityType, filters.entityType));
+  }
+
+  if (filters.q) {
+    predicates.push(or(
+      ilike(auditLog.action, `%${filters.q}%`),
+      ilike(auditLog.entityType, `%${filters.q}%`)
+    )!);
+  }
+
+  if (filters.from) {
+    predicates.push(gte(auditLog.createdAt, filters.from));
+  }
+
+  if (filters.to) {
+    predicates.push(lte(auditLog.createdAt, filters.to));
+  }
+
   return db.select().from(auditLog)
-    .where(adminId ? eq(auditLog.actorAdminId, adminId) : undefined)
+    .where(predicates.length ? and(...predicates) : undefined)
     .orderBy(desc(auditLog.createdAt))
     .limit(100);
 }

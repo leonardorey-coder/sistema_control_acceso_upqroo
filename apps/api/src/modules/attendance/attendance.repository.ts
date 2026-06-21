@@ -94,6 +94,49 @@ export function listAttendanceByPerson(personId: string) {
     .limit(100);
 }
 
+export async function adjustAttendance(id: string, input: {
+  estado: "confirmed" | "partial" | "unverified" | "assumed";
+  minutosAsistidos?: number;
+  porcentaje?: number;
+}) {
+  const [current] = await db
+    .select({
+      minutosTotales: asistenciasPotenciales.minutosTotales,
+      minutosAsistidos: asistenciasPotenciales.minutosAsistidos,
+      porcentaje: asistenciasPotenciales.porcentaje
+    })
+    .from(asistenciasPotenciales)
+    .where(eq(asistenciasPotenciales.id, id))
+    .limit(1);
+
+  if (!current) return null;
+
+  const minutosTotales = current.minutosTotales || 0;
+  const minutosAsistidos = input.minutosAsistidos ?? (
+    input.estado === "confirmed" ? minutosTotales :
+    input.estado === "partial" ? Math.floor(minutosTotales / 2) :
+    0
+  );
+  const porcentaje = input.porcentaje ?? (
+    minutosTotales > 0 ? Math.min(100, Math.max(0, Math.round((minutosAsistidos / minutosTotales) * 100))) :
+    (input.estado === "confirmed" ? 100 : input.estado === "partial" ? 50 : 0)
+  );
+
+  const [row] = await db
+    .update(asistenciasPotenciales)
+    .set({
+      estado: input.estado,
+      minutosAsistidos,
+      porcentaje,
+      confirmedAt: input.estado === "confirmed" ? new Date() : null,
+      updatedAt: new Date()
+    })
+    .where(eq(asistenciasPotenciales.id, id))
+    .returning();
+
+  return row;
+}
+
 export function listSubjects() {
   return db.select().from(subjects).orderBy(asc(subjects.nombre));
 }

@@ -4,6 +4,7 @@ import { getActorMetadata } from "../../http/middleware/session";
 import { recordAudit } from "../../shared/audit";
 import { withoutUndefined } from "../../shared/object";
 import { issueTemporaryPassword } from "../../shared/security";
+import { broadcastEvent } from "../events/events";
 import {
   countActiveSuperAdmins,
   createAdmin,
@@ -33,6 +34,15 @@ const adminPatchSchema = z.object({
   role: z.enum(["admin", "super_admin"]).optional(),
   status: z.enum(["active", "disabled"]).optional(),
   mustChangePassword: z.boolean().optional()
+});
+
+const auditQuerySchema = z.object({
+  adminId: z.string().uuid().optional(),
+  action: z.string().trim().min(1).max(120).optional(),
+  entityType: z.string().trim().min(1).max(80).optional(),
+  q: z.string().trim().min(1).max(160).optional(),
+  from: z.string().datetime().optional(),
+  to: z.string().datetime().optional()
 });
 
 export const adminManagementRoutes = new Hono();
@@ -68,12 +78,19 @@ adminManagementRoutes.post("/", async (c) => {
     entityId: row.id,
     metadata: { username: row.username, role: row.role }
   });
+  broadcastEvent("admins.table", { action: "created", id: row.id });
+  broadcastEvent("audit.table", { action: "admin.created", entityId: row.id });
 
   return c.json({ data: { ...row, temporaryPassword } }, 201);
 });
 
 adminManagementRoutes.get("/audit", async (c) => {
-  const rows = await listAuditLog();
+  const query = withoutUndefined(auditQuerySchema.parse(c.req.query()));
+  const rows = await listAuditLog(withoutUndefined({
+    ...query,
+    from: query.from ? new Date(query.from) : undefined,
+    to: query.to ? new Date(query.to) : undefined
+  }));
   return c.json({ data: { rows } });
 });
 
@@ -110,6 +127,8 @@ adminManagementRoutes.patch("/:id", async (c) => {
       entityId: id,
       metadata: { changed: Object.keys(input) }
     });
+    broadcastEvent("admins.table", { action: "updated", id });
+    broadcastEvent("audit.table", { action: "admin.updated", entityId: id });
   }
   return row ? c.json({ data: row }) : c.json({ error: { code: "ADMIN_NOT_FOUND" } }, 404);
 });
@@ -139,6 +158,9 @@ adminManagementRoutes.post("/:id/disable", async (c) => {
       entityType: "admin",
       entityId: id
     });
+    broadcastEvent("admins.table", { action: "disabled", id });
+    broadcastEvent("admin-sessions.table", { action: "revoked_for_admin", adminId: id });
+    broadcastEvent("audit.table", { action: "admin.disabled", entityId: id });
   }
   return row ? c.json({ data: row }) : c.json({ error: { code: "ADMIN_NOT_FOUND" } }, 404);
 });
@@ -153,6 +175,8 @@ adminManagementRoutes.post("/:id/enable", async (c) => {
       entityType: "admin",
       entityId: id
     });
+    broadcastEvent("admins.table", { action: "enabled", id });
+    broadcastEvent("audit.table", { action: "admin.enabled", entityId: id });
   }
   return row ? c.json({ data: row }) : c.json({ error: { code: "ADMIN_NOT_FOUND" } }, 404);
 });
@@ -174,6 +198,9 @@ adminManagementRoutes.post("/:id/reset-password", async (c) => {
       entityType: "admin",
       entityId: id
     });
+    broadcastEvent("admins.table", { action: "password_reset", id });
+    broadcastEvent("admin-sessions.table", { action: "revoked_for_admin", adminId: id });
+    broadcastEvent("audit.table", { action: "admin.password_reset", entityId: id });
   }
   return row ? c.json({ data: { ...row, temporaryPassword } }) : c.json({ error: { code: "ADMIN_NOT_FOUND" } }, 404);
 });
@@ -196,12 +223,20 @@ adminManagementRoutes.post("/:id/sessions/:sessionId/revoke", async (c) => {
       entityId: sessionId,
       metadata: { adminId: id }
     });
+    broadcastEvent("admin-sessions.table", { action: "revoked", adminId: id, sessionId });
+    broadcastEvent("audit.table", { action: "admin.session_revoked", entityId: sessionId });
   }
   return row ? c.json({ data: { ok: true } }) : c.json({ error: { code: "SESSION_NOT_FOUND" } }, 404);
 });
 
 adminManagementRoutes.get("/:id/audit", async (c) => {
   const id = z.string().uuid().parse(c.req.param("id"));
-  const rows = await listAuditLog(id);
+  const query = withoutUndefined(auditQuerySchema.omit({ adminId: true }).parse(c.req.query()));
+  const rows = await listAuditLog(withoutUndefined({
+    ...query,
+    adminId: id,
+    from: query.from ? new Date(query.from) : undefined,
+    to: query.to ? new Date(query.to) : undefined
+  }));
   return c.json({ data: { rows } });
 });
