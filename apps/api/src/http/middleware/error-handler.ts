@@ -27,6 +27,15 @@ export const errorHandler: ErrorHandler = (error, c) => {
     }, 400);
   }
 
+  if (error instanceof SyntaxError) {
+    return c.json({
+      error: {
+        code: "INVALID_JSON",
+        message: "Invalid JSON request body."
+      }
+    }, 400);
+  }
+
   if (isPostgresError(error)) {
     if (error.code === "23505") {
       return c.json({
