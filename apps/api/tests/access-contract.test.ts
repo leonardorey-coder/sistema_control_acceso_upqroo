@@ -67,4 +67,15 @@ describe("access atomic contracts", () => {
     expect(migration).toContain("temporary_daily_qr_id");
     expect(migration).toContain("scanned_token_jti");
   });
+
+  it("keeps the latest access scan function atomic and avoids raw signed payload leakage", () => {
+    const migration = readFileSync("drizzle/migrations/0005_signed_qr_scope_extension.sql", "utf8");
+
+    expect(migration).toContain("PERFORM pg_advisory_xact_lock");
+    expect(migration).toContain("v_safe_payload jsonb := payload - 'token' - 'signedQr'");
+    expect(migration).toContain("INSERT INTO qr_jti_consumptions");
+    expect(migration).toContain("WHERE NOT EXISTS (SELECT 1 FROM qr_jti_consumptions WHERE jti = v_pre_verified_jti)");
+    expect(migration).toContain("UPDATE qr_jti_consumptions SET access_record_id = v_record.id WHERE jti = v_pre_verified_jti");
+    expect(migration).not.toContain("metadata)\n    VALUES (v_pre_verified_person_id, 'person_qr', 'pedestrian', false, 'JTI_ALREADY_CONSUMED',");
+  });
 });

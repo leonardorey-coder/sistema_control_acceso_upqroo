@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { app } from "../src/app";
 import { db } from "../src/db/client";
-import { administradores, personas } from "../src/db/schema";
+import { administradores, personas, userAccounts } from "../src/db/schema";
 import { runWorkerCycle } from "../src/worker";
 
 async function canUsePostgres() {
@@ -45,6 +45,45 @@ async function ensureIntegrationAdmin() {
   return { username, password };
 }
 
+async function ensurePortalUser() {
+  const suffix = randomUUID().slice(0, 8);
+  const password = "Portal123!";
+  const [person] = await db.insert(personas).values({
+    matricula: `PU-${suffix}`,
+    nombres: "Portal",
+    apellidos: "Integracion",
+    tipoPersona: "docente",
+    estado: "activo"
+  }).returning();
+  const email = `portal-${suffix}@example.test`;
+  const [account] = await db.insert(userAccounts).values({
+    personId: person!.id,
+    email,
+    passwordHash: await Bun.password.hash(password, { algorithm: "bcrypt", cost: 10 }),
+    status: "active",
+    mustChangePassword: false
+  }).returning();
+
+  return { account: account!, person: person!, email, password };
+}
+
+function expectCookieSecurity(setCookie: string, cookieName: string) {
+  expect(setCookie).toContain(`${cookieName}=`);
+  expect(setCookie).toContain("HttpOnly");
+  expect(setCookie).toContain("SameSite=Lax");
+  expect(setCookie).toContain("Path=/");
+  expect(setCookie).not.toContain("passwordHash");
+  expect(setCookie).not.toContain("sessionHash");
+}
+
+function expectNoSecretFieldNames(payload: unknown) {
+  const serialized = JSON.stringify(payload);
+
+  expect(serialized).not.toContain("passwordHash");
+  expect(serialized).not.toContain("sessionHash");
+  expect(serialized).not.toContain("tokenHash");
+}
+
 describeIfPostgres("postgres integration", () => {
   let cookie = "";
 
@@ -58,7 +97,27 @@ describeIfPostgres("postgres integration", () => {
 
     expect(response.status).toBe(200);
     cookie = response.headers.get("set-cookie") ?? "";
-    expect(cookie).toContain("ca_session=");
+    expectCookieSecurity(cookie, "ca_session");
+  });
+
+  it("returns public admin session and admin lists without stored hashes", async () => {
+    const meResponse = await app.request("/api/v1/auth/me", {
+      headers: jsonHeaders(cookie)
+    });
+    const meBody = await meResponse.json();
+
+    expect(meResponse.status).toBe(200);
+    expect(meBody.data.admin.username).toBe("integration_super");
+    expectNoSecretFieldNames(meBody);
+
+    const adminsResponse = await app.request("/api/v1/admins", {
+      headers: jsonHeaders(cookie)
+    });
+    const adminsBody = await adminsResponse.json();
+
+    expect(adminsResponse.status).toBe(200);
+    expect(adminsBody.data.rows.length).toBeGreaterThan(0);
+    expectNoSecretFieldNames(adminsBody);
   });
 
   it("creates a person QR and scans entry, exit and integrity", async () => {
@@ -94,6 +153,7 @@ describeIfPostgres("postgres integration", () => {
     expect(qrResponse.status).toBe(201);
     expect(qrBody.data.token).toStartWith("person_qr_");
     expect(qrBody.data.credential.tokenHash).toBeUndefined();
+    expectNoSecretFieldNames(qrBody.data.credential);
 
     const entryResponse = await app.request("/api/v1/access/scan", {
       method: "POST",
@@ -152,5 +212,46 @@ describeIfPostgres("postgres integration", () => {
 
     const workerResult = await runWorkerCycle();
     expect(workerResult).toHaveProperty("expired");
+  });
+
+  it("logs portal users in with secure cookies and hides session and QR hashes", async () => {
+    const portalUser = await ensurePortalUser();
+    const loginResponse = await app.request("/api/v1/portal/auth/login", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({
+        identity: portalUser.email,
+        password: portalUser.password
+      })
+    });
+    const loginBody = await loginResponse.json();
+    const portalCookie = loginResponse.headers.get("set-cookie") ?? "";
+
+    expect(loginResponse.status).toBe(200);
+    expect(loginBody.data.user.email).toBe(portalUser.email);
+    expectCookieSecurity(portalCookie, "ca_user_session");
+    expectNoSecretFieldNames(loginBody);
+
+    const meResponse = await app.request("/api/v1/portal/me", {
+      headers: jsonHeaders(portalCookie)
+    });
+    const meBody = await meResponse.json();
+
+    expect(meResponse.status).toBe(200);
+    expect(meBody.data.user.accountId).toBe(portalUser.account.id);
+    expect(meBody.data.user.personId).toBe(portalUser.person.id);
+    expectNoSecretFieldNames(meBody);
+
+    const rotateResponse = await app.request("/api/v1/portal/qr/rotate", {
+      method: "POST",
+      headers: jsonHeaders(portalCookie),
+      body: JSON.stringify({})
+    });
+    const rotateBody = await rotateResponse.json();
+
+    expect(rotateResponse.status).toBe(201);
+    expect(rotateBody.data.token).toStartWith("person_qr_");
+    expect(rotateBody.data.credential.personId).toBe(portalUser.person.id);
+    expectNoSecretFieldNames(rotateBody.data.credential);
   });
 });
