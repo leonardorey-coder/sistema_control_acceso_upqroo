@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, isNull, max, sql } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, max, ne, sql } from "drizzle-orm";
 import { db } from "../../db/client";
 import {
   asistenciasPotenciales,
@@ -37,6 +37,38 @@ export async function findUserAccountForLogin(identity: string) {
 export async function createUserSession(input: typeof userSessions.$inferInsert) {
   const [row] = await db.insert(userSessions).values(input).returning();
   return row!;
+}
+
+export function getUserAccountCredentialsById(id: string) {
+  return db.query.userAccounts.findFirst({
+    where: eq(userAccounts.id, id)
+  });
+}
+
+export async function updateUserPassword(id: string, passwordHash: string) {
+  const [row] = await db
+    .update(userAccounts)
+    .set({
+      passwordHash,
+      mustChangePassword: false,
+      updatedAt: new Date()
+    })
+    .where(eq(userAccounts.id, id))
+    .returning();
+
+  return row;
+}
+
+export async function revokeOtherUserSessions(accountId: string, currentSessionHash: string) {
+  return db
+    .update(userSessions)
+    .set({ revokedAt: new Date() })
+    .where(and(
+      eq(userSessions.accountId, accountId),
+      ne(userSessions.sessionHash, currentSessionHash),
+      isNull(userSessions.revokedAt)
+    ))
+    .returning();
 }
 
 export async function getUserSessionByHash(sessionHash: string) {

@@ -29,6 +29,8 @@ const personUpsertSchema = z.object({
 });
 
 const personPatchSchema = personUpsertSchema.partial();
+const allowedPhotoTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
+const maxPhotoBytes = 5 * 1024 * 1024;
 
 export const peopleRoutes = new Hono();
 
@@ -175,6 +177,14 @@ peopleRoutes.post("/:id/photo", async (c) => {
 
   if (!(file instanceof File)) {
     return c.json({ error: { code: "PHOTO_FILE_REQUIRED" } }, 400);
+  }
+
+  if (!allowedPhotoTypes.has(file.type)) {
+    throw new HttpError(400, "PHOTO_TYPE_NOT_ALLOWED", "Only PNG, JPEG and WebP profile photos are allowed.");
+  }
+
+  if (file.size > maxPhotoBytes) {
+    throw new HttpError(400, "PHOTO_TOO_LARGE", "Profile photos must be 5 MB or smaller.");
   }
 
   const stored = await storeFile({

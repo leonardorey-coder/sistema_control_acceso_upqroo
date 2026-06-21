@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { getActorMetadata } from "../../http/middleware/session";
 import { recordAudit } from "../../shared/audit";
+import { broadcastEvent } from "../events/events";
 import { getOperationalConfig, upsertOperationalConfig } from "./config.repository";
 
 const defaultScannerConfig = {
@@ -60,6 +61,7 @@ configRoutes.patch("/operational", async (c) => {
     entityType: "operational_config",
     metadata: { key: "scanner" }
   });
+  broadcastEvent("config.table", { action: "operational_updated", key: "scanner" });
 
   return c.json({ data: row });
 });
@@ -84,6 +86,7 @@ configRoutes.patch("/signed-qr", async (c) => {
     entityType: "operational_config",
     metadata: { key: "signed_qr" }
   });
+  broadcastEvent("config.table", { action: "signed_qr_updated", key: "signed_qr" });
 
   return c.json({ data: row });
 });

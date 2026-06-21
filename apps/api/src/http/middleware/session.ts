@@ -7,6 +7,35 @@ import { hashSessionToken } from "../../shared/security";
 
 export type AdminSessionContext = NonNullable<Awaited<ReturnType<typeof getSessionByHash>>>;
 
+function parseCookieHeader(cookieHeader: string | null) {
+  const cookies = new Map<string, string>();
+
+  for (const part of cookieHeader?.split(";") ?? []) {
+    const [rawName, ...rawValue] = part.trim().split("=");
+    if (!rawName || !rawValue.length) continue;
+    cookies.set(rawName, decodeURIComponent(rawValue.join("=")));
+  }
+
+  return cookies;
+}
+
+export async function resolveAdminSessionFromCookieHeader(cookieHeader: string | null) {
+  const sessionToken = parseCookieHeader(cookieHeader).get(env.SESSION_COOKIE_NAME);
+
+  if (!sessionToken) {
+    throw new HttpError(401, "SESSION_REQUIRED", "A valid session is required.");
+  }
+
+  const sessionHash = hashSessionToken(sessionToken);
+  const session = await getSessionByHash(sessionHash);
+
+  if (!session) {
+    throw new HttpError(401, "SESSION_INVALID", "The session is invalid or expired.");
+  }
+
+  return { sessionToken, sessionHash, session };
+}
+
 export async function resolveAdminSession(c: Parameters<MiddlewareHandler>[0]) {
   const sessionToken = getCookie(c, env.SESSION_COOKIE_NAME);
 

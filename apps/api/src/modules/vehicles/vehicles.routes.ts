@@ -8,6 +8,7 @@ import { paginated, parsePagination } from "../../shared/pagination";
 import { stripSecretFields } from "../../shared/sanitize";
 import { issueOpaqueToken } from "../../shared/security";
 import { getOperationalConfig } from "../config/config.repository";
+import { broadcastEvent } from "../events/events";
 import { signDynamicQr } from "../qr-signing/qr-signing.service";
 import {
   createVehicle,
@@ -69,6 +70,7 @@ vehiclesRoutes.post("/", async (c) => {
     entityId: row.id,
     metadata: { plate: row.plate, ownerPersonId: row.ownerPersonId }
   });
+  broadcastEvent("vehicles.table", { action: "created", id: row.id, ownerPersonId: row.ownerPersonId });
   return c.json({ data: row }, 201);
 });
 
@@ -102,6 +104,7 @@ vehiclesRoutes.post("/permits", async (c) => {
     entityId: row.id,
     metadata: { personId: row.personId, vehicleId: row.vehicleId }
   });
+  broadcastEvent("vehicle-permits.table", { action: "created", id: row.id, personId: row.personId, vehicleId: row.vehicleId });
   return c.json({ data: row }, 201);
 });
 
@@ -115,6 +118,7 @@ vehiclesRoutes.post("/permits/:permitId/revoke", async (c) => {
       entityType: "vehicle_permit",
       entityId: permitId
     });
+    broadcastEvent("vehicle-permits.table", { action: "revoked", id: permitId });
   }
   return row ? c.json({ data: row }) : c.json({ error: { code: "VEHICLE_PERMIT_NOT_FOUND" } }, 404);
 });
@@ -141,6 +145,7 @@ vehiclesRoutes.post("/permits/:permitId/qr/rotate", async (c) => {
     entityId: permitId,
     metadata: { qrTokenId: row.id }
   });
+  broadcastEvent("vehicle-permits.table", { action: "qr_rotated", id: permitId, qrTokenId: row.id });
 
   return c.json({ data: { credential: stripSecretFields(row), token: issued.token } }, 201);
 });
@@ -174,6 +179,7 @@ vehiclesRoutes.post("/permits/:permitId/qr/dynamic", async (c) => {
     entityId: permit.permitId,
     metadata: { personId: permit.personId, vehicleId: permit.vehicleId, jti }
   });
+  broadcastEvent("vehicle-permits.table", { action: "dynamic_issued", id: permit.permitId, vehicleId: permit.vehicleId });
 
   return c.json({
     data: {
@@ -202,6 +208,7 @@ vehiclesRoutes.patch("/:id", async (c) => {
       entityType: "vehicle",
       entityId: id
     });
+    broadcastEvent("vehicles.table", { action: "updated", id });
   }
   return row ? c.json({ data: row }) : c.json({ error: { code: "VEHICLE_NOT_FOUND" } }, 404);
 });
@@ -216,6 +223,7 @@ vehiclesRoutes.post("/:id/disable", async (c) => {
       entityType: "vehicle",
       entityId: id
     });
+    broadcastEvent("vehicles.table", { action: "disabled", id });
   }
   return row ? c.json({ data: row }) : c.json({ error: { code: "VEHICLE_NOT_FOUND" } }, 404);
 });

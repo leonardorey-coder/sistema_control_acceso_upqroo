@@ -9,6 +9,7 @@ import { authRoutes } from "./modules/auth/auth.routes";
 import { careersRoutes } from "./modules/careers/careers.routes";
 import { configRoutes } from "./modules/config/config.routes";
 import { credentialsRoutes } from "./modules/credentials/credentials.routes";
+import { filesRoutes } from "./modules/files/files.routes";
 import { hotQrRoutes } from "./modules/hot-qr/hot-qr.routes";
 import { integrityRoutes } from "./modules/integrity/integrity.routes";
 import { peopleRoutes } from "./modules/people/people.routes";
@@ -23,8 +24,13 @@ export const app = new Hono();
 
 app.onError(errorHandler);
 
+const allowedOrigins = new Set((env.WEB_ORIGINS ?? env.WEB_ORIGIN)
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean));
+
 app.use("*", cors({
-  origin: env.WEB_ORIGIN,
+  origin: (origin) => allowedOrigins.has(origin) ? origin : env.WEB_ORIGIN,
   credentials: true
 }));
 
@@ -58,7 +64,9 @@ for (const path of [
   "/api/v1/integrity",
   "/api/v1/integrity/*",
   "/api/v1/credentials",
-  "/api/v1/credentials/*"
+  "/api/v1/credentials/*",
+  "/api/v1/files",
+  "/api/v1/files/*"
 ]) {
   app.use(path, requireAdminSession);
 }
@@ -79,3 +87,4 @@ app.route("/api/v1/config", configRoutes);
 app.route("/api/v1/integrity", integrityRoutes);
 app.route("/api/v1/admins", adminManagementRoutes);
 app.route("/api/v1/credentials", credentialsRoutes);
+app.route("/api/v1/files", filesRoutes);

@@ -13,14 +13,18 @@ export type AuditEvent = {
 };
 
 export async function recordAudit(event: AuditEvent) {
-  await db.insert(auditLog).values({
-    actorAdminId: event.actorAdminId,
-    actorAccountId: event.actorAccountId,
-    action: event.action,
-    entityType: event.entityType,
-    entityId: event.entityId,
-    ipAddress: event.ipAddress,
-    userAgent: event.userAgent,
-    metadata: event.metadata ?? {}
-  });
+  try {
+    await db.insert(auditLog).values({
+      actorAdminId: event.actorAdminId,
+      actorAccountId: event.actorAccountId,
+      action: event.action,
+      entityType: event.entityType,
+      entityId: event.entityId,
+      ipAddress: event.ipAddress,
+      userAgent: event.userAgent,
+      metadata: event.metadata ?? {}
+    });
+  } catch (error) {
+    console.error("Audit write failed", error);
+  }
 }

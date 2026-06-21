@@ -1,13 +1,20 @@
 import { serve } from "bun";
 import { env } from "./config/env";
 import { app } from "./app";
+import { resolveAdminSessionFromCookieHeader } from "./http/middleware/session";
 import { registerEventsSocket, unregisterEventsSocket } from "./modules/events/events";
 
 serve({
-  fetch(request, server) {
+  async fetch(request, server) {
     const url = new URL(request.url);
 
     if (url.pathname === "/api/v1/events") {
+      try {
+        await resolveAdminSessionFromCookieHeader(request.headers.get("cookie"));
+      } catch {
+        return new Response("Unauthorized", { status: 401 });
+      }
+
       const upgraded = server.upgrade(request);
 
       if (!upgraded) {

@@ -1,5 +1,5 @@
 import { mkdir } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname, join, normalize } from "node:path";
 import { db } from "../db/client";
 import { storedFiles } from "../db/schema";
 import { env } from "../config/env";
@@ -77,4 +77,9 @@ export async function storeFile(input: PutObjectInput) {
   const storageRow = await storageAdapter.put(input);
   const [row] = await db.insert(storedFiles).values(storageRow).returning();
   return row!;
+}
+
+export function resolveLocalObjectPath(objectKey: string) {
+  const normalizedKey = normalize(objectKey).replace(/^(\.\.(\/|\\|$))+/, "");
+  return join(env.LOCAL_STORAGE_ROOT, normalizedKey);
 }

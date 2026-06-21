@@ -8,7 +8,7 @@ import { withoutUndefined } from "../../shared/object";
 import { paginated, parsePagination } from "../../shared/pagination";
 import { broadcastEvent } from "../events/events";
 import { verifyDynamicQr } from "../qr-signing/qr-signing.service";
-import { listAccessToday, runAccessScan, runAutoExits } from "./access.repository";
+import { getPersonProfileFileUrl, listAccessToday, runAccessScan, runAutoExits } from "./access.repository";
 import { getOperationalConfig } from "../config/config.repository";
 import { db } from "../../db/client";
 import { sql } from "drizzle-orm";
@@ -92,18 +92,32 @@ accessRoutes.post("/scan", async (c) => {
   }
 
   const result = await runAccessScan(withoutUndefined(scanPayload));
+  const responseResult = typeof result === "object" && result
+    ? ({ ...(result as Record<string, unknown>) } as Record<string, unknown>)
+    : result;
+  const responseObject = typeof responseResult === "object" && responseResult
+    ? responseResult as Record<string, unknown>
+    : null;
+
+  if (responseObject && typeof responseObject["personId"] === "string") {
+    const profilePhotoUrl = await getPersonProfileFileUrl(responseObject["personId"]);
+    if (profilePhotoUrl) {
+      responseObject["profilePhotoUrl"] = profilePhotoUrl;
+    }
+  }
+
   await recordAudit({
     ...getActorMetadata(c),
     action: "access.scan",
     entityType: "access",
-    entityId: typeof result === "object" && result && "registroId" in result ? String(result.registroId) : undefined,
-    metadata: { result }
+    entityId: responseObject && "registroId" in responseObject ? String(responseObject["registroId"]) : undefined,
+    metadata: { result: responseResult }
   });
-  broadcastEvent("access.scan", { result: result as Record<string, unknown> });
+  broadcastEvent("access.scan", { result: responseResult as Record<string, unknown> });
   broadcastEvent("access.table", {});
   broadcastEvent("attendance.table", {});
 
-  return c.json({ data: result });
+  return c.json({ data: responseResult });
 });
 
 const accessTodayQuerySchema = z.object({

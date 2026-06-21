@@ -6,6 +6,7 @@ import { HttpError } from "../../shared/http-error";
 import { stripSecretFields } from "../../shared/sanitize";
 import { issueOpaqueToken } from "../../shared/security";
 import { getOperationalConfig } from "../config/config.repository";
+import { broadcastEvent } from "../events/events";
 import { signDynamicQr } from "../qr-signing/qr-signing.service";
 import {
   createPersonQrToken,
@@ -61,6 +62,7 @@ credentialsRoutes.post("/person", async (c) => {
     entityId: row.id,
     metadata: { personId: input.personId }
   });
+  broadcastEvent("credentials.table", { action: "person_qr_issued", personId: input.personId, id: row.id });
 
   return c.json({ data: { credential: stripSecretFields(row), token: issued.token } }, 201);
 });
@@ -83,6 +85,7 @@ credentialsRoutes.post("/person/:personId/rotate", async (c) => {
     entityId: row.id,
     metadata: { personId }
   });
+  broadcastEvent("credentials.table", { action: "person_qr_rotated", personId, id: row.id });
 
   return c.json({ data: { credential: stripSecretFields(row), token: issued.token } }, 201);
 });
@@ -97,6 +100,7 @@ credentialsRoutes.post("/person/:personId/revoke", async (c) => {
     entityId: personId,
     metadata: { revoked: rows.length }
   });
+  broadcastEvent("credentials.table", { action: "person_qr_revoked", personId, revoked: rows.length });
 
   return c.json({ data: { rows } });
 });
@@ -125,6 +129,7 @@ credentialsRoutes.post("/temporary-daily", async (c) => {
     entityId: row.id,
     metadata: { personId: input.personId, operationalDate: input.operationalDate }
   });
+  broadcastEvent("temporary-daily-qr.table", { action: "issued", personId: input.personId, id: row.id });
 
   return c.json({ data: { credential: stripSecretFields(row), token: issued.token } }, 201);
 });
@@ -139,6 +144,7 @@ credentialsRoutes.post("/temporary-daily/:id/revoke", async (c) => {
       entityType: "temporary_daily_qr",
       entityId: id
     });
+    broadcastEvent("temporary-daily-qr.table", { action: "revoked", id });
   }
   return row ? c.json({ data: row }) : c.json({ error: { code: "TEMPORARY_DAILY_QR_NOT_FOUND" } }, 404);
 });
@@ -172,6 +178,7 @@ credentialsRoutes.post("/temporary-daily/:id/dynamic", async (c) => {
     entityId: credential.id,
     metadata: { personId: credential.personId, operationalDate: credential.operationalDate, jti }
   });
+  broadcastEvent("temporary-daily-qr.table", { action: "dynamic_issued", id: credential.id, personId: credential.personId });
 
   return c.json({
     data: {

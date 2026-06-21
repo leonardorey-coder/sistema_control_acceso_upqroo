@@ -5,18 +5,27 @@ import { z } from "zod";
 import { env } from "../../config/env";
 import { recordAudit } from "../../shared/audit";
 import { HttpError } from "../../shared/http-error";
+import { assertLoginNotRateLimited, clearLoginFailures, recordLoginFailure } from "../../shared/rate-limit";
 import { hashSessionToken, issueSessionToken } from "../../shared/security";
 import {
   createAdminSession,
   findAdminForLogin,
+  getAdminCredentialsById,
   getSessionByHash,
+  revokeOtherAdminSessions,
   revokeSession,
-  touchSession
+  touchSession,
+  updateAdminPassword
 } from "./auth.repository";
 
 const loginSchema = z.object({
   identity: z.string().trim().min(3),
   password: z.string().min(1)
+});
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8).max(128)
 });
 
 function sessionCookieOptions(expires: Date) {
@@ -64,13 +73,16 @@ export const authRoutes = new Hono();
 
 authRoutes.post("/login", async (c) => {
   const input = loginSchema.parse(await c.req.json());
+  const ipAddress = c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? undefined;
+  const rateLimitKey = assertLoginNotRateLimited("admin", input.identity, ipAddress);
   const admin = await findAdminForLogin(input.identity);
 
   if (!admin || admin.status !== "active") {
+    recordLoginFailure(rateLimitKey);
     await recordAudit({
       action: "admin.login_failed",
       entityType: "admin_session",
-      ipAddress: c.req.header("x-forwarded-for") ?? undefined,
+      ipAddress,
       userAgent: c.req.header("user-agent") ?? undefined,
       metadata: { identity: input.identity, reason: "not_found_or_disabled" }
     });
@@ -80,16 +92,19 @@ authRoutes.post("/login", async (c) => {
   const passwordOk = await Bun.password.verify(input.password, admin.passwordHash);
 
   if (!passwordOk) {
+    recordLoginFailure(rateLimitKey);
     await recordAudit({
       actorAdminId: admin.id,
       action: "admin.login_failed",
       entityType: "admin_session",
-      ipAddress: c.req.header("x-forwarded-for") ?? undefined,
+      ipAddress,
       userAgent: c.req.header("user-agent") ?? undefined,
       metadata: { identity: input.identity, reason: "bad_password" }
     });
     throw new HttpError(401, "INVALID_CREDENTIALS", "Invalid credentials.");
   }
+
+  clearLoginFailures(rateLimitKey);
 
   const token = issueSessionToken();
   const sessionHash = hashSessionToken(token);
@@ -98,7 +113,7 @@ authRoutes.post("/login", async (c) => {
   await createAdminSession({
     adminId: admin.id,
     sessionHash,
-    ipAddress: c.req.header("x-forwarded-for") ?? undefined,
+    ipAddress,
     userAgent: c.req.header("user-agent") ?? undefined,
     expiresAt
   });
@@ -107,7 +122,7 @@ authRoutes.post("/login", async (c) => {
     actorAdminId: admin.id,
     action: "admin.login_success",
     entityType: "admin_session",
-    ipAddress: c.req.header("x-forwarded-for") ?? undefined,
+    ipAddress,
     userAgent: c.req.header("user-agent") ?? undefined,
     metadata: { username: admin.username }
   });
@@ -159,4 +174,47 @@ authRoutes.post("/refresh", async (c) => {
   const { sessionHash, session } = await requireCurrentSession(c);
   await touchSession(sessionHash);
   return c.json({ data: publicSession(session) });
+});
+
+authRoutes.post("/change-password", async (c) => {
+  const { sessionHash, session } = await requireCurrentSession(c);
+  const input = changePasswordSchema.parse(await c.req.json());
+  const admin = await getAdminCredentialsById(session.adminId);
+
+  if (!admin || admin.status !== "active") {
+    throw new HttpError(401, "SESSION_INVALID", "The session is invalid or expired.");
+  }
+
+  const passwordOk = await Bun.password.verify(input.currentPassword, admin.passwordHash);
+
+  if (!passwordOk) {
+    await recordAudit({
+      actorAdminId: admin.id,
+      action: "admin.change_password_failed",
+      entityType: "admin",
+      entityId: admin.id,
+      ipAddress: c.req.header("x-forwarded-for") ?? undefined,
+      userAgent: c.req.header("user-agent") ?? undefined,
+      metadata: { reason: "bad_current_password" }
+    });
+    throw new HttpError(401, "INVALID_CURRENT_PASSWORD", "The current password is incorrect.");
+  }
+
+  const passwordHash = await Bun.password.hash(input.newPassword, {
+    algorithm: "bcrypt",
+    cost: 10
+  });
+
+  await updateAdminPassword(admin.id, passwordHash);
+  await revokeOtherAdminSessions(admin.id, sessionHash);
+  await recordAudit({
+    actorAdminId: admin.id,
+    action: "admin.password_changed",
+    entityType: "admin",
+    entityId: admin.id,
+    ipAddress: c.req.header("x-forwarded-for") ?? undefined,
+    userAgent: c.req.header("user-agent") ?? undefined
+  });
+
+  return c.json({ data: { ok: true } });
 });

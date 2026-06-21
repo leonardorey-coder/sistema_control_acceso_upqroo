@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { app } from "../src/app";
+import { assertLoginNotRateLimited, recordLoginFailure } from "../src/shared/rate-limit";
 import { hashScannerToken, issueOpaqueToken } from "../src/shared/security";
 import { stripSecretFields } from "../src/shared/sanitize";
 
@@ -39,5 +40,23 @@ describe("security helpers", () => {
 
     expect(response.status).toBe(401);
     expect(body.error.code).toBe("SESSION_REQUIRED");
+  });
+
+  it("protects stored files behind an admin session", async () => {
+    const response = await app.request("/api/v1/files/uploads%2Fmissing.png");
+    const body = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(body.error.code).toBe("SESSION_REQUIRED");
+  });
+
+  it("temporarily locks repeated login failures", () => {
+    const key = assertLoginNotRateLimited("test", `identity-${crypto.randomUUID()}`, "127.0.0.1");
+
+    for (let index = 0; index < 5; index += 1) {
+      recordLoginFailure(key);
+    }
+
+    expect(() => assertLoginNotRateLimited("test", key.split(":")[1]!, "127.0.0.1")).toThrow("Too many failed login attempts");
   });
 });

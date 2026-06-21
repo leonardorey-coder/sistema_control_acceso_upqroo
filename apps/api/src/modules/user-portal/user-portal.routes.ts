@@ -6,8 +6,10 @@ import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { env } from "../../config/env";
 import { recordAudit } from "../../shared/audit";
+import { currentOperationalDate } from "../../shared/date-range";
 import { HttpError } from "../../shared/http-error";
 import { withoutUndefined } from "../../shared/object";
+import { assertLoginNotRateLimited, clearLoginFailures, recordLoginFailure } from "../../shared/rate-limit";
 import { hashSessionToken, issueOpaqueToken, issueSessionToken } from "../../shared/security";
 import { stripSecretFields } from "../../shared/sanitize";
 import { signDynamicQr } from "../qr-signing/qr-signing.service";
@@ -23,19 +25,27 @@ import {
   getActivePortalQr,
   getCurrentPortalTemporaryDailyQr,
   getUserSessionByHash,
+  getUserAccountCredentialsById,
   listUserDevices,
   listPortalAccess,
   listPortalAttendance,
   listPortalTemporaryDailyQrHistory,
   markUserDeviceUsed,
   revokeUserSession,
+  revokeOtherUserSessions,
   rotatePortalQr,
-  touchUserSession
+  touchUserSession,
+  updateUserPassword
 } from "./user-portal.repository";
 
 const loginSchema = z.object({
   identity: z.string().trim().email(),
   password: z.string().min(1)
+});
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8).max(128)
 });
 
 const temporaryDailyRequestSchema = z.object({
@@ -116,7 +126,7 @@ async function requirePortalSession(c: Context) {
 export const userPortalRoutes = new Hono();
 
 function operationalDateToday() {
-  return new Date().toISOString().slice(0, 10);
+  return currentOperationalDate();
 }
 
 function base64UrlToBytes(value: string) {
@@ -176,13 +186,16 @@ async function verifyDeviceProof(input: {
 
 userPortalRoutes.post("/auth/login", async (c) => {
   const input = loginSchema.parse(await c.req.json());
+  const ipAddress = c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? undefined;
+  const rateLimitKey = assertLoginNotRateLimited("portal", input.identity, ipAddress);
   const account = await findUserAccountForLogin(input.identity);
 
   if (!account || account.status !== "active" || account.estado !== "activo") {
+    recordLoginFailure(rateLimitKey);
     await recordAudit({
       action: "user.login_failed",
       entityType: "user_session",
-      ipAddress: c.req.header("x-forwarded-for") ?? undefined,
+      ipAddress,
       userAgent: c.req.header("user-agent") ?? undefined,
       metadata: { identity: input.identity, reason: "not_found_or_disabled" }
     });
@@ -192,16 +205,19 @@ userPortalRoutes.post("/auth/login", async (c) => {
   const passwordOk = await Bun.password.verify(input.password, account.passwordHash);
 
   if (!passwordOk) {
+    recordLoginFailure(rateLimitKey);
     await recordAudit({
       actorAccountId: account.id,
       action: "user.login_failed",
       entityType: "user_session",
-      ipAddress: c.req.header("x-forwarded-for") ?? undefined,
+      ipAddress,
       userAgent: c.req.header("user-agent") ?? undefined,
       metadata: { identity: input.identity, reason: "bad_password" }
     });
     throw new HttpError(401, "INVALID_CREDENTIALS", "Invalid credentials.");
   }
+
+  clearLoginFailures(rateLimitKey);
 
   const token = issueSessionToken();
   const sessionHash = hashSessionToken(token);
@@ -210,7 +226,7 @@ userPortalRoutes.post("/auth/login", async (c) => {
   await createUserSession({
     accountId: account.id,
     sessionHash,
-    ipAddress: c.req.header("x-forwarded-for") ?? undefined,
+    ipAddress,
     userAgent: c.req.header("user-agent") ?? undefined,
     expiresAt
   });
@@ -221,7 +237,7 @@ userPortalRoutes.post("/auth/login", async (c) => {
     actorAccountId: account.id,
     action: "user.login_success",
     entityType: "user_session",
-    ipAddress: c.req.header("x-forwarded-for") ?? undefined,
+    ipAddress,
     userAgent: c.req.header("user-agent") ?? undefined
   });
 
@@ -257,6 +273,49 @@ userPortalRoutes.get("/me", async (c) => {
   const { sessionHash, session } = await requirePortalSession(c);
   await touchUserSession(sessionHash);
   return c.json({ data: publicPortalSession(session) });
+});
+
+userPortalRoutes.post("/auth/change-password", async (c) => {
+  const { sessionHash, session } = await requirePortalSession(c);
+  const input = changePasswordSchema.parse(await c.req.json());
+  const account = await getUserAccountCredentialsById(session.accountId);
+
+  if (!account || account.status !== "active") {
+    throw new HttpError(401, "USER_SESSION_INVALID", "The user session is invalid or expired.");
+  }
+
+  const passwordOk = await Bun.password.verify(input.currentPassword, account.passwordHash);
+
+  if (!passwordOk) {
+    await recordAudit({
+      actorAccountId: account.id,
+      action: "user.change_password_failed",
+      entityType: "user_account",
+      entityId: account.id,
+      ipAddress: c.req.header("x-forwarded-for") ?? undefined,
+      userAgent: c.req.header("user-agent") ?? undefined,
+      metadata: { reason: "bad_current_password" }
+    });
+    throw new HttpError(401, "INVALID_CURRENT_PASSWORD", "The current password is incorrect.");
+  }
+
+  const passwordHash = await Bun.password.hash(input.newPassword, {
+    algorithm: "bcrypt",
+    cost: 10
+  });
+
+  await updateUserPassword(account.id, passwordHash);
+  await revokeOtherUserSessions(account.id, sessionHash);
+  await recordAudit({
+    actorAccountId: account.id,
+    action: "user.password_changed",
+    entityType: "user_account",
+    entityId: account.id,
+    ipAddress: c.req.header("x-forwarded-for") ?? undefined,
+    userAgent: c.req.header("user-agent") ?? undefined
+  });
+
+  return c.json({ data: { ok: true } });
 });
 
 userPortalRoutes.get("/qr", async (c) => {

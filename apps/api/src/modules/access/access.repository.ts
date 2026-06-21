@@ -5,6 +5,7 @@ import {
   carreras,
   personas,
   registrosAcceso,
+  storedFiles,
   vehicles
 } from "../../db/schema";
 import type { Pagination } from "../../shared/pagination";
@@ -120,6 +121,26 @@ export async function runAccessScan(payload: AccessScanPayload) {
   );
 
   return row?.result;
+}
+
+export async function getPersonProfileFileUrl(personId: string) {
+  const [row] = await db
+    .select({
+      objectKey: storedFiles.objectKey,
+      legacyPhoto: personas.fotoPerfilLegacy
+    })
+    .from(personas)
+    .leftJoin(storedFiles, eq(personas.profileFileId, storedFiles.id))
+    .where(eq(personas.id, personId))
+    .limit(1);
+
+  if (!row) return null;
+
+  if (row.objectKey) {
+    return `/api/v1/files/${encodeURIComponent(row.objectKey)}`;
+  }
+
+  return row.legacyPhoto ?? null;
 }
 
 export async function runAutoExits(targetDate?: string) {

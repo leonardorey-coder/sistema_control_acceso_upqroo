@@ -1,4 +1,4 @@
-import { and, eq, gt, isNull, or } from "drizzle-orm";
+import { and, eq, gt, isNull, ne, or } from "drizzle-orm";
 import { db } from "../../db/client";
 import { administradores, adminSessions } from "../../db/schema";
 
@@ -14,6 +14,38 @@ export function findAdminForLogin(identity: string) {
 export async function createAdminSession(input: typeof adminSessions.$inferInsert) {
   const [row] = await db.insert(adminSessions).values(input).returning();
   return row;
+}
+
+export function getAdminCredentialsById(id: string) {
+  return db.query.administradores.findFirst({
+    where: eq(administradores.id, id)
+  });
+}
+
+export async function updateAdminPassword(id: string, passwordHash: string) {
+  const [row] = await db
+    .update(administradores)
+    .set({
+      passwordHash,
+      mustChangePassword: false,
+      updatedAt: new Date()
+    })
+    .where(eq(administradores.id, id))
+    .returning();
+
+  return row;
+}
+
+export async function revokeOtherAdminSessions(adminId: string, currentSessionHash: string) {
+  return db
+    .update(adminSessions)
+    .set({ revokedAt: new Date() })
+    .where(and(
+      eq(adminSessions.adminId, adminId),
+      ne(adminSessions.sessionHash, currentSessionHash),
+      isNull(adminSessions.revokedAt)
+    ))
+    .returning();
 }
 
 export async function getSessionByHash(sessionHash: string) {

@@ -1,6 +1,18 @@
 import type { ServerWebSocket } from "bun";
 
-type EventTopic = "access.scan" | "access.table" | "attendance.table" | "hot-qr.table";
+type EventTopic =
+  | "access.scan"
+  | "access.table"
+  | "attendance.table"
+  | "hot-qr.table"
+  | "credentials.table"
+  | "temporary-daily-qr.table"
+  | "vehicles.table"
+  | "vehicle-permits.table"
+  | "admins.table"
+  | "admin-sessions.table"
+  | "audit.table"
+  | "config.table";
 
 type EventMessage = {
   topic: EventTopic;
