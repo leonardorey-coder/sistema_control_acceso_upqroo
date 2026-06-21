@@ -1,4 +1,5 @@
 import { env } from "$env/dynamic/public";
+import type { PaginatedResponse } from "@control-acceso/shared";
 
 export type ApiResult<T> = {
   data?: T;
@@ -9,13 +10,7 @@ export type ApiResult<T> = {
   };
 };
 
-export type PaginatedRows<T> = {
-  rows: T[];
-  total: number;
-  page: number;
-  pageSize: number;
-  summary?: Record<string, unknown>;
-};
+export type PaginatedRows<T> = PaginatedResponse<T>;
 
 export const apiBaseUrl = env.PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 

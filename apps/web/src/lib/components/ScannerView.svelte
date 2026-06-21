@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
+  import type { ScannerResultPayload } from "@control-acceso/shared";
   import DataTable from "./DataTable.svelte";
   import StatusBadge from "./StatusBadge.svelte";
 
@@ -10,7 +11,7 @@
     recentRows,
     onScan
   }: {
-    result: Row | null;
+    result: (ScannerResultPayload & Row) | null;
     recentRows: Row[];
     onScan: (payload: { token?: string; signedQr?: string; manualMatricula?: string }) => Promise<void>;
   } = $props();
@@ -144,7 +145,11 @@
         <p class="error">{error}</p>
       {/if}
       {#if result}
-        <div class="avatar">{String(result.fullName ?? result.visitorName ?? "?").slice(0, 1)}</div>
+        {#if result.profilePhotoUrl}
+          <img class="avatar photo-avatar" src={String(result.profilePhotoUrl)} alt={`Foto de ${result.fullName ?? result.visitorName ?? "persona"}`} />
+        {:else}
+          <div class="avatar">{String(result.fullName ?? result.visitorName ?? "?").slice(0, 1)}</div>
+        {/if}
         <strong>{result.fullName ?? result.visitorName}</strong>
         <p>{result.matricula ?? ""} {result.vehiclePlate ? `- ${result.vehiclePlate}` : ""}</p>
         <div class="result-meta">

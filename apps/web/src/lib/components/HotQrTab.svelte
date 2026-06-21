@@ -1,8 +1,10 @@
 <script lang="ts">
+  import type { HotQrRowPayload } from "@control-acceso/shared";
   import DataTable from "./DataTable.svelte";
   import QrPreview from "./QrPreview.svelte";
 
   type Row = Record<string, unknown>;
+  type HotQrRow = HotQrRowPayload & Row;
 
   let {
     rows,
@@ -14,14 +16,14 @@
     onFilter,
     onRevoke
   }: {
-    rows: Row[];
+    rows: HotQrRow[];
     form: { visitorName: string; reason: string; minutes: number };
     generatedToken: string;
     generatedTitle: string;
     filters: { q: string; date: string; hotQrStatus: string };
     onCreate: () => void;
     onFilter: () => void;
-    onRevoke: (row: Row) => void;
+    onRevoke: (row: HotQrRow) => void;
   } = $props();
 </script>
 
@@ -68,5 +70,5 @@
       { key: "status", label: "Estado", kind: "status" },
       { key: "validUntil", label: "Expira", kind: "date" },
       { key: "createdByAdminId", label: "Creador" }
-    ]} actions={[{ label: "Revocar", onClick: onRevoke, tone: "ghost" }]} />
+    ]} actions={[{ label: "Revocar", onClick: (row) => onRevoke(row as HotQrRow), tone: "ghost" }]} />
 </section>

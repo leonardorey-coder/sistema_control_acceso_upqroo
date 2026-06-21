@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { AttendanceRowPayload } from "@control-acceso/shared";
   import DataTable from "./DataTable.svelte";
 
   type Row = Record<string, unknown>;
@@ -14,9 +15,10 @@
     scheduleForm,
     onFilter,
     onCreateSubject,
-    onCreateSchedule
+    onCreateSchedule,
+    onAdjustAttendance
   }: {
-    rows: Row[];
+    rows: Array<AttendanceRowPayload & Row>;
     total: number;
     filters: { q: string; date: string; page: number; pageSize: number; subject: string; status: string; careerId: string };
     careerRows: Row[];
@@ -27,7 +29,12 @@
     onFilter: () => void;
     onCreateSubject: () => void;
     onCreateSchedule: () => void;
+    onAdjustAttendance: (row: AttendanceRowPayload & Row, estado: "confirmed" | "partial" | "unverified") => void;
   } = $props();
+
+  function asAttendanceRow(row: Row) {
+    return row as AttendanceRowPayload & Row;
+  }
 </script>
 
 <section class="panel">
@@ -67,6 +74,11 @@
     { key: "porcentaje", label: "%" },
     { key: "carrera", label: "Carrera" },
     { key: "estado", label: "Estado", kind: "status" }
+  ]}
+  actions={[
+    { label: "Confirmar", onClick: (row) => onAdjustAttendance(asAttendanceRow(row), "confirmed") },
+    { label: "Parcial", onClick: (row) => onAdjustAttendance(asAttendanceRow(row), "partial"), tone: "ghost" },
+    { label: "No verificada", onClick: (row) => onAdjustAttendance(asAttendanceRow(row), "unverified"), tone: "ghost" }
   ]} />
 </section>
 

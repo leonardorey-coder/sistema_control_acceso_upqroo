@@ -28,6 +28,9 @@
   let temporaryCredential = $state<Row | null>(null);
   let temporaryHistory = $state<Row[]>([]);
   let temporaryForm = $state({ reasonCode: "credential_unavailable", reasonText: "" });
+  let passwordForm = $state({ currentPassword: "", newPassword: "" });
+  let passwordNotice = $state("");
+  let passwordError = $state("");
   let accessRows = $state<Row[]>([]);
   let attendanceRows = $state<Row[]>([]);
   let error = $state("");
@@ -70,6 +73,27 @@
     await goto("/portal/login");
   }
 
+  async function changePassword() {
+    passwordNotice = "";
+    passwordError = "";
+    try {
+      await apiRequest("/api/v1/portal/auth/change-password", {
+        method: "POST",
+        body: JSON.stringify(passwordForm)
+      });
+      passwordForm = { currentPassword: "", newPassword: "" };
+      if (session) {
+        session = {
+          ...session,
+          user: { ...session.user, mustChangePassword: false }
+        };
+      }
+      passwordNotice = "Password actualizado";
+    } catch (changeError) {
+      passwordError = changeError instanceof Error ? changeError.message : "No se pudo cambiar el password";
+    }
+  }
+
   onMount(loadPortal);
 </script>
 
@@ -99,6 +123,18 @@
         <a class="view-switch-button" href="/portal/historial">Historial</a>
       </div>
     </section>
+
+    {#if session.user.mustChangePassword}
+      <form class="panel form-grid" onsubmit={(event) => { event.preventDefault(); changePassword(); }}>
+        <h2>Cambiar password</h2>
+        <p class="muted">Actualiza tu password para continuar usando el portal.</p>
+        {#if passwordNotice}<p class="notice">{passwordNotice}</p>{/if}
+        {#if passwordError}<p class="error">{passwordError}</p>{/if}
+        <input type="password" bind:value={passwordForm.currentPassword} placeholder="Password actual" required />
+        <input type="password" bind:value={passwordForm.newPassword} placeholder="Nuevo password" minlength="8" required />
+        <button>Actualizar password</button>
+      </form>
+    {/if}
 
     <section class="grid two">
       <section class="panel qr-focus">

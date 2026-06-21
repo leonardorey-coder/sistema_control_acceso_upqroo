@@ -1,8 +1,13 @@
 <script lang="ts">
+  import type { CareerRowPayload, PersonCredentialRowPayload, PersonRowPayload, PersonTypeRowPayload } from "@control-acceso/shared";
   import DataTable from "./DataTable.svelte";
   import QrPreview from "./QrPreview.svelte";
 
   type Row = Record<string, unknown>;
+  type PersonRow = PersonRowPayload & Row;
+  type PersonTypeRow = PersonTypeRowPayload & Row;
+  type CareerRow = CareerRowPayload & Row;
+  type CredentialRow = PersonCredentialRowPayload & Row;
 
   let {
     editMatricula = $bindable(),
@@ -21,10 +26,10 @@
     onPhoto
   }: {
     editMatricula: string;
-    editPerson: Row | null;
-    personTypeRows: Row[];
-    careerRows: Row[];
-    credentialRows: Row[];
+    editPerson: PersonRow | null;
+    personTypeRows: PersonTypeRow[];
+    careerRows: CareerRow[];
+    credentialRows: CredentialRow[];
     generatedToken: string;
     generatedTitle: string;
     onSearch: () => void;

@@ -1,5 +1,21 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onDestroy, onMount } from "svelte";
+  import type {
+    AdminRowPayload,
+    AdminSessionPayload,
+    AdminSessionRowPayload,
+    AttendanceRowPayload,
+    AuditLogRowPayload,
+    CareerRowPayload,
+    HotQrRowPayload,
+    OperationalConfigPayload,
+    PersonCredentialRowPayload,
+    PersonRowPayload,
+    PersonTypeRowPayload,
+    TemporaryDailyQrRowPayload,
+    VehiclePermitRowPayload,
+    VehicleRowPayload
+  } from "@control-acceso/shared";
   import AdminShell from "$lib/components/AdminShell.svelte";
   import AccessTab from "$lib/components/AccessTab.svelte";
   import AdminsTab from "$lib/components/AdminsTab.svelte";
@@ -20,16 +36,25 @@
     refreshAfterMs: number;
     jti: string;
   };
-  type Session = {
-    admin: {
-      id: string;
-      username: string;
-      displayName: string;
-      role: string;
-      mustChangePassword: boolean;
-    };
-    expiresAt: string;
+  type EventTopic =
+    | "access.scan"
+    | "access.table"
+    | "attendance.table"
+    | "hot-qr.table"
+    | "credentials.table"
+    | "temporary-daily-qr.table"
+    | "vehicles.table"
+    | "vehicle-permits.table"
+    | "admins.table"
+    | "admin-sessions.table"
+    | "audit.table"
+    | "config.table";
+  type EventMessage = {
+    topic: EventTopic;
+    payload?: Row;
+    emittedAt?: string;
   };
+  type Session = AdminSessionPayload;
 
   let { data }: { data: PageData } = $props();
 
@@ -39,27 +64,30 @@
   let loginPassword = $state("");
   let loginError = $state("");
   let notice = $state("");
+  let passwordNotice = $state("");
+  let passwordError = $state("");
+  let passwordForm = $state({ currentPassword: "", newPassword: "" });
   let generatedToken = $state("");
   let generatedTitle = $state("");
 
   let accessRows = $state<Row[]>([]);
   let accessTotal = $state(0);
-  let attendanceRows = $state<Row[]>([]);
+  let attendanceRows = $state<Array<AttendanceRowPayload & Row>>([]);
   let attendanceTotal = $state(0);
-  let peopleRows = $state<Row[]>([]);
-  let personTypeRows = $state<Row[]>([]);
-  let careerRows = $state<Row[]>([]);
-  let credentialRows = $state<Row[]>([]);
-  let temporaryQrRows = $state<Row[]>([]);
-  let hotQrRows = $state<Row[]>([]);
-  let vehicleRows = $state<Row[]>([]);
-  let permitRows = $state<Row[]>([]);
-  let adminRows = $state<Row[]>([]);
-  let adminSessionRows = $state<Row[]>([]);
-  let adminAuditRows = $state<Row[]>([]);
+  let peopleRows = $state<Array<PersonRowPayload & Row>>([]);
+  let personTypeRows = $state<Array<PersonTypeRowPayload & Row>>([]);
+  let careerRows = $state<Array<CareerRowPayload & Row>>([]);
+  let credentialRows = $state<Array<PersonCredentialRowPayload & Row>>([]);
+  let temporaryQrRows = $state<Array<TemporaryDailyQrRowPayload & Row>>([]);
+  let hotQrRows = $state<Array<HotQrRowPayload & Row>>([]);
+  let vehicleRows = $state<Array<VehicleRowPayload & Row>>([]);
+  let permitRows = $state<Array<VehiclePermitRowPayload & Row>>([]);
+  let adminRows = $state<Array<AdminRowPayload & Row>>([]);
+  let adminSessionRows = $state<Array<AdminSessionRowPayload & Row>>([]);
+  let adminAuditRows = $state<Array<AuditLogRowPayload & Row>>([]);
   let subjectRows = $state<Row[]>([]);
   let scheduleRows = $state<Row[]>([]);
-  let configForm = $state({
+  let configForm = $state<OperationalConfigPayload>({
     retryEnabled: true,
     retryDelayMs: 1200,
     cameraEnabled: true,
@@ -95,7 +123,7 @@
   });
 
   let editMatricula = $state("");
-  let editPerson = $state<Row | null>(null);
+  let editPerson = $state<(PersonRowPayload & Row) | null>(null);
   let temporaryQrForm = $state({
     personId: "",
     operationalDate: new Date().toISOString().slice(0, 10),
@@ -109,6 +137,16 @@
   let vehicleForm = $state({ ownerPersonId: "", plate: "", make: "", model: "", color: "" });
   let permitForm = $state({ personId: "", vehicleId: "", validUntil: "" });
   let adminForm = $state({ username: "", displayName: "", email: "", role: "admin", temporaryPassword: "" });
+  let adminEditForm = $state({
+    id: "",
+    username: "",
+    displayName: "",
+    email: "",
+    role: "admin",
+    status: "active",
+    mustChangePassword: false
+  });
+  let auditFilters = $state({ q: "", action: "", entityType: "", from: "", to: "" });
   let subjectForm = $state({ clave: "", nombre: "" });
   let scheduleForm = $state({ personId: "", subjectId: "", weekday: 1, horaInicio: "08:00", horaFin: "09:00", aula: "", validFrom: new Date().toISOString().slice(0, 10), validUntil: "" });
 
@@ -124,6 +162,58 @@
   ];
 
   const apiOnline = $derived(Boolean(data.health));
+  let eventsSocket: WebSocket | null = null;
+  let eventsReconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let eventsReconnectDelay = 1000;
+  let eventsShouldReconnect = false;
+
+  function closeEventsSocket() {
+    eventsShouldReconnect = false;
+    if (eventsReconnectTimer) clearTimeout(eventsReconnectTimer);
+    eventsReconnectTimer = null;
+    eventsSocket?.close();
+    eventsSocket = null;
+  }
+
+  function connectEventsSocket() {
+    closeEventsSocket();
+    eventsShouldReconnect = true;
+    eventsSocket = new WebSocket(`${apiBaseUrl.replace(/^http/, "ws")}/api/v1/events`);
+
+    eventsSocket.addEventListener("open", () => {
+      eventsReconnectDelay = 1000;
+    });
+
+    eventsSocket.addEventListener("message", (event) => {
+      let message: EventMessage;
+
+      try {
+        message = JSON.parse(event.data) as EventMessage;
+      } catch {
+        return;
+      }
+
+      if (message.topic === "access.scan" || message.topic === "access.table") refreshAccess();
+      if (message.topic === "access.scan" || message.topic === "attendance.table") refreshAttendance();
+      if (message.topic === "hot-qr.table") refreshHotQr();
+      if (message.topic === "credentials.table") refreshCredentials();
+      if (message.topic === "temporary-daily-qr.table") refreshTemporaryQr();
+      if (message.topic === "vehicles.table") refreshVehicles();
+      if (message.topic === "vehicle-permits.table") refreshPermits();
+      if (message.topic === "admins.table" || message.topic === "audit.table") refreshAdmins();
+      if (message.topic === "admin-sessions.table") {
+        refreshAdmins();
+        adminSessionRows = [];
+      }
+      if (message.topic === "config.table") refreshConfig();
+    });
+
+    eventsSocket.addEventListener("close", () => {
+      if (!session || !eventsShouldReconnect) return;
+      eventsReconnectTimer = setTimeout(connectEventsSocket, eventsReconnectDelay);
+      eventsReconnectDelay = Math.min(eventsReconnectDelay * 2, 15000);
+    });
+  }
 
   async function login() {
     loginError = "";
@@ -134,6 +224,7 @@
       });
       loginPassword = "";
       await refreshAll();
+      connectEventsSocket();
     } catch (error) {
       loginError = error instanceof Error ? error.message : "No se pudo iniciar sesion";
     }
@@ -141,6 +232,7 @@
 
   async function logout() {
     await apiRequest("/api/v1/auth/logout", { method: "POST" }).catch(() => null);
+    closeEventsSocket();
     session = null;
   }
 
@@ -148,6 +240,7 @@
     try {
       session = await apiRequest<Session>("/api/v1/auth/me");
       await refreshAll();
+      connectEventsSocket();
     } catch {
       session = null;
     }
@@ -168,7 +261,7 @@
   }
 
   async function refreshAttendance() {
-    const result = await apiRequest<PaginatedRows<Row>>(`/api/v1/attendance/today${toQuery({
+    const result = await apiRequest<PaginatedRows<AttendanceRowPayload & Row>>(`/api/v1/attendance/today${toQuery({
       q: filters.q,
       date: filters.date,
       page: filters.page,
@@ -182,16 +275,16 @@
   }
 
   async function refreshPeople() {
-    const result = await apiRequest<PaginatedRows<Row>>(`/api/v1/people${toQuery({ q: filters.q, personType: filters.personType, status: filters.status, careerId: filters.careerId, page: filters.page, pageSize: filters.pageSize })}`);
+    const result = await apiRequest<PaginatedRows<PersonRowPayload & Row>>(`/api/v1/people${toQuery({ q: filters.q, personType: filters.personType, status: filters.status, careerId: filters.careerId, page: filters.page, pageSize: filters.pageSize })}`);
     peopleRows = result.rows;
   }
 
   async function refreshPersonTypes() {
-    personTypeRows = (await apiRequest<{ rows: Row[] }>("/api/v1/person-types")).rows;
+    personTypeRows = (await apiRequest<{ rows: Array<PersonTypeRowPayload & Row> }>("/api/v1/person-types")).rows;
   }
 
   async function refreshCareers() {
-    careerRows = (await apiRequest<{ rows: Row[] }>("/api/v1/careers")).rows;
+    careerRows = (await apiRequest<{ rows: Array<CareerRowPayload & Row> }>("/api/v1/careers")).rows;
   }
 
   async function refreshCredentials(personId = editPerson?.id ? String(editPerson.id) : "") {
@@ -199,34 +292,40 @@
       credentialRows = [];
       return;
     }
-    credentialRows = (await apiRequest<{ rows: Row[] }>(`/api/v1/credentials/person/${personId}`)).rows;
+    credentialRows = (await apiRequest<{ rows: Array<PersonCredentialRowPayload & Row> }>(`/api/v1/credentials/person/${personId}`)).rows;
   }
 
   async function refreshTemporaryQr() {
-    temporaryQrRows = (await apiRequest<{ rows: Row[] }>("/api/v1/credentials/temporary-daily")).rows;
+    temporaryQrRows = (await apiRequest<{ rows: Array<TemporaryDailyQrRowPayload & Row> }>("/api/v1/credentials/temporary-daily")).rows;
   }
 
   async function refreshHotQr() {
-    const result = await apiRequest<PaginatedRows<Row>>(`/api/v1/hot-qr/today${toQuery({ q: filters.q, status: filters.hotQrStatus, date: filters.date, page: filters.page, pageSize: filters.pageSize })}`);
+    const result = await apiRequest<PaginatedRows<HotQrRowPayload & Row>>(`/api/v1/hot-qr/today${toQuery({ q: filters.q, status: filters.hotQrStatus, date: filters.date, page: filters.page, pageSize: filters.pageSize })}`);
     hotQrRows = result.rows;
   }
 
   async function refreshVehicles() {
-    vehicleRows = (await apiRequest<PaginatedRows<Row>>(`/api/v1/vehicles${toQuery({ q: filters.q, status: filters.vehicleStatus, page: filters.page, pageSize: filters.pageSize })}`)).rows;
+    vehicleRows = (await apiRequest<PaginatedRows<VehicleRowPayload & Row>>(`/api/v1/vehicles${toQuery({ q: filters.q, status: filters.vehicleStatus, page: filters.page, pageSize: filters.pageSize })}`)).rows;
   }
 
   async function refreshPermits() {
-    permitRows = (await apiRequest<PaginatedRows<Row>>(`/api/v1/vehicles/permits${toQuery({ page: filters.page, pageSize: filters.pageSize })}`)).rows;
+    permitRows = (await apiRequest<PaginatedRows<VehiclePermitRowPayload & Row>>(`/api/v1/vehicles/permits${toQuery({ page: filters.page, pageSize: filters.pageSize })}`)).rows;
   }
 
   async function refreshAdmins() {
     if (session?.admin.role !== "super_admin") return;
-    adminRows = (await apiRequest<{ rows: Row[] }>("/api/v1/admins")).rows;
-    adminAuditRows = (await apiRequest<{ rows: Row[] }>("/api/v1/admins/audit")).rows;
+    adminRows = (await apiRequest<{ rows: Array<AdminRowPayload & Row> }>("/api/v1/admins")).rows;
+    adminAuditRows = (await apiRequest<{ rows: Array<AuditLogRowPayload & Row> }>(`/api/v1/admins/audit${toQuery({
+      q: auditFilters.q,
+      action: auditFilters.action,
+      entityType: auditFilters.entityType,
+      from: auditFilters.from ? new Date(auditFilters.from).toISOString() : "",
+      to: auditFilters.to ? new Date(auditFilters.to).toISOString() : ""
+    })}`)).rows;
   }
 
   async function refreshConfig() {
-    const result = await apiRequest<Row>("/api/v1/config/operational");
+    const result = await apiRequest<{ value?: Partial<OperationalConfigPayload> }>("/api/v1/config/operational");
     configForm = { ...configForm, ...(result.value as Partial<typeof configForm> ?? {}) };
   }
 
@@ -256,11 +355,32 @@
     ]);
   }
 
-  async function createPersonAndQr() {
+  async function changeAdminPassword() {
+    passwordError = "";
+    passwordNotice = "";
+    try {
+      await apiRequest("/api/v1/auth/change-password", {
+        method: "POST",
+        body: JSON.stringify(passwordForm)
+      });
+      passwordForm = { currentPassword: "", newPassword: "" };
+      if (session) {
+        session = {
+          ...session,
+          admin: { ...session.admin, mustChangePassword: false }
+        };
+      }
+      passwordNotice = "Password actualizado";
+    } catch (error) {
+      passwordError = error instanceof Error ? error.message : "No se pudo cambiar el password";
+    }
+  }
+
+  async function createPersonAndQr(mode: "register" | "generate") {
     let personId = "";
 
-    if (personForm.nombres && personForm.apellidos) {
-      const person = await apiRequest<Row>("/api/v1/people", {
+    if (mode === "register") {
+      const person = await apiRequest<PersonRowPayload & Row>("/api/v1/people", {
         method: "POST",
         body: JSON.stringify({
           matricula: personForm.matricula,
@@ -275,7 +395,11 @@
       });
       personId = String(person.id);
     } else {
-      const person = await apiRequest<Row>(`/api/v1/people/by-matricula/${personForm.matricula}`);
+      if (!personForm.matricula) {
+        notice = "Capture una matricula para generar QR";
+        return;
+      }
+      const person = await apiRequest<PersonRowPayload & Row>(`/api/v1/people/by-matricula/${personForm.matricula}`);
       personId = String(person.id);
     }
 
@@ -292,7 +416,7 @@
   }
 
   async function searchPerson() {
-    editPerson = await apiRequest<Row>(`/api/v1/people/by-matricula/${editMatricula}`);
+    editPerson = await apiRequest<PersonRowPayload & Row>(`/api/v1/people/by-matricula/${editMatricula}`);
     temporaryQrForm.personId = String(editPerson.id ?? "");
     permitForm.personId = String(editPerson.id ?? permitForm.personId);
     vehicleForm.ownerPersonId = String(editPerson.id ?? vehicleForm.ownerPersonId);
@@ -301,9 +425,19 @@
 
   async function saveEditPerson() {
     if (!editPerson?.id) return;
+    const payload = {
+      matricula: String(editPerson.matricula ?? ""),
+      nombres: String(editPerson.nombres ?? ""),
+      apellidos: String(editPerson.apellidos ?? ""),
+      curp: editPerson.curp ? String(editPerson.curp).toUpperCase() : undefined,
+      tipoPersona: String(editPerson.tipoPersona ?? "estudiante"),
+      estado: String(editPerson.estado ?? "activo"),
+      carreraId: editPerson.carreraId ? String(editPerson.carreraId) : undefined,
+      notas: editPerson.notas ? String(editPerson.notas) : undefined
+    };
     await apiRequest(`/api/v1/people/${editPerson.id}`, {
       method: "PATCH",
-      body: JSON.stringify(editPerson)
+      body: JSON.stringify(payload)
     });
     notice = "Persona actualizada";
     await refreshPeople();
@@ -311,14 +445,14 @@
 
   async function disableEditPerson() {
     if (!editPerson?.id) return;
-    editPerson = await apiRequest<Row>(`/api/v1/people/${editPerson.id}/disable`, { method: "POST" });
+    editPerson = await apiRequest<PersonRowPayload & Row>(`/api/v1/people/${editPerson.id}/disable`, { method: "POST" });
     notice = "Persona desactivada";
     await refreshPeople();
   }
 
   async function enableEditPerson() {
     if (!editPerson?.id) return;
-    editPerson = await apiRequest<Row>(`/api/v1/people/${editPerson.id}/enable`, { method: "POST" });
+    editPerson = await apiRequest<PersonRowPayload & Row>(`/api/v1/people/${editPerson.id}/enable`, { method: "POST" });
     notice = "Persona activada";
     await refreshPeople();
   }
@@ -345,7 +479,7 @@
     if (!editPerson?.id) return;
     const body = new FormData();
     body.set("file", file);
-    const result = await apiRequest<{ person: Row }>(`/api/v1/people/${editPerson.id}/photo`, { method: "POST", body });
+    const result = await apiRequest<{ person: PersonRowPayload & Row }>(`/api/v1/people/${editPerson.id}/photo`, { method: "POST", body });
     editPerson = result.person;
     notice = "Foto actualizada";
   }
@@ -466,6 +600,35 @@
     await refreshAdmins();
   }
 
+  function selectAdminForEdit(row: AdminRowPayload & Row) {
+    adminEditForm = {
+      id: row.id,
+      username: row.username,
+      displayName: row.displayName,
+      email: row.email ?? "",
+      role: row.role,
+      status: row.status,
+      mustChangePassword: row.mustChangePassword
+    };
+  }
+
+  async function updateAdmin() {
+    if (!adminEditForm.id) return;
+    await apiRequest(`/api/v1/admins/${adminEditForm.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        username: adminEditForm.username,
+        displayName: adminEditForm.displayName,
+        email: adminEditForm.email || undefined,
+        role: adminEditForm.role,
+        status: adminEditForm.status,
+        mustChangePassword: adminEditForm.mustChangePassword
+      })
+    });
+    notice = "Administrador actualizado";
+    await refreshAdmins();
+  }
+
   async function disableAdmin(row: Row) {
     await apiRequest(`/api/v1/admins/${row.id}/disable`, { method: "POST" });
     await refreshAdmins();
@@ -483,7 +646,7 @@
   }
 
   async function loadAdminSessions(row: Row) {
-    adminSessionRows = (await apiRequest<{ rows: Row[] }>(`/api/v1/admins/${row.id}/sessions`)).rows;
+    adminSessionRows = (await apiRequest<{ rows: Array<AdminSessionRowPayload & Row> }>(`/api/v1/admins/${row.id}/sessions`)).rows;
   }
 
   async function revokeAdminSession(row: Row) {
@@ -519,16 +682,24 @@
     await refreshSchedules();
   }
 
+  async function adjustAttendance(row: AttendanceRowPayload & Row, estado: "confirmed" | "partial" | "unverified") {
+    if (!row.id) return;
+    await apiRequest(`/api/v1/attendance/${row.id}/adjust`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        estado,
+        reason: "Ajuste manual desde panel administrativo"
+      })
+    });
+    notice = "Asistencia ajustada";
+    await refreshAttendance();
+  }
+
   onMount(() => {
     loadSession();
-
-    const socket = new WebSocket(`${apiBaseUrl.replace(/^http/, "ws")}/api/v1/events`);
-    socket.addEventListener("message", () => {
-      refreshAccess();
-      refreshAttendance();
-      refreshHotQr();
-    });
   });
+
+  onDestroy(closeEventsSocket);
 </script>
 
 <svelte:head>
@@ -555,6 +726,17 @@
     onLogout={logout}
   >
     {#if notice}<p class="notice">{notice}</p>{/if}
+    {#if session.admin.mustChangePassword}
+      <form class="panel form-grid" onsubmit={(event) => { event.preventDefault(); changeAdminPassword(); }}>
+        <h2>Cambiar password</h2>
+        <p class="muted">Debes actualizar tu password antes de continuar con tareas sensibles.</p>
+        {#if passwordNotice}<p class="notice">{passwordNotice}</p>{/if}
+        {#if passwordError}<p class="error">{passwordError}</p>{/if}
+        <input type="password" bind:value={passwordForm.currentPassword} placeholder="Password actual" required />
+        <input type="password" bind:value={passwordForm.newPassword} placeholder="Nuevo password" minlength="8" required />
+        <button>Actualizar password</button>
+      </form>
+    {/if}
 
     {#if activeTab === "generator"}
       <GeneratorTab
@@ -608,6 +790,7 @@
         onFilter={refreshAttendance}
         onCreateSubject={createSubject}
         onCreateSchedule={createSchedule}
+        onAdjustAttendance={adjustAttendance}
       />
     {/if}
 
@@ -638,15 +821,20 @@
       <AdminsTab
         rows={adminRows}
         form={adminForm}
+        editForm={adminEditForm}
+        auditFilters={auditFilters}
         isSuperAdmin={session.admin.role === "super_admin"}
         sessionRows={adminSessionRows}
         auditRows={adminAuditRows}
         onCreate={createAdmin}
+        onSelect={selectAdminForEdit}
+        onUpdate={updateAdmin}
         onDisable={disableAdmin}
         onEnable={enableAdmin}
         onResetPassword={resetAdminPassword}
         onLoadSessions={loadAdminSessions}
         onRevokeSession={revokeAdminSession}
+        onFilterAudit={refreshAdmins}
       />
     {/if}
 

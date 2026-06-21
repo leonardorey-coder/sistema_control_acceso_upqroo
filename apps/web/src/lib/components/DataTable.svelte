@@ -39,7 +39,7 @@
       {#each rows as row}
         <tr>
           {#each columns as column}
-            <td>
+            <td data-label={column.label}>
               {#if column.kind === "status"}
                 <StatusBadge value={row[column.key]} />
               {:else if column.kind === "date"}
@@ -52,7 +52,7 @@
             </td>
           {/each}
           {#if actions.length}
-            <td>
+            <td data-label="Acciones">
               <div class="row-actions">
                 {#each actions as action}
                   <button class={action.tone === "ghost" ? "ghost" : ""} onclick={() => action.onClick(row)}>
@@ -65,7 +65,7 @@
         </tr>
       {:else}
         <tr>
-          <td colspan={columns.length + (actions.length ? 1 : 0)} class="muted">{empty}</td>
+          <td colspan={columns.length + (actions.length ? 1 : 0)} class="muted empty-cell">{empty}</td>
         </tr>
       {/each}
     </tbody>

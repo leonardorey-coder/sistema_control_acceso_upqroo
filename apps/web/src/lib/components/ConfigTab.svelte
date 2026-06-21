@@ -1,16 +1,11 @@
 <script lang="ts">
+  import type { OperationalConfigPayload } from "@control-acceso/shared";
+
   let {
     config = $bindable(),
     onSave
   }: {
-    config: {
-      retryEnabled: boolean;
-      retryDelayMs: number;
-      cameraEnabled: boolean;
-      manualEntryEnabled: boolean;
-      soundsEnabled: boolean;
-      autoExitEnabled: boolean;
-    };
+    config: OperationalConfigPayload;
     onSave: () => void;
   } = $props();
 </script>

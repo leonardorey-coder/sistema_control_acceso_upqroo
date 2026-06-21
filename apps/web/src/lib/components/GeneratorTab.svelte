@@ -1,8 +1,12 @@
 <script lang="ts">
+  import type { CareerRowPayload, PersonTypeRowPayload, TemporaryDailyQrRowPayload } from "@control-acceso/shared";
   import DataTable from "./DataTable.svelte";
   import QrPreview from "./QrPreview.svelte";
 
   type Row = Record<string, unknown>;
+  type PersonTypeRow = PersonTypeRowPayload & Row;
+  type CareerRow = CareerRowPayload & Row;
+  type TemporaryQrRow = TemporaryDailyQrRowPayload & Row;
 
   let {
     personForm,
@@ -28,8 +32,8 @@
       notas: string;
       expiresAt: string;
     };
-    personTypeRows: Row[];
-    careerRows: Row[];
+    personTypeRows: PersonTypeRow[];
+    careerRows: CareerRow[];
     generatedToken: string;
     generatedTitle: string;
     temporaryQrForm: {
@@ -41,11 +45,11 @@
       maxUses: number;
       validUntil: string;
     };
-    temporaryRows: Row[];
-    onSubmit: () => void;
+    temporaryRows: TemporaryQrRow[];
+    onSubmit: (mode: "register" | "generate") => void;
     onCreateTemporaryQr: () => void;
-    onShowTemporaryQr: (row: Row) => void;
-    onRevokeTemporaryQr: (row: Row) => void;
+    onShowTemporaryQr: (row: TemporaryQrRow) => void;
+    onRevokeTemporaryQr: (row: TemporaryQrRow) => void;
   } = $props();
 
   let mode = $state<"register" | "generate">("register");
@@ -55,7 +59,7 @@
 </script>
 
 <section class="grid two">
-  <form class="panel form-grid" onsubmit={(event) => { event.preventDefault(); onSubmit(); }}>
+  <form class="panel form-grid" onsubmit={(event) => { event.preventDefault(); onSubmit(mode); }}>
     <div class="section-header">
       <h2>Generador de Codigo QR</h2>
       <p>Cree credenciales personales con registro nuevo o matricula existente</p>
@@ -131,8 +135,8 @@
         { key: "validUntil", label: "Expira", kind: "date" }
       ]}
       actions={[
-        { label: "QR dinamico", onClick: onShowTemporaryQr },
-        { label: "Revocar", onClick: onRevokeTemporaryQr, tone: "ghost" }
+        { label: "QR dinamico", onClick: (row) => onShowTemporaryQr(row as TemporaryQrRow) },
+        { label: "Revocar", onClick: (row) => onRevokeTemporaryQr(row as TemporaryQrRow), tone: "ghost" }
       ]}
     />
   </section>

@@ -1,8 +1,12 @@
 <script lang="ts">
+  import type { PersonRowPayload, VehiclePermitRowPayload, VehicleRowPayload } from "@control-acceso/shared";
   import DataTable from "./DataTable.svelte";
   import QrPreview from "./QrPreview.svelte";
 
   type Row = Record<string, unknown>;
+  type PersonRow = PersonRowPayload & Row;
+  type VehicleRow = VehicleRowPayload & Row;
+  type PermitRow = VehiclePermitRowPayload & Row;
 
   let {
     rows,
@@ -20,19 +24,19 @@
     onDisableVehicle,
     onFilter
   }: {
-    rows: Row[];
-    permitRows: Row[];
+    rows: VehicleRow[];
+    permitRows: PermitRow[];
     vehicleForm: { ownerPersonId: string; plate: string; make: string; model: string; color: string };
     permitForm: { personId: string; vehicleId: string; validUntil: string };
-    peopleRows: Row[];
+    peopleRows: PersonRow[];
     generatedToken: string;
     generatedTitle: string;
     filters: { q: string; vehicleStatus: string };
     onCreateVehicle: () => void;
     onCreatePermitQr: () => void;
-    onCreateDynamicPermitQr: (row: Row) => void;
-    onRevokePermit: (row: Row) => void;
-    onDisableVehicle: (row: Row) => void;
+    onCreateDynamicPermitQr: (row: PermitRow) => void;
+    onRevokePermit: (row: PermitRow) => void;
+    onDisableVehicle: (row: VehicleRow) => void;
     onFilter: () => void;
   } = $props();
 </script>
@@ -96,7 +100,7 @@
     { key: "color", label: "Color" },
     { key: "status", label: "Estado", kind: "status" },
     { key: "ownerPersonId", label: "Propietario" }
-  ]} actions={[{ label: "Desactivar", onClick: onDisableVehicle, tone: "ghost" }]} />
+  ]} actions={[{ label: "Desactivar", onClick: (row) => onDisableVehicle(row as VehicleRow), tone: "ghost" }]} />
 </section>
 
 <section class="panel">
@@ -107,7 +111,7 @@
     { key: "status", label: "Estado", kind: "status" },
     { key: "validUntil", label: "Vigencia", kind: "date" }
   ]} actions={[
-    { label: "QR dinamico", onClick: onCreateDynamicPermitQr },
-    { label: "Revocar", onClick: onRevokePermit, tone: "ghost" }
+    { label: "QR dinamico", onClick: (row) => onCreateDynamicPermitQr(row as PermitRow) },
+    { label: "Revocar", onClick: (row) => onRevokePermit(row as PermitRow), tone: "ghost" }
   ]} />
 </section>
