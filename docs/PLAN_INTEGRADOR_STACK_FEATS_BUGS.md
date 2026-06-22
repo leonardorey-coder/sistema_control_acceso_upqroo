@@ -1,5 +1,10 @@
 # Plan integrador: stack, features y correccion de bugs
 
+> Estado del documento: historico. Este plan conserva la auditoria original,
+> pero varios puntos ya fueron implementados o cambiaron durante el cierre v2.
+> Para levantar y verificar el proyecto usa primero `README.md`. Para pendientes
+> vivos de GUI/cierre usa `docs/PLAN_GUI_FRONTEND_FALTANTE_V2.md`.
+
 ## Proposito
 
 Este documento consolida el estado real del Sistema de Control de Acceso UPQROO
@@ -141,13 +146,18 @@ Correccion: agregar `POST /auth/change-password` (admin) y
 `POST /portal/auth/change-password` (usuario), validando password actual,
 reglas minimas, y limpiando el flag e invalidando otras sesiones.
 
-### B8. Login sin proteccion de fuerza bruta (media)
+### B8. Login sin proteccion de fuerza bruta (parcialmente resuelto)
 
-`auth.routes.ts` y el login de portal no limitan intentos. Solo registran
-auditoria. Riesgo de fuerza bruta sobre cuentas administrativas.
+Actualizacion 2026-06-21: login admin y portal ya tienen bloqueo temporal por
+IP+identidad. Se agrego `RATE_LIMIT_DRIVER=postgres` y la migracion
+`0006_durable_rate_limit.sql` para persistir contadores en despliegues
+multi-proceso.
 
-Correccion: agregar rate limit por IP+identidad y bloqueo temporal tras N fallos,
-con ventana configurable en `operational_config`.
+`auth.routes.ts` y el login de portal limitan intentos fallidos y registran
+auditoria. Para despliegues distribuidos debe usarse el driver Postgres.
+
+Pendiente: exponer ventana/maximos como configuracion operativa si se requiere
+ajuste sin redeploy.
 
 ### B9. Cobertura de pruebas del QR firmado ausente (media)
 

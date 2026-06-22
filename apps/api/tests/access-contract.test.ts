@@ -1,6 +1,18 @@
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "bun:test";
 import { app } from "../src/app";
+
+const migrationsDir = join(import.meta.dir, "../drizzle/migrations");
+const modulesDir = join(import.meta.dir, "../src/modules");
+
+function readMigration(name: string) {
+  return readFileSync(join(migrationsDir, name), "utf8");
+}
+
+function readModule(path: string) {
+  return readFileSync(join(modulesDir, path), "utf8");
+}
 
 describe("access atomic contracts", () => {
   it("protects scan before touching Postgres", async () => {
@@ -15,7 +27,7 @@ describe("access atomic contracts", () => {
   });
 
   it("ships the SQL atomic functions in a versioned migration", () => {
-    const migration = readFileSync("drizzle/migrations/0001_access_atomic.sql", "utf8");
+    const migration = readMigration("0001_access_atomic.sql");
 
     expect(migration).toContain("CREATE EXTENSION IF NOT EXISTS pgcrypto");
     expect(migration).toContain("CREATE OR REPLACE FUNCTION access_scan_v1");
@@ -24,7 +36,7 @@ describe("access atomic contracts", () => {
   });
 
   it("ships schema alignment for QR versioning and partial temporal uniqueness", () => {
-    const migration = readFileSync("drizzle/migrations/0002_schema_alignment.sql", "utf8");
+    const migration = readMigration("0002_schema_alignment.sql");
 
     expect(migration).toContain("ALTER TABLE \"qr_tokens\" ADD COLUMN IF NOT EXISTS \"token_version\"");
     expect(migration).toContain("ALTER TABLE \"vehicle_permit_qr_tokens\" ADD COLUMN IF NOT EXISTS \"token_version\"");
@@ -35,7 +47,7 @@ describe("access atomic contracts", () => {
   });
 
   it("ships signed dynamic QR schema and anti-replay contracts", () => {
-    const migration = readFileSync("drizzle/migrations/0003_signed_dynamic_qr.sql", "utf8");
+    const migration = readMigration("0003_signed_dynamic_qr.sql");
 
     expect(migration).toContain("CREATE TABLE IF NOT EXISTS \"qr_signing_keys\"");
     expect(migration).toContain("CREATE TABLE IF NOT EXISTS \"qr_jti_consumptions\"");
@@ -46,7 +58,7 @@ describe("access atomic contracts", () => {
   });
 
   it("ships user device binding schema for client-side QR proof", () => {
-    const migration = readFileSync("drizzle/migrations/0004_user_device_binding.sql", "utf8");
+    const migration = readMigration("0004_user_device_binding.sql");
 
     expect(migration).toContain("CREATE TABLE IF NOT EXISTS \"user_device_keys\"");
     expect(migration).toContain("CREATE TABLE IF NOT EXISTS \"user_device_challenges\"");
@@ -56,7 +68,7 @@ describe("access atomic contracts", () => {
   });
 
   it("extends signed QR scope to temporary daily and vehicle permits", () => {
-    const migration = readFileSync("drizzle/migrations/0005_signed_qr_scope_extension.sql", "utf8");
+    const migration = readMigration("0005_signed_qr_scope_extension.sql");
 
     expect(migration).toContain("preVerifiedCredentialType");
     expect(migration).toContain("preVerifiedTemporaryDailyQrId");
@@ -69,7 +81,7 @@ describe("access atomic contracts", () => {
   });
 
   it("keeps the latest access scan function atomic and avoids raw signed payload leakage", () => {
-    const migration = readFileSync("drizzle/migrations/0005_signed_qr_scope_extension.sql", "utf8");
+    const migration = readMigration("0005_signed_qr_scope_extension.sql");
 
     expect(migration).toContain("PERFORM pg_advisory_xact_lock");
     expect(migration).toContain("v_safe_payload jsonb := payload - 'token' - 'signedQr'");
@@ -77,5 +89,49 @@ describe("access atomic contracts", () => {
     expect(migration).toContain("WHERE NOT EXISTS (SELECT 1 FROM qr_jti_consumptions WHERE jti = v_pre_verified_jti)");
     expect(migration).toContain("UPDATE qr_jti_consumptions SET access_record_id = v_record.id WHERE jti = v_pre_verified_jti");
     expect(migration).not.toContain("metadata)\n    VALUES (v_pre_verified_person_id, 'person_qr', 'pedestrian', false, 'JTI_ALREADY_CONSUMED',");
+  });
+
+  it("keeps the latest access scan function bound to the operational timezone", () => {
+    const migration = readMigration("0005_signed_qr_scope_extension.sql");
+
+    expect(migration).toContain("v_operational_timezone text := 'America/Cancun'");
+    expect(migration).toContain("v_operational_date date := (v_now AT TIME ZONE v_operational_timezone)::date");
+    expect(migration).toContain("v_operational_dow integer := EXTRACT(DOW FROM (v_now AT TIME ZONE v_operational_timezone))::integer");
+    expect(migration).toContain("t.operational_date = v_operational_date");
+    expect(migration).toContain("s.weekday = v_operational_dow");
+  });
+
+  it("derives access scan admin identity from the authenticated session", () => {
+    const source = readModule("access/access.routes.ts");
+
+    expect(source).toContain("const session = getAdminSession(c)");
+    expect(source).toContain("adminId: session.adminId");
+    expect(source).not.toContain("adminId: body.adminId");
+    expect(source).not.toContain("adminId: z.string().uuid().optional()");
+  });
+
+  it("derives audit actor ids from the authenticated session for mutable admin routes", () => {
+    const hotQrRoutes = readModule("hot-qr/hot-qr.routes.ts");
+    const credentialsRoutes = readModule("credentials/credentials.routes.ts");
+    const vehiclesRoutes = readModule("vehicles/vehicles.routes.ts");
+    const configRoutes = readModule("config/config.routes.ts");
+
+    expect(hotQrRoutes).toContain("createdByAdminId: session.adminId");
+    expect(credentialsRoutes).toContain("createdByAdminId: session.adminId");
+    expect(vehiclesRoutes).toContain("createdByAdminId: session.adminId");
+    expect(configRoutes).toContain("updatedByAdminId: session.adminId");
+
+    expect(hotQrRoutes).not.toContain("createdByAdminId: z.string().uuid().optional()");
+    expect(credentialsRoutes).not.toContain("createdByAdminId: z.string().uuid().optional()");
+    expect(vehiclesRoutes).not.toContain("createdByAdminId: z.string().uuid().optional()");
+    expect(configRoutes).not.toContain("updatedByAdminId: z.string().uuid().optional()");
+  });
+
+  it("ships a durable login rate-limit table for production deployments", () => {
+    const migration = readMigration("0006_durable_rate_limit.sql");
+
+    expect(migration).toContain("CREATE TABLE IF NOT EXISTS \"login_rate_limits\"");
+    expect(migration).toContain("\"key\" text PRIMARY KEY");
+    expect(migration).toContain("\"locked_until\" timestamptz");
   });
 });

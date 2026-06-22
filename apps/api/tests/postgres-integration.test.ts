@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { app } from "../src/app";
 import { db } from "../src/db/client";
-import { administradores, personas, userAccounts } from "../src/db/schema";
+import { administradores, personas, registrosAcceso, temporaryDailyQrTokens, userAccounts } from "../src/db/schema";
 import { runWorkerCycle } from "../src/worker";
 
 async function canUsePostgres() {
@@ -43,6 +43,35 @@ async function ensureIntegrationAdmin() {
   }
 
   return { username, password };
+}
+
+async function getAdminByUsername(username: string) {
+  const admin = await db.query.administradores.findFirst({
+    where: eq(administradores.username, username)
+  });
+
+  if (!admin) throw new Error(`Missing admin ${username}`);
+  return admin;
+}
+
+async function ensureSpoofTargetAdmin() {
+  const username = "integration_spoof_target";
+  const existing = await db.query.administradores.findFirst({
+    where: eq(administradores.username, username)
+  });
+
+  if (existing) return existing;
+
+  const [admin] = await db.insert(administradores).values({
+    username,
+    displayName: "Integration Spoof Target",
+    passwordHash: await Bun.password.hash("Integration123!", { algorithm: "bcrypt", cost: 10 }),
+    role: "admin",
+    status: "active",
+    mustChangePassword: false
+  }).returning();
+
+  return admin!;
 }
 
 async function ensurePortalUser() {
@@ -86,9 +115,13 @@ function expectNoSecretFieldNames(payload: unknown) {
 
 describeIfPostgres("postgres integration", () => {
   let cookie = "";
+  let sessionAdminId = "";
+  let spoofAdminId = "";
 
   beforeAll(async () => {
     const admin = await ensureIntegrationAdmin();
+    sessionAdminId = (await getAdminByUsername(admin.username)).id;
+    spoofAdminId = (await ensureSpoofTargetAdmin()).id;
     const response = await app.request("/api/v1/auth/login", {
       method: "POST",
       headers: jsonHeaders(),
@@ -185,6 +218,99 @@ describeIfPostgres("postgres integration", () => {
 
     expect(integrityResponse.status).toBe(200);
     expect(integrityBody.data.valid).toBe(true);
+  });
+
+  it("rejects spoofed actor fields and persists the session admin for access and temporary QR audit", async () => {
+    const suffix = randomUUID().slice(0, 8);
+    const matricula = `SP-${suffix}`;
+
+    const personResponse = await app.request("/api/v1/people", {
+      method: "POST",
+      headers: jsonHeaders(cookie),
+      body: JSON.stringify({
+        matricula,
+        nombres: "Spoof",
+        apellidos: "Integracion",
+        tipoPersona: "docente",
+        estado: "activo"
+      })
+    });
+    const personBody = await personResponse.json();
+    expect(personResponse.status).toBe(201);
+
+    const qrResponse = await app.request("/api/v1/credentials/person", {
+      method: "POST",
+      headers: jsonHeaders(cookie),
+      body: JSON.stringify({
+        personId: personBody.data.id,
+        expiresAt: new Date(Date.now() + 86_400_000).toISOString()
+      })
+    });
+    const qrBody = await qrResponse.json();
+    expect(qrResponse.status).toBe(201);
+
+    const rejectedScanResponse = await app.request("/api/v1/access/scan", {
+      method: "POST",
+      headers: jsonHeaders(cookie),
+      body: JSON.stringify({ token: qrBody.data.token, adminId: spoofAdminId })
+    });
+    const rejectedScanBody = await rejectedScanResponse.json();
+
+    expect(rejectedScanResponse.status).toBe(400);
+    expect(rejectedScanBody.error.code).toBe("VALIDATION_ERROR");
+
+    const scanResponse = await app.request("/api/v1/access/scan", {
+      method: "POST",
+      headers: jsonHeaders(cookie),
+      body: JSON.stringify({ token: qrBody.data.token })
+    });
+    const scanBody = await scanResponse.json();
+    expect(scanResponse.status).toBe(200);
+    expect(scanBody.data.accepted).toBe(true);
+
+    const accessRecord = await db.query.registrosAcceso.findFirst({
+      where: eq(registrosAcceso.id, scanBody.data.registroId)
+    });
+    expect(accessRecord?.adminEntradaId).toBe(sessionAdminId);
+    expect(accessRecord?.adminEntradaId).not.toBe(spoofAdminId);
+
+    const rejectedTemporaryResponse = await app.request("/api/v1/credentials/temporary-daily", {
+      method: "POST",
+      headers: jsonHeaders(cookie),
+      body: JSON.stringify({
+        personId: personBody.data.id,
+        operationalDate: new Date().toISOString().slice(0, 10),
+        missingCredentialType: "credential_unavailable",
+        reasonCode: "spoof_attempt",
+        maxUses: 1,
+        validUntil: new Date(Date.now() + 3_600_000).toISOString(),
+        createdByAdminId: spoofAdminId
+      })
+    });
+    const rejectedTemporaryBody = await rejectedTemporaryResponse.json();
+    expect(rejectedTemporaryResponse.status).toBe(400);
+    expect(rejectedTemporaryBody.error.code).toBe("VALIDATION_ERROR");
+
+    const temporaryResponse = await app.request("/api/v1/credentials/temporary-daily", {
+      method: "POST",
+      headers: jsonHeaders(cookie),
+      body: JSON.stringify({
+        personId: personBody.data.id,
+        operationalDate: new Date().toISOString().slice(0, 10),
+        missingCredentialType: "credential_unavailable",
+        reasonCode: "valid_session_actor",
+        maxUses: 1,
+        validUntil: new Date(Date.now() + 3_600_000).toISOString()
+      })
+    });
+    const temporaryBody = await temporaryResponse.json();
+    expect(temporaryResponse.status).toBe(201);
+
+    const temporaryRecord = await db.query.temporaryDailyQrTokens.findFirst({
+      where: eq(temporaryDailyQrTokens.id, temporaryBody.data.credential.id)
+    });
+    expect(temporaryRecord?.createdByAdminId).toBe(sessionAdminId);
+    expect(temporaryRecord?.createdByAdminId).not.toBe(spoofAdminId);
   });
 
   it("rejects inactive people and expires worker-managed records", async () => {

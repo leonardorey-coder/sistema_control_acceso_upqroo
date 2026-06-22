@@ -50,13 +50,14 @@ describe("security helpers", () => {
     expect(body.error.code).toBe("SESSION_REQUIRED");
   });
 
-  it("temporarily locks repeated login failures", () => {
-    const key = assertLoginNotRateLimited("test", `identity-${crypto.randomUUID()}`, "127.0.0.1");
+  it("temporarily locks repeated login failures", async () => {
+    const identity = `identity-${crypto.randomUUID()}`;
+    const key = await assertLoginNotRateLimited("test", identity, "127.0.0.1");
 
     for (let index = 0; index < 5; index += 1) {
-      recordLoginFailure(key);
+      await recordLoginFailure(key);
     }
 
-    expect(() => assertLoginNotRateLimited("test", key.split(":")[1]!, "127.0.0.1")).toThrow("Too many failed login attempts");
+    await expect(assertLoginNotRateLimited("test", identity, "127.0.0.1")).rejects.toThrow("Too many failed login attempts");
   });
 });

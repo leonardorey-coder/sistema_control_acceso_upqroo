@@ -27,6 +27,23 @@ worker, portal, scanner, admin shell y QR dinamico firmado ya existen.
   vehiculares y configuracion operativa.
 - Portal admin con edicion basica de administradores, sesiones visibles y
   auditoria filtrable con modal de metadata.
+- `bun test` desde la raiz del monorepo ya resuelve migraciones con rutas
+  independientes del cwd.
+- `/api/v1/access/scan` y rutas mutables de Hot-QR, QR temporal, permisos
+  vehiculares y configuracion derivan el actor desde la sesion backend.
+- `access_scan_v1` usa fecha y dia operativo `America/Cancun` para QR temporal
+  diario y asistencia.
+- La configuracion admin ya expone controles de QR dinamico firmado.
+- El portal principal solicita QR personales y temporales dinamicos cuando la
+  configuracion firmada esta activa, con fallback opaco controlado.
+- Los permisos vehiculares soportan filtros basicos y devuelven contexto de
+  persona/placa en el listado paginado.
+- Contratos compartidos alinean `VehiclePermitStatus` con `suspended`.
+- El portal API permite revocar dispositivos vinculados por usuario.
+- El portal ya lista dispositivos vinculados, permite revocarlos y regenerar el
+  vinculo local cuando IndexedDB se pierde o queda invalido.
+- El backend ya tiene rate limit durable opcional con `RATE_LIMIT_DRIVER=postgres`
+  y migracion `0006_durable_rate_limit.sql`.
 
 Lo pendiente para cerrar v2 no es mas CRUD basico, sino:
 
