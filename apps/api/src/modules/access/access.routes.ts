@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { errors as JoseErrors } from "jose";
-import { getActorMetadata } from "../../http/middleware/session";
+import { getActorMetadata, getAdminSession } from "../../http/middleware/session";
 import { recordAudit } from "../../shared/audit";
 import { toOperationalDateRange } from "../../shared/date-range";
 import { withoutUndefined } from "../../shared/object";
@@ -41,13 +41,16 @@ accessRoutes.post("/scan", async (c) => {
     token: z.string().trim().min(1).optional(),
     signedQr: z.string().trim().min(1).optional(),
     manualMatricula: z.string().trim().min(1).optional(),
-    adminId: z.string().uuid().optional(),
     scannerId: z.string().trim().optional()
-  }).refine((input) => input.token || input.signedQr || input.manualMatricula, {
+  }).strict().refine((input) => input.token || input.signedQr || input.manualMatricula, {
     message: "token, signedQr or manualMatricula is required"
   }).parse(await c.req.json().catch(() => ({})));
 
-  let scanPayload: Record<string, unknown> = withoutUndefined(body) as Record<string, unknown>;
+  const session = getAdminSession(c);
+  let scanPayload: Record<string, unknown> = {
+    ...withoutUndefined(body),
+    adminId: session.adminId
+  } as Record<string, unknown>;
 
   // Signed QR path: verify JWT here in Bun, then inject pre-verified fields for SQL
   if (body.signedQr) {
@@ -87,7 +90,7 @@ accessRoutes.post("/scan", async (c) => {
       iat: verified.iat,
       exp: verified.exp,
       scannerId: body.scannerId,
-      adminId: body.adminId
+      adminId: session.adminId
     };
   }
 

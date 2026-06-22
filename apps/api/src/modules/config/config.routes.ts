@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { getActorMetadata } from "../../http/middleware/session";
+import { getActorMetadata, getAdminSession } from "../../http/middleware/session";
 import { recordAudit } from "../../shared/audit";
 import { broadcastEvent } from "../events/events";
 import { getOperationalConfig, upsertOperationalConfig } from "./config.repository";
@@ -23,9 +23,8 @@ const defaultSignedQrConfig = {
 
 const operationalConfigSchema = z.object({
   value: z.record(z.unknown()).default(defaultScannerConfig),
-  description: z.string().trim().optional(),
-  updatedByAdminId: z.string().uuid().optional()
-});
+  description: z.string().trim().optional()
+}).strict();
 
 const signedQrConfigSchema = z.object({
   value: z.object({
@@ -35,9 +34,8 @@ const signedQrConfigSchema = z.object({
     compatibilityOpaqueTokens: z.boolean().default(defaultSignedQrConfig.compatibilityOpaqueTokens),
     requireDeviceBinding: z.boolean().default(false)
   }).default(defaultSignedQrConfig),
-  description: z.string().trim().optional(),
-  updatedByAdminId: z.string().uuid().optional()
-});
+  description: z.string().trim().optional()
+}).strict();
 
 export const configRoutes = new Hono();
 
@@ -48,11 +46,12 @@ configRoutes.get("/operational", async (c) => {
 
 configRoutes.patch("/operational", async (c) => {
   const input = operationalConfigSchema.parse(await c.req.json());
+  const session = getAdminSession(c);
   const row = await upsertOperationalConfig({
     key: "scanner",
     value: input.value,
     description: input.description,
-    updatedByAdminId: input.updatedByAdminId
+    updatedByAdminId: session.adminId
   });
 
   await recordAudit({
@@ -73,11 +72,12 @@ configRoutes.get("/signed-qr", async (c) => {
 
 configRoutes.patch("/signed-qr", async (c) => {
   const input = signedQrConfigSchema.parse(await c.req.json());
+  const session = getAdminSession(c);
   const row = await upsertOperationalConfig({
     key: "signed_qr",
     value: input.value,
     description: input.description ?? "Signed dynamic QR settings",
-    updatedByAdminId: input.updatedByAdminId
+    updatedByAdminId: session.adminId
   });
 
   await recordAudit({

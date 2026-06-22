@@ -5,7 +5,10 @@ import * as schema from "./schema";
 
 const queryClient = postgres(env.DATABASE_URL, {
   prepare: false,
-  max: 10
+  max: 10,
+  connection: {
+    TimeZone: env.OPERATING_TIMEZONE
+  }
 });
 
 export const db = drizzle(queryClient, { schema });

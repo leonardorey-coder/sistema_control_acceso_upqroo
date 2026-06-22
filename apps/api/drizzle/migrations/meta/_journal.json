@@ -43,6 +43,13 @@
       "when": 1781833600000,
       "tag": "0005_signed_qr_scope_extension",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1781835400000,
+      "tag": "0006_durable_rate_limit",
+      "breakpoints": true
     }
   ]
 }

@@ -74,11 +74,11 @@ export const authRoutes = new Hono();
 authRoutes.post("/login", async (c) => {
   const input = loginSchema.parse(await c.req.json());
   const ipAddress = c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? undefined;
-  const rateLimitKey = assertLoginNotRateLimited("admin", input.identity, ipAddress);
+  const rateLimitKey = await assertLoginNotRateLimited("admin", input.identity, ipAddress);
   const admin = await findAdminForLogin(input.identity);
 
   if (!admin || admin.status !== "active") {
-    recordLoginFailure(rateLimitKey);
+    await recordLoginFailure(rateLimitKey);
     await recordAudit({
       action: "admin.login_failed",
       entityType: "admin_session",
@@ -92,7 +92,7 @@ authRoutes.post("/login", async (c) => {
   const passwordOk = await Bun.password.verify(input.password, admin.passwordHash);
 
   if (!passwordOk) {
-    recordLoginFailure(rateLimitKey);
+    await recordLoginFailure(rateLimitKey);
     await recordAudit({
       actorAdminId: admin.id,
       action: "admin.login_failed",
@@ -104,7 +104,7 @@ authRoutes.post("/login", async (c) => {
     throw new HttpError(401, "INVALID_CREDENTIALS", "Invalid credentials.");
   }
 
-  clearLoginFailures(rateLimitKey);
+  await clearLoginFailures(rateLimitKey);
 
   const token = issueSessionToken();
   const sessionHash = hashSessionToken(token);

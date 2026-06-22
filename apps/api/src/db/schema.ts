@@ -258,6 +258,17 @@ export const adminSessions = pgTable("admin_sessions", {
   adminIdx: index("admin_sessions_admin_idx").on(table.adminId, table.expiresAt)
 }));
 
+export const loginRateLimits = pgTable("login_rate_limits", {
+  key: text("key").primaryKey(),
+  count: integer("count").notNull().default(0),
+  firstFailedAt: timestamp("first_failed_at", { withTimezone: true }).notNull(),
+  lockedUntil: timestamp("locked_until", { withTimezone: true }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+}, (table) => ({
+  lockedUntilIdx: index("login_rate_limits_locked_until_idx").on(table.lockedUntil),
+  updatedAtIdx: index("login_rate_limits_updated_at_idx").on(table.updatedAt)
+}));
+
 export const subjects = pgTable("subjects", {
   id: uuid("id").primaryKey().defaultRandom(),
   clave: varchar("clave", { length: 60 }).notNull(),

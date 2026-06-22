@@ -9,6 +9,9 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
   v_now timestamptz := now();
+  v_operational_timezone text := 'America/Cancun';
+  v_operational_date date := (v_now AT TIME ZONE v_operational_timezone)::date;
+  v_operational_dow integer := EXTRACT(DOW FROM (v_now AT TIME ZONE v_operational_timezone))::integer;
   v_token text := nullif(payload->>'token', '');
   v_manual_matricula text := nullif(payload->>'manualMatricula', '');
   v_admin_id uuid := nullif(payload->>'adminId', '')::uuid;
@@ -100,7 +103,7 @@ BEGIN
         AND t.person_id = v_pre_verified_person_id
         AND t.status = 'active'
         AND t.valid_until > v_now
-        AND t.operational_date = v_now::date
+        AND t.operational_date = v_operational_date
         AND (
           t.use_count < t.max_uses
           OR EXISTS (
@@ -191,7 +194,7 @@ BEGIN
       WHERE t.token_hash = v_token_hash
         AND t.status = 'active'
         AND t.valid_until > v_now
-        AND t.operational_date = v_now::date
+        AND t.operational_date = v_operational_date
         AND (
           t.use_count < t.max_uses
           OR EXISTS (
@@ -410,7 +413,7 @@ BEGIN
     person_id, schedule_id, subject_id, fecha_clase, hora_inicio, hora_fin, aula, estado,
     minutos_totales, registro_acceso_id
   )
-  SELECT s.person_id, s.id, s.subject_id, v_now::date, s.hora_inicio, s.hora_fin, s.aula,
+  SELECT s.person_id, s.id, s.subject_id, v_operational_date, s.hora_inicio, s.hora_fin, s.aula,
          'in_progress',
          GREATEST(0, FLOOR(EXTRACT(EPOCH FROM ((s.hora_fin::time - s.hora_inicio::time))) / 60)::integer),
          v_record.id
@@ -419,9 +422,9 @@ BEGIN
   INNER JOIN person_types pt ON pt.code = p.tipo_persona
   WHERE s.person_id = v_person_id
     AND s.active = true
-    AND s.weekday = EXTRACT(DOW FROM v_now)::integer
-    AND s.valid_from <= v_now::date
-    AND (s.valid_until IS NULL OR s.valid_until >= v_now::date)
+    AND s.weekday = v_operational_dow
+    AND s.valid_from <= v_operational_date
+    AND (s.valid_until IS NULL OR s.valid_until >= v_operational_date)
     AND pt.generates_attendance = true;
 
   v_display := jsonb_build_object(

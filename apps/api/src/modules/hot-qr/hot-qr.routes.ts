@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { getActorMetadata } from "../../http/middleware/session";
+import { getActorMetadata, getAdminSession } from "../../http/middleware/session";
 import { recordAudit } from "../../shared/audit";
 import { toOperationalDateRange } from "../../shared/date-range";
 import { withoutUndefined } from "../../shared/object";
@@ -24,9 +24,8 @@ const hotQrCreateSchema = z.object({
   reason: z.string().trim().min(1),
   maxUses: z.number().int().min(1).max(10).default(1),
   validUntil: z.coerce.date(),
-  createdByAdminId: z.string().uuid().optional(),
   metadata: z.record(z.unknown()).default({})
-});
+}).strict();
 
 hotQrRoutes.get("/today", async (c) => {
   const pagination = parsePagination(c.req.query());
@@ -44,9 +43,11 @@ hotQrRoutes.get("/today", async (c) => {
 
 hotQrRoutes.post("/", async (c) => {
   const input = hotQrCreateSchema.parse(await c.req.json());
+  const session = getAdminSession(c);
   const issued = issueOpaqueToken("hot_qr");
   const row = await createHotQr({
     ...input,
+    createdByAdminId: session.adminId,
     tokenHash: issued.tokenHash
   });
 

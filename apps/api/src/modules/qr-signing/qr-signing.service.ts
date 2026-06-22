@@ -78,6 +78,21 @@ export async function loadSigningKey(): Promise<ActiveKey> {
 }
 
 async function persistPublicKey(kid: string, alg: string, publicKeyJwk: JWK) {
+  const [existing] = await db.execute<{ status: string; public_key_jwk: JWK }>(sql`
+    SELECT status, public_key_jwk
+    FROM qr_signing_keys
+    WHERE kid = ${kid}
+    LIMIT 1
+  `);
+
+  if (existing?.status === "rotated") {
+    throw new Error("QR_SIGNING_KID_ROTATED_CHANGE_KID_REQUIRED");
+  }
+
+  if (existing && JSON.stringify(existing.public_key_jwk) !== JSON.stringify(publicKeyJwk)) {
+    throw new Error("QR_SIGNING_KID_REUSE_WITH_DIFFERENT_KEY");
+  }
+
   await db.execute(sql`
     INSERT INTO qr_signing_keys (kid, algorithm, public_key_jwk, status)
     VALUES (${kid}, ${alg}, ${JSON.stringify(publicKeyJwk)}::jsonb, 'active')
