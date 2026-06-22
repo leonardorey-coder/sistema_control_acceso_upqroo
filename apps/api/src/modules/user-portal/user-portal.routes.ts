@@ -31,6 +31,7 @@ import {
   listPortalAttendance,
   listPortalTemporaryDailyQrHistory,
   markUserDeviceUsed,
+  revokeUserDevice,
   revokeUserSession,
   revokeOtherUserSessions,
   rotatePortalQr,
@@ -187,11 +188,11 @@ async function verifyDeviceProof(input: {
 userPortalRoutes.post("/auth/login", async (c) => {
   const input = loginSchema.parse(await c.req.json());
   const ipAddress = c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? undefined;
-  const rateLimitKey = assertLoginNotRateLimited("portal", input.identity, ipAddress);
+  const rateLimitKey = await assertLoginNotRateLimited("portal", input.identity, ipAddress);
   const account = await findUserAccountForLogin(input.identity);
 
   if (!account || account.status !== "active" || account.estado !== "activo") {
-    recordLoginFailure(rateLimitKey);
+    await recordLoginFailure(rateLimitKey);
     await recordAudit({
       action: "user.login_failed",
       entityType: "user_session",
@@ -205,7 +206,7 @@ userPortalRoutes.post("/auth/login", async (c) => {
   const passwordOk = await Bun.password.verify(input.password, account.passwordHash);
 
   if (!passwordOk) {
-    recordLoginFailure(rateLimitKey);
+    await recordLoginFailure(rateLimitKey);
     await recordAudit({
       actorAccountId: account.id,
       action: "user.login_failed",
@@ -217,7 +218,7 @@ userPortalRoutes.post("/auth/login", async (c) => {
     throw new HttpError(401, "INVALID_CREDENTIALS", "Invalid credentials.");
   }
 
-  clearLoginFailures(rateLimitKey);
+  await clearLoginFailures(rateLimitKey);
 
   const token = issueSessionToken();
   const sessionHash = hashSessionToken(token);
@@ -349,6 +350,26 @@ userPortalRoutes.post("/devices", async (c) => {
   });
 
   return c.json({ data: { device: row } }, 201);
+});
+
+userPortalRoutes.delete("/devices/:deviceId", async (c) => {
+  const { session } = await requirePortalSession(c);
+  const deviceId = z.string().uuid().parse(c.req.param("deviceId"));
+  const row = await revokeUserDevice(session.accountId, deviceId);
+
+  if (!row) {
+    throw new HttpError(404, "DEVICE_NOT_FOUND", "The device was not found for this account.");
+  }
+
+  await recordAudit({
+    actorAccountId: session.accountId,
+    action: "user.device_revoked",
+    entityType: "user_device",
+    entityId: row.id,
+    metadata: { status: row.status }
+  });
+
+  return c.json({ data: row });
 });
 
 userPortalRoutes.post("/devices/challenge", async (c) => {

@@ -12,6 +12,7 @@
     PersonCredentialRowPayload,
     PersonRowPayload,
     PersonTypeRowPayload,
+    SignedQrConfigPayload,
     TemporaryDailyQrRowPayload,
     VehiclePermitRowPayload,
     VehicleRowPayload
@@ -94,6 +95,13 @@
     manualEntryEnabled: true,
     soundsEnabled: true,
     autoExitEnabled: true
+  });
+  let signedQrConfigForm = $state<SignedQrConfigPayload>({
+    enabled: false,
+    ttlSeconds: 30,
+    clockToleranceSeconds: 5,
+    compatibilityOpaqueTokens: true,
+    requireDeviceBinding: false
   });
 
   let filters = $state({
@@ -309,7 +317,7 @@
   }
 
   async function refreshPermits() {
-    permitRows = (await apiRequest<PaginatedRows<VehiclePermitRowPayload & Row>>(`/api/v1/vehicles/permits${toQuery({ page: filters.page, pageSize: filters.pageSize })}`)).rows;
+    permitRows = (await apiRequest<PaginatedRows<VehiclePermitRowPayload & Row>>(`/api/v1/vehicles/permits${toQuery({ q: filters.q, page: filters.page, pageSize: filters.pageSize })}`)).rows;
   }
 
   async function refreshAdmins() {
@@ -326,7 +334,9 @@
 
   async function refreshConfig() {
     const result = await apiRequest<{ value?: Partial<OperationalConfigPayload> }>("/api/v1/config/operational");
+    const signedQrResult = await apiRequest<{ value?: Partial<SignedQrConfigPayload> }>("/api/v1/config/signed-qr");
     configForm = { ...configForm, ...(result.value as Partial<typeof configForm> ?? {}) };
+    signedQrConfigForm = { ...signedQrConfigForm, ...(signedQrResult.value as Partial<typeof signedQrConfigForm> ?? {}) };
   }
 
   async function refreshSubjects() {
@@ -488,7 +498,7 @@
     const validUntil = temporaryQrForm.validUntil ? new Date(temporaryQrForm.validUntil).toISOString() : new Date(Date.now() + 1000 * 60 * 60 * 8).toISOString();
     const result = await apiRequest<{ credential: Row; token: string }>("/api/v1/credentials/temporary-daily", {
       method: "POST",
-      body: JSON.stringify({ ...temporaryQrForm, validUntil, maxUses: Number(temporaryQrForm.maxUses), createdByAdminId: session?.admin.id })
+      body: JSON.stringify({ ...temporaryQrForm, validUntil, maxUses: Number(temporaryQrForm.maxUses) })
     });
     await showTemporaryQr(result.credential, result.token);
     await refreshTemporaryQr();
@@ -521,8 +531,7 @@
       body: JSON.stringify({
         visitorName: hotQrForm.visitorName,
         reason: hotQrForm.reason,
-        validUntil,
-        createdByAdminId: session?.admin.id
+        validUntil
       })
     });
     generatedToken = result.token;
@@ -658,9 +667,17 @@
   async function saveConfig() {
     await apiRequest("/api/v1/config/operational", {
       method: "PATCH",
-      body: JSON.stringify({ value: configForm, updatedByAdminId: session?.admin.id })
+      body: JSON.stringify({ value: configForm })
     });
     notice = "Configuracion guardada";
+  }
+
+  async function saveSignedQrConfig() {
+    await apiRequest("/api/v1/config/signed-qr", {
+      method: "PATCH",
+      body: JSON.stringify({ value: signedQrConfigForm })
+    });
+    notice = "Configuracion de QR firmado guardada";
   }
 
   async function createSubject() {
@@ -839,7 +856,7 @@
     {/if}
 
     {#if activeTab === "config"}
-      <ConfigTab bind:config={configForm} onSave={saveConfig} />
+      <ConfigTab bind:config={configForm} bind:signedQrConfig={signedQrConfigForm} onSave={saveConfig} onSaveSignedQr={saveSignedQrConfig} />
     {/if}
   </AdminShell>
 {/if}

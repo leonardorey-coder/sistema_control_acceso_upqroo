@@ -271,6 +271,20 @@ export function listUserDevices(accountId: string) {
     .orderBy(desc(userDeviceKeys.createdAt));
 }
 
+export async function revokeUserDevice(accountId: string, deviceId: string) {
+  const [row] = await db.update(userDeviceKeys)
+    .set({ status: "revoked", revokedAt: new Date() })
+    .where(and(eq(userDeviceKeys.accountId, accountId), eq(userDeviceKeys.id, deviceId)))
+    .returning({
+      id: userDeviceKeys.id,
+      accountId: userDeviceKeys.accountId,
+      status: userDeviceKeys.status,
+      revokedAt: userDeviceKeys.revokedAt
+    });
+
+  return row;
+}
+
 export async function createUserDeviceChallenge(input: {
   accountId: string;
   deviceId: string;

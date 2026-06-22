@@ -28,6 +28,10 @@
   let temporaryCredential = $state<Row | null>(null);
   let temporaryHistory = $state<Row[]>([]);
   let temporaryForm = $state({ reasonCode: "credential_unavailable", reasonText: "" });
+  let dynamicQrEnabled = $state(true);
+  let deviceStatus = $state("Dispositivo pendiente");
+  let deviceError = $state("");
+  let devices = $state<Row[]>([]);
   let passwordForm = $state({ currentPassword: "", newPassword: "" });
   let passwordNotice = $state("");
   let passwordError = $state("");
@@ -35,11 +39,152 @@
   let attendanceRows = $state<Row[]>([]);
   let error = $state("");
 
+  type StoredDevice = {
+    id: string;
+    privateKey: CryptoKey;
+  };
+
+  function toBase64Url(bytes: ArrayBuffer) {
+    const binary = String.fromCharCode(...new Uint8Array(bytes));
+    return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  }
+
+  function openDeviceDb() {
+    return new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open("control-acceso-device-binding", 1);
+      request.onupgradeneeded = () => {
+        request.result.createObjectStore("devices");
+      };
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+  }
+
+  async function readStoredDevice() {
+    const db = await openDeviceDb();
+    return new Promise<StoredDevice | null>((resolve, reject) => {
+      const tx = db.transaction("devices", "readonly");
+      const request = tx.objectStore("devices").get("current");
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve((request.result as StoredDevice | undefined) ?? null);
+      tx.oncomplete = () => db.close();
+    });
+  }
+
+  async function writeStoredDevice(device: StoredDevice) {
+    const db = await openDeviceDb();
+    return new Promise<void>((resolve, reject) => {
+      const tx = db.transaction("devices", "readwrite");
+      tx.objectStore("devices").put(device, "current");
+      tx.onerror = () => reject(tx.error);
+      tx.oncomplete = () => {
+        db.close();
+        resolve();
+      };
+    });
+  }
+
+  async function clearStoredDevice() {
+    const db = await openDeviceDb();
+    return new Promise<void>((resolve, reject) => {
+      const tx = db.transaction("devices", "readwrite");
+      tx.objectStore("devices").delete("current");
+      tx.onerror = () => reject(tx.error);
+      tx.oncomplete = () => {
+        db.close();
+        resolve();
+      };
+    });
+  }
+
+  async function loadDevices() {
+    devices = (await apiRequest<{ rows: Row[] }>("/api/v1/portal/devices")).rows;
+  }
+
+  async function ensureDevice() {
+    if (!("indexedDB" in window) || !crypto?.subtle) {
+      deviceStatus = "Dispositivo sin soporte criptografico";
+      return null;
+    }
+
+    const stored = await readStoredDevice().catch(() => null);
+    if (stored?.id && stored.privateKey) {
+      deviceStatus = "Dispositivo verificado";
+      return stored;
+    }
+
+    const pair = await crypto.subtle.generateKey(
+      { name: "ECDSA", namedCurve: "P-256" },
+      false,
+      ["sign", "verify"]
+    );
+    const publicKeyJwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
+    const result = await apiRequest<{ device: { id: string } }>("/api/v1/portal/devices", {
+      method: "POST",
+      body: JSON.stringify({
+        publicKeyJwk,
+        label: navigator.userAgent.slice(0, 120)
+      })
+    });
+    const device = { id: result.device.id, privateKey: pair.privateKey };
+    await writeStoredDevice(device);
+    deviceStatus = "Dispositivo registrado";
+    await loadDevices();
+    return device;
+  }
+
+  async function buildDeviceProof() {
+    const device = await ensureDevice();
+    if (!device) return {};
+
+    const challenge = await apiRequest<{ id: string; message: string }>("/api/v1/portal/devices/challenge", {
+      method: "POST",
+      body: JSON.stringify({ deviceId: device.id })
+    });
+    const signature = await crypto.subtle.sign(
+      { name: "ECDSA", hash: "SHA-256" },
+      device.privateKey,
+      new TextEncoder().encode(challenge.message)
+    );
+
+    return {
+      deviceId: device.id,
+      challengeId: challenge.id,
+      signature: toBase64Url(signature)
+    };
+  }
+
+  function getApiErrorCode(error: unknown) {
+    return error instanceof Error && "code" in error ? String(error.code) : "";
+  }
+
+  function isDeviceBindingError(code: string) {
+    return [
+      "DEVICE_NOT_FOUND",
+      "DEVICE_PROOF_REQUIRED",
+      "DEVICE_CHALLENGE_INVALID",
+      "DEVICE_KEY_INVALID",
+      "DEVICE_SIGNATURE_INVALID"
+    ].includes(code);
+  }
+
+  async function handleDeviceBindingError(error: unknown) {
+    const code = getApiErrorCode(error);
+    if (!isDeviceBindingError(code)) return false;
+
+    await clearStoredDevice().catch(() => null);
+    deviceStatus = "Dispositivo requiere vinculacion";
+    deviceError = "El vinculo de este dispositivo ya no es valido. Regenera el vinculo local e intenta de nuevo.";
+    await loadDevices().catch(() => null);
+    return true;
+  }
+
   async function loadPortal() {
     try {
       session = await apiRequest<PortalSession>("/api/v1/portal/me");
       const qr = await apiRequest<{ credential: Row | null }>("/api/v1/portal/qr");
       qrCredential = qr.credential;
+      await loadDevices();
       temporaryCredential = (await apiRequest<{ credential: Row | null }>("/api/v1/portal/temporary-daily-qr/current")).credential;
       temporaryHistory = (await apiRequest<{ rows: Row[] }>("/api/v1/portal/temporary-daily-qr/history")).rows;
       accessRows = (await apiRequest<{ rows: Row[] }>("/api/v1/portal/access/recent")).rows;
@@ -51,11 +196,27 @@
   }
 
   async function rotateQr() {
-    const result = await apiRequest<{ credential: Row; token: string }>("/api/v1/portal/qr/rotate", {
-      method: "POST"
-    });
-    qrCredential = result.credential;
-    qrToken = result.token;
+    try {
+      deviceError = "";
+      const proof = await buildDeviceProof();
+      const result = await apiRequest<{ token: string; expiresAt: string; deviceId?: string }>("/api/v1/portal/qr/dynamic", {
+        method: "POST",
+        body: JSON.stringify(proof)
+      });
+      dynamicQrEnabled = true;
+      qrToken = result.token;
+      if (result.deviceId) deviceStatus = "Dispositivo firmado";
+    } catch (qrError) {
+      if (await handleDeviceBindingError(qrError)) return;
+      const code = getApiErrorCode(qrError);
+      if (code !== "SIGNED_QR_DISABLED") throw qrError;
+      dynamicQrEnabled = false;
+      const result = await apiRequest<{ credential: Row; token: string }>("/api/v1/portal/qr/rotate", {
+        method: "POST"
+      });
+      qrCredential = result.credential;
+      qrToken = result.token;
+    }
   }
 
   async function requestTemporaryQr() {
@@ -64,8 +225,47 @@
       body: JSON.stringify(temporaryForm)
     });
     temporaryCredential = result.credential;
-    temporaryToken = result.token;
+    try {
+      deviceError = "";
+      const proof = await buildDeviceProof();
+      const dynamic = await apiRequest<{ token: string; deviceId?: string }>("/api/v1/portal/temporary-daily-qr/dynamic", {
+        method: "POST",
+        body: JSON.stringify(proof)
+      });
+      dynamicQrEnabled = true;
+      temporaryToken = dynamic.token;
+      if (dynamic.deviceId) deviceStatus = "Dispositivo firmado";
+    } catch (temporaryError) {
+      if (await handleDeviceBindingError(temporaryError)) return;
+      const code = getApiErrorCode(temporaryError);
+      if (code !== "SIGNED_QR_DISABLED") throw temporaryError;
+      dynamicQrEnabled = false;
+      temporaryToken = result.token;
+    }
     temporaryHistory = (await apiRequest<{ rows: Row[] }>("/api/v1/portal/temporary-daily-qr/history")).rows;
+  }
+
+  async function resetLocalDevice() {
+    deviceError = "";
+    await clearStoredDevice().catch(() => null);
+    deviceStatus = "Vinculo local regenerado";
+    await ensureDevice().catch((resetError) => {
+      deviceError = resetError instanceof Error ? resetError.message : "No se pudo registrar el dispositivo";
+    });
+  }
+
+  async function revokeDevice(row: Row) {
+    const id = String(row.id ?? "");
+    if (!id) return;
+
+    deviceError = "";
+    await apiRequest(`/api/v1/portal/devices/${id}`, { method: "DELETE" });
+    const stored = await readStoredDevice().catch(() => null);
+    if (stored?.id === id) {
+      await clearStoredDevice().catch(() => null);
+      deviceStatus = "Dispositivo actual revocado";
+    }
+    await loadDevices();
   }
 
   async function logout() {
@@ -141,8 +341,11 @@
         <QrPreview
           token={qrToken}
           title="QR personal"
-          subtitle={qrToken ? "Token visible solo en esta emision" : qrCredential ? "QR vigente registrado. Rota para mostrar un token nuevo." : "No hay QR vigente visible."}
+          subtitle={qrToken ? dynamicQrEnabled ? "QR dinamico firmado para esta sesion" : "Token visible solo en esta emision" : qrCredential ? "QR vigente registrado. Genera para mostrar un token nuevo." : "No hay QR vigente visible."}
+          showToken={!dynamicQrEnabled}
         />
+        <p class="muted">{deviceStatus}</p>
+        <button onclick={rotateQr}>Generar QR personal</button>
       </section>
       <section class="panel">
         <h2>Estado de credencial</h2>
@@ -157,6 +360,25 @@
           <p class="muted">No hay credencial activa.</p>
         {/if}
       </section>
+    </section>
+
+    <section class="panel">
+      <div class="section-header">
+        <div>
+          <h2>Dispositivos vinculados</h2>
+          <p class="muted">{deviceStatus}</p>
+        </div>
+        <button type="button" onclick={resetLocalDevice}>Regenerar vinculo local</button>
+      </div>
+      {#if deviceError}<p class="error">{deviceError}</p>{/if}
+      <DataTable rows={devices} columns={[
+        { key: "label", label: "Dispositivo" },
+        { key: "status", label: "Estado", kind: "status" },
+        { key: "lastUsedAt", label: "Ultimo uso", kind: "date" },
+        { key: "createdAt", label: "Alta", kind: "date" }
+      ]} actions={[
+        { label: "Revocar", onClick: revokeDevice }
+      ]} />
     </section>
 
     <section class="grid two">
@@ -174,7 +396,8 @@
         <QrPreview
           token={temporaryToken}
           title="QR temporal diario"
-          subtitle={temporaryToken ? "Token visible solo en esta solicitud" : temporaryCredential ? "Ya existe un QR temporal vigente para hoy." : "No hay QR temporal activo."}
+          subtitle={temporaryToken ? dynamicQrEnabled ? "QR temporal dinamico firmado" : "Token visible solo en esta solicitud" : temporaryCredential ? "Ya existe un QR temporal vigente para hoy." : "No hay QR temporal activo."}
+          showToken={!dynamicQrEnabled}
         />
       </section>
     </section>
