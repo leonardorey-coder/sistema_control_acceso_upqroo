@@ -1,18 +1,30 @@
-import { and, eq, gt, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, sql } from "drizzle-orm";
 import { db } from "../../db/client";
 import { carreras, personas, qrTokens, registrosAcceso, temporaryDailyQrTokens } from "../../db/schema";
+import type { Pagination } from "../../shared/pagination";
 
-export function listPersonQrTokens(personId: string) {
-  return db.select({
-    id: qrTokens.id,
-    personId: qrTokens.personId,
-    status: qrTokens.status,
-    issuedAt: qrTokens.issuedAt,
-    expiresAt: qrTokens.expiresAt,
-    lastUsedAt: qrTokens.lastUsedAt,
-    revokedAt: qrTokens.revokedAt,
-    tokenVersion: qrTokens.tokenVersion
-  }).from(qrTokens).where(eq(qrTokens.personId, personId)).limit(20);
+export async function listPersonQrTokens(personId: string, pagination: Pagination) {
+  const where = eq(qrTokens.personId, personId);
+  const [rows, totalRows] = await Promise.all([
+    db.select({
+      id: qrTokens.id,
+      personId: qrTokens.personId,
+      status: qrTokens.status,
+      issuedAt: qrTokens.issuedAt,
+      expiresAt: qrTokens.expiresAt,
+      lastUsedAt: qrTokens.lastUsedAt,
+      revokedAt: qrTokens.revokedAt,
+      tokenVersion: qrTokens.tokenVersion
+    })
+      .from(qrTokens)
+      .where(where)
+      .orderBy(desc(qrTokens.issuedAt))
+      .limit(pagination.pageSize)
+      .offset(pagination.offset),
+    db.select({ total: count() }).from(qrTokens).where(where)
+  ]);
+
+  return { rows, total: totalRows[0]?.total ?? 0 };
 }
 
 export async function createPersonQrToken(input: typeof qrTokens.$inferInsert) {
@@ -38,21 +50,30 @@ export async function createTemporaryDailyQr(input: typeof temporaryDailyQrToken
   return row!;
 }
 
-export function listTemporaryDailyQr() {
-  return db.select({
-    id: temporaryDailyQrTokens.id,
-    personId: temporaryDailyQrTokens.personId,
-    operationalDate: temporaryDailyQrTokens.operationalDate,
-    missingCredentialType: temporaryDailyQrTokens.missingCredentialType,
-    reasonCode: temporaryDailyQrTokens.reasonCode,
-    reasonText: temporaryDailyQrTokens.reasonText,
-    maxUses: temporaryDailyQrTokens.maxUses,
-    useCount: temporaryDailyQrTokens.useCount,
-    status: temporaryDailyQrTokens.status,
-    validUntil: temporaryDailyQrTokens.validUntil,
-    revokedAt: temporaryDailyQrTokens.revokedAt,
-    createdAt: temporaryDailyQrTokens.createdAt
-  }).from(temporaryDailyQrTokens).limit(100);
+export async function listTemporaryDailyQr(pagination: Pagination) {
+  const [rows, totalRows] = await Promise.all([
+    db.select({
+      id: temporaryDailyQrTokens.id,
+      personId: temporaryDailyQrTokens.personId,
+      operationalDate: temporaryDailyQrTokens.operationalDate,
+      missingCredentialType: temporaryDailyQrTokens.missingCredentialType,
+      reasonCode: temporaryDailyQrTokens.reasonCode,
+      reasonText: temporaryDailyQrTokens.reasonText,
+      maxUses: temporaryDailyQrTokens.maxUses,
+      useCount: temporaryDailyQrTokens.useCount,
+      status: temporaryDailyQrTokens.status,
+      validUntil: temporaryDailyQrTokens.validUntil,
+      revokedAt: temporaryDailyQrTokens.revokedAt,
+      createdAt: temporaryDailyQrTokens.createdAt
+    })
+      .from(temporaryDailyQrTokens)
+      .orderBy(desc(temporaryDailyQrTokens.createdAt))
+      .limit(pagination.pageSize)
+      .offset(pagination.offset),
+    db.select({ total: count() }).from(temporaryDailyQrTokens)
+  ]);
+
+  return { rows, total: totalRows[0]?.total ?? 0 };
 }
 
 export async function revokeTemporaryDailyQr(id: string) {

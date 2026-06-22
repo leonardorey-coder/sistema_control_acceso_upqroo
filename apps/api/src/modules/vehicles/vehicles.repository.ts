@@ -1,4 +1,4 @@
-import { and, asc, count, eq, ilike, or, type SQL } from "drizzle-orm";
+import { and, asc, count, eq, ilike, or, sql, type SQL } from "drizzle-orm";
 import { db } from "../../db/client";
 import { carreras, personas, personTypes, vehiclePermitQrTokens, vehiclePermits, vehicles } from "../../db/schema";
 import type { Pagination } from "../../shared/pagination";
@@ -7,6 +7,13 @@ export type VehicleFilters = {
   q?: string;
   status?: "active" | "inactive" | "blocked";
   ownerPersonId?: string;
+};
+
+export type VehiclePermitFilters = {
+  q?: string;
+  status?: "active" | "expired" | "revoked" | "suspended";
+  personId?: string;
+  vehicleId?: string;
 };
 
 function buildVehicleWhere(filters: VehicleFilters) {
@@ -60,13 +67,61 @@ export async function updateVehicle(id: string, input: Partial<typeof vehicles.$
   return row;
 }
 
-export async function listVehiclePermits(pagination: Pagination) {
+function buildVehiclePermitWhere(filters: VehiclePermitFilters) {
+  const where: SQL[] = [];
+
+  if (filters.q) {
+    const q = `%${filters.q}%`;
+    where.push(or(
+      ilike(personas.matricula, q),
+      ilike(personas.nombres, q),
+      ilike(personas.apellidos, q),
+      ilike(vehicles.plate, q)
+    )!);
+  }
+
+  if (filters.status) {
+    where.push(eq(vehiclePermits.status, filters.status));
+  }
+
+  if (filters.personId) {
+    where.push(eq(vehiclePermits.personId, filters.personId));
+  }
+
+  if (filters.vehicleId) {
+    where.push(eq(vehiclePermits.vehicleId, filters.vehicleId));
+  }
+
+  return where.length ? and(...where) : undefined;
+}
+
+export async function listVehiclePermits(filters: VehiclePermitFilters, pagination: Pagination) {
+  const where = buildVehiclePermitWhere(filters);
   const [rows, totalRows] = await Promise.all([
-    db.select().from(vehiclePermits)
+    db.select({
+      id: vehiclePermits.id,
+      personId: vehiclePermits.personId,
+      vehicleId: vehiclePermits.vehicleId,
+      status: vehiclePermits.status,
+      validFrom: vehiclePermits.validFrom,
+      validUntil: vehiclePermits.validUntil,
+      revokedAt: vehiclePermits.revokedAt,
+      createdAt: vehiclePermits.createdAt,
+      updatedAt: vehiclePermits.updatedAt,
+      matricula: personas.matricula,
+      personName: sql<string>`trim(coalesce(${personas.nombres}, '') || ' ' || coalesce(${personas.apellidos}, ''))`,
+      vehiclePlate: vehicles.plate
+    }).from(vehiclePermits)
+      .innerJoin(personas, eq(vehiclePermits.personId, personas.id))
+      .innerJoin(vehicles, eq(vehiclePermits.vehicleId, vehicles.id))
+      .where(where)
       .orderBy(asc(vehiclePermits.validFrom))
       .limit(pagination.pageSize)
       .offset(pagination.offset),
     db.select({ total: count() }).from(vehiclePermits)
+      .innerJoin(personas, eq(vehiclePermits.personId, personas.id))
+      .innerJoin(vehicles, eq(vehiclePermits.vehicleId, vehicles.id))
+      .where(where)
   ]);
 
   return {

@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { getActorMetadata } from "../../http/middleware/session";
+import { getActorMetadata, getAdminSession } from "../../http/middleware/session";
 import { recordAudit } from "../../shared/audit";
 import { HttpError } from "../../shared/http-error";
 import { withoutUndefined } from "../../shared/object";
@@ -40,9 +40,8 @@ const permitSchema = z.object({
   status: z.enum(["active", "expired", "revoked", "suspended"]).default("active"),
   validFrom: z.coerce.date().optional(),
   validUntil: z.coerce.date().optional(),
-  reason: z.string().trim().optional(),
-  createdByAdminId: z.string().uuid().optional()
-});
+  reason: z.string().trim().optional()
+}).strict();
 
 const permitQrSchema = z.object({
   expiresAt: z.coerce.date()
@@ -76,12 +75,19 @@ vehiclesRoutes.post("/", async (c) => {
 
 vehiclesRoutes.get("/permits", async (c) => {
   const pagination = parsePagination(c.req.query());
-  const result = await listVehiclePermits(pagination);
+  const query = withoutUndefined(z.object({
+    q: z.string().trim().min(1).optional(),
+    status: z.enum(["active", "expired", "revoked", "suspended"]).optional(),
+    personId: z.string().uuid().optional(),
+    vehicleId: z.string().uuid().optional()
+  }).parse(c.req.query()));
+  const result = await listVehiclePermits(query, pagination);
   return c.json({ data: paginated(result.rows, result.total, pagination) });
 });
 
 vehiclesRoutes.post("/permits", async (c) => {
   const input = permitSchema.parse(await c.req.json());
+  const session = getAdminSession(c);
   const eligibility = await getVehiclePermitEligibility(input.personId);
 
   if (!eligibility) {
@@ -96,7 +102,10 @@ vehiclesRoutes.post("/permits", async (c) => {
     throw new HttpError(409, "PERSON_TYPE_VEHICLE_PERMIT_NOT_ALLOWED", "This person type cannot have vehicle permits.");
   }
 
-  const row = await createVehiclePermit(input);
+  const row = await createVehiclePermit({
+    ...input,
+    createdByAdminId: session.adminId
+  });
   await recordAudit({
     ...getActorMetadata(c),
     action: "vehicle_permit.created",

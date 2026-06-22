@@ -122,7 +122,7 @@ export type PersonRowPayload = {
   updatedAt: string;
 };
 
-export type CredentialStatus = "active" | "revoked" | "expired" | "disabled";
+export type CredentialStatus = "active" | "revoked" | "expired";
 
 export type PersonCredentialRowPayload = {
   id: string;
@@ -181,7 +181,7 @@ export type VehicleRowPayload = {
   updatedAt: string;
 };
 
-export type VehiclePermitStatus = "active" | "revoked" | "expired" | "disabled";
+export type VehiclePermitStatus = "active" | "revoked" | "expired" | "suspended";
 
 export type VehiclePermitRowPayload = {
   id: string;
@@ -202,6 +202,14 @@ export type OperationalConfigPayload = {
   manualEntryEnabled: boolean;
   soundsEnabled: boolean;
   autoExitEnabled: boolean;
+};
+
+export type SignedQrConfigPayload = {
+  enabled: boolean;
+  ttlSeconds: number;
+  clockToleranceSeconds: number;
+  compatibilityOpaqueTokens: boolean;
+  requireDeviceBinding: boolean;
 };
 
 export type AdminRole = "admin" | "super_admin";

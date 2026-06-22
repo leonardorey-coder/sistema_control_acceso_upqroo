@@ -1,8 +1,9 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { getActorMetadata } from "../../http/middleware/session";
+import { getActorMetadata, getAdminSession } from "../../http/middleware/session";
 import { recordAudit } from "../../shared/audit";
 import { HttpError } from "../../shared/http-error";
+import { paginated, parsePagination } from "../../shared/pagination";
 import { stripSecretFields } from "../../shared/sanitize";
 import { issueOpaqueToken } from "../../shared/security";
 import { getOperationalConfig } from "../config/config.repository";
@@ -31,16 +32,16 @@ const temporaryDailyQrSchema = z.object({
   reasonText: z.string().trim().optional(),
   scope: z.record(z.unknown()).default({}),
   maxUses: z.number().int().min(1).max(10).default(10),
-  validUntil: z.coerce.date(),
-  createdByAdminId: z.string().uuid().optional()
-});
+  validUntil: z.coerce.date()
+}).strict();
 
 export const credentialsRoutes = new Hono();
 
 credentialsRoutes.get("/person/:personId", async (c) => {
   const personId = z.string().uuid().parse(c.req.param("personId"));
-  const rows = await listPersonQrTokens(personId);
-  return c.json({ data: { rows } });
+  const pagination = parsePagination(c.req.query());
+  const result = await listPersonQrTokens(personId, pagination);
+  return c.json({ data: paginated(result.rows, result.total, pagination) });
 });
 
 credentialsRoutes.post("/person", async (c) => {
@@ -106,15 +107,18 @@ credentialsRoutes.post("/person/:personId/revoke", async (c) => {
 });
 
 credentialsRoutes.get("/temporary-daily", async (c) => {
-  const rows = await listTemporaryDailyQr();
-  return c.json({ data: { rows } });
+  const pagination = parsePagination(c.req.query());
+  const result = await listTemporaryDailyQr(pagination);
+  return c.json({ data: paginated(result.rows, result.total, pagination) });
 });
 
 credentialsRoutes.post("/temporary-daily", async (c) => {
   const input = temporaryDailyQrSchema.parse(await c.req.json());
+  const session = getAdminSession(c);
   const issued = issueOpaqueToken("temporary_daily_qr");
   const row = await createTemporaryDailyQr({
     ...input,
+    createdByAdminId: session.adminId,
     tokenHash: issued.tokenHash
   });
 
