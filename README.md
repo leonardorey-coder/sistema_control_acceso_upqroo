@@ -44,8 +44,13 @@ Variables principales:
   tokens opacos.
 - `RATE_LIMIT_DRIVER`: `memory` en desarrollo/test y `postgres` por defecto en
   produccion. Usa la tabla `login_rate_limits`.
-- `STORAGE_DRIVER`: `local` soportado por defecto.
+- `STORAGE_DRIVER`: `local`, `r2` o `s3`. `r2` es el recomendado para
+  produccion si se usara Cloudflare R2.
 - `LOCAL_STORAGE_ROOT`: carpeta local para archivos.
+- `STORAGE_BUCKET`, `STORAGE_REGION`, `STORAGE_ENDPOINT`,
+  `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY`,
+  `STORAGE_FORCE_PATH_STYLE`, `STORAGE_SIGNED_URL_TTL_SECONDS`: configuracion
+  del adapter S3-compatible usado por S3/R2.
 - `QR_SIGNING_PRIVATE_KEY`, `QR_SIGNING_PUBLIC_KEY`, `QR_SIGNING_KID`: llaves
   productivas opcionales para QR dinamico firmado.
 
@@ -88,6 +93,7 @@ Las migraciones viven en `apps/api/drizzle/migrations`.
 - Vehiculos y permisos vehiculares.
 - Registros de acceso, salidas automaticas y asistencias.
 - Archivos locales protegidos por sesion admin.
+- Storage externo S3/R2 mediante URLs firmadas.
 - Auditoria y eventos live para refresco de tablas.
 - Worker para expiraciones, limpieza y cierres automaticos.
 
@@ -111,6 +117,10 @@ tests locales o despliegues de un unico proceso.
 Para rotar llaves QR productivas por variables de entorno, cambia el par de
 llaves y tambien `QR_SIGNING_KID`. Reutilizar un `kid` ya rotado o con otra
 llave es rechazado para evitar reactivar llaves antiguas.
+
+Para R2, configura `STORAGE_DRIVER=r2`, `STORAGE_ENDPOINT` con el endpoint S3 de
+la cuenta, `STORAGE_REGION=auto`, bucket y credenciales. `/api/v1/files/:key`
+redirige a una URL firmada temporal para objetos externos.
 
 ## Verificacion Actual
 

@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { Hono } from "hono";
 import { HttpError } from "../../shared/http-error";
-import { resolveLocalObjectPath } from "../../shared/storage";
+import { resolveLocalObjectPath, storageAdapter } from "../../shared/storage";
 import { findStoredFileByObjectKey } from "./files.repository";
 
 export const filesRoutes = new Hono();
@@ -15,7 +15,7 @@ filesRoutes.get("/:key", async (c) => {
   }
 
   if (file.driver !== "local") {
-    throw new HttpError(501, "STORAGE_DRIVER_NOT_SERVABLE", "The configured storage driver is not directly servable by this route.");
+    return c.redirect(await storageAdapter.signedUrl(file.objectKey), 302);
   }
 
   const bytes = await readFile(resolveLocalObjectPath(file.objectKey));
