@@ -5,6 +5,8 @@
   import DataTable from "$lib/components/DataTable.svelte";
   import LegacyHeader from "$lib/components/LegacyHeader.svelte";
   import QrPreview from "$lib/components/QrPreview.svelte";
+  import { clearStoredDevice, ensureDevice, getApiErrorCode, isDeviceBindingError, readStoredDevice } from "$lib/portal/device-binding";
+  import { requestPersonalDynamicQr, requestTemporaryDynamicQr } from "$lib/portal/qr";
 
   type Row = Record<string, unknown>;
   type PortalSession = {
@@ -39,133 +41,8 @@
   let attendanceRows = $state<Row[]>([]);
   let error = $state("");
 
-  type StoredDevice = {
-    id: string;
-    privateKey: CryptoKey;
-  };
-
-  function toBase64Url(bytes: ArrayBuffer) {
-    const binary = String.fromCharCode(...new Uint8Array(bytes));
-    return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-  }
-
-  function openDeviceDb() {
-    return new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open("control-acceso-device-binding", 1);
-      request.onupgradeneeded = () => {
-        request.result.createObjectStore("devices");
-      };
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => resolve(request.result);
-    });
-  }
-
-  async function readStoredDevice() {
-    const db = await openDeviceDb();
-    return new Promise<StoredDevice | null>((resolve, reject) => {
-      const tx = db.transaction("devices", "readonly");
-      const request = tx.objectStore("devices").get("current");
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => resolve((request.result as StoredDevice | undefined) ?? null);
-      tx.oncomplete = () => db.close();
-    });
-  }
-
-  async function writeStoredDevice(device: StoredDevice) {
-    const db = await openDeviceDb();
-    return new Promise<void>((resolve, reject) => {
-      const tx = db.transaction("devices", "readwrite");
-      tx.objectStore("devices").put(device, "current");
-      tx.onerror = () => reject(tx.error);
-      tx.oncomplete = () => {
-        db.close();
-        resolve();
-      };
-    });
-  }
-
-  async function clearStoredDevice() {
-    const db = await openDeviceDb();
-    return new Promise<void>((resolve, reject) => {
-      const tx = db.transaction("devices", "readwrite");
-      tx.objectStore("devices").delete("current");
-      tx.onerror = () => reject(tx.error);
-      tx.oncomplete = () => {
-        db.close();
-        resolve();
-      };
-    });
-  }
-
   async function loadDevices() {
     devices = (await apiRequest<{ rows: Row[] }>("/api/v1/portal/devices")).rows;
-  }
-
-  async function ensureDevice() {
-    if (!("indexedDB" in window) || !crypto?.subtle) {
-      deviceStatus = "Dispositivo sin soporte criptografico";
-      return null;
-    }
-
-    const stored = await readStoredDevice().catch(() => null);
-    if (stored?.id && stored.privateKey) {
-      deviceStatus = "Dispositivo verificado";
-      return stored;
-    }
-
-    const pair = await crypto.subtle.generateKey(
-      { name: "ECDSA", namedCurve: "P-256" },
-      false,
-      ["sign", "verify"]
-    );
-    const publicKeyJwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
-    const result = await apiRequest<{ device: { id: string } }>("/api/v1/portal/devices", {
-      method: "POST",
-      body: JSON.stringify({
-        publicKeyJwk,
-        label: navigator.userAgent.slice(0, 120)
-      })
-    });
-    const device = { id: result.device.id, privateKey: pair.privateKey };
-    await writeStoredDevice(device);
-    deviceStatus = "Dispositivo registrado";
-    await loadDevices();
-    return device;
-  }
-
-  async function buildDeviceProof() {
-    const device = await ensureDevice();
-    if (!device) return {};
-
-    const challenge = await apiRequest<{ id: string; message: string }>("/api/v1/portal/devices/challenge", {
-      method: "POST",
-      body: JSON.stringify({ deviceId: device.id })
-    });
-    const signature = await crypto.subtle.sign(
-      { name: "ECDSA", hash: "SHA-256" },
-      device.privateKey,
-      new TextEncoder().encode(challenge.message)
-    );
-
-    return {
-      deviceId: device.id,
-      challengeId: challenge.id,
-      signature: toBase64Url(signature)
-    };
-  }
-
-  function getApiErrorCode(error: unknown) {
-    return error instanceof Error && "code" in error ? String(error.code) : "";
-  }
-
-  function isDeviceBindingError(code: string) {
-    return [
-      "DEVICE_NOT_FOUND",
-      "DEVICE_PROOF_REQUIRED",
-      "DEVICE_CHALLENGE_INVALID",
-      "DEVICE_KEY_INVALID",
-      "DEVICE_SIGNATURE_INVALID"
-    ].includes(code);
   }
 
   async function handleDeviceBindingError(error: unknown) {
@@ -198,11 +75,7 @@
   async function rotateQr() {
     try {
       deviceError = "";
-      const proof = await buildDeviceProof();
-      const result = await apiRequest<{ token: string; expiresAt: string; deviceId?: string }>("/api/v1/portal/qr/dynamic", {
-        method: "POST",
-        body: JSON.stringify(proof)
-      });
+      const result = await requestPersonalDynamicQr((status) => (deviceStatus = status));
       dynamicQrEnabled = true;
       qrToken = result.token;
       if (result.deviceId) deviceStatus = "Dispositivo firmado";
@@ -227,11 +100,7 @@
     temporaryCredential = result.credential;
     try {
       deviceError = "";
-      const proof = await buildDeviceProof();
-      const dynamic = await apiRequest<{ token: string; deviceId?: string }>("/api/v1/portal/temporary-daily-qr/dynamic", {
-        method: "POST",
-        body: JSON.stringify(proof)
-      });
+      const dynamic = await requestTemporaryDynamicQr((status) => (deviceStatus = status));
       dynamicQrEnabled = true;
       temporaryToken = dynamic.token;
       if (dynamic.deviceId) deviceStatus = "Dispositivo firmado";
@@ -249,7 +118,7 @@
     deviceError = "";
     await clearStoredDevice().catch(() => null);
     deviceStatus = "Vinculo local regenerado";
-    await ensureDevice().catch((resetError) => {
+    await ensureDevice((status) => (deviceStatus = status)).then(loadDevices).catch((resetError) => {
       deviceError = resetError instanceof Error ? resetError.message : "No se pudo registrar el dispositivo";
     });
   }

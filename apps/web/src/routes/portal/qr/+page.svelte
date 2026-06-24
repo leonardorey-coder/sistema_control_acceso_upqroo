@@ -4,6 +4,8 @@
   import { apiRequest } from "$lib/api/client";
   import LegacyHeader from "$lib/components/LegacyHeader.svelte";
   import QrPreview from "$lib/components/QrPreview.svelte";
+  import { clearStoredDevice, ensureDevice, getApiErrorCode, isDeviceBindingError } from "$lib/portal/device-binding";
+  import { requestPersonalDynamicQr } from "$lib/portal/qr";
 
   type Row = Record<string, unknown>;
   type PortalSession = {
@@ -18,106 +20,10 @@
   let secondsLeft = $state(0);
   let dynamicEnabled = $state(true);
   let deviceStatus = $state("Preparando dispositivo...");
+  let canRegenerateDevice = $state(false);
   let refreshTimer: ReturnType<typeof setTimeout> | null = null;
   let countdownTimer: ReturnType<typeof setInterval> | null = null;
   let error = $state("");
-
-  type StoredDevice = {
-    id: string;
-    privateKey: CryptoKey;
-  };
-
-  function toBase64Url(bytes: ArrayBuffer) {
-    const binary = String.fromCharCode(...new Uint8Array(bytes));
-    return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-  }
-
-  function openDeviceDb() {
-    return new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open("control-acceso-device-binding", 1);
-      request.onupgradeneeded = () => {
-        request.result.createObjectStore("devices");
-      };
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => resolve(request.result);
-    });
-  }
-
-  async function readStoredDevice() {
-    const db = await openDeviceDb();
-    return new Promise<StoredDevice | null>((resolve, reject) => {
-      const tx = db.transaction("devices", "readonly");
-      const request = tx.objectStore("devices").get("current");
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => resolve((request.result as StoredDevice | undefined) ?? null);
-      tx.oncomplete = () => db.close();
-    });
-  }
-
-  async function writeStoredDevice(device: StoredDevice) {
-    const db = await openDeviceDb();
-    return new Promise<void>((resolve, reject) => {
-      const tx = db.transaction("devices", "readwrite");
-      tx.objectStore("devices").put(device, "current");
-      tx.onerror = () => reject(tx.error);
-      tx.oncomplete = () => {
-        db.close();
-        resolve();
-      };
-    });
-  }
-
-  async function ensureDevice() {
-    if (!("indexedDB" in window) || !crypto?.subtle) {
-      deviceStatus = "Dispositivo sin soporte WebCrypto";
-      return null;
-    }
-
-    const stored = await readStoredDevice().catch(() => null);
-    if (stored?.id && stored.privateKey) {
-      deviceStatus = "Dispositivo verificado";
-      return stored;
-    }
-
-    const pair = await crypto.subtle.generateKey(
-      { name: "ECDSA", namedCurve: "P-256" },
-      false,
-      ["sign", "verify"]
-    );
-    const publicKeyJwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
-    const result = await apiRequest<{ device: { id: string } }>("/api/v1/portal/devices", {
-      method: "POST",
-      body: JSON.stringify({
-        publicKeyJwk,
-        label: navigator.userAgent.slice(0, 120)
-      })
-    });
-    const device = { id: result.device.id, privateKey: pair.privateKey };
-    await writeStoredDevice(device);
-    deviceStatus = "Dispositivo registrado";
-    return device;
-  }
-
-  async function buildDeviceProof() {
-    const device = await ensureDevice();
-    if (!device) return {};
-
-    const challenge = await apiRequest<{ id: string; message: string }>("/api/v1/portal/devices/challenge", {
-      method: "POST",
-      body: JSON.stringify({ deviceId: device.id })
-    });
-    const signature = await crypto.subtle.sign(
-      { name: "ECDSA", hash: "SHA-256" },
-      device.privateKey,
-      new TextEncoder().encode(challenge.message)
-    );
-
-    return {
-      deviceId: device.id,
-      challengeId: challenge.id,
-      signature: toBase64Url(signature)
-    };
-  }
 
   async function load() {
     try {
@@ -137,12 +43,9 @@
 
   async function loadDynamicQr() {
     error = "";
+    canRegenerateDevice = false;
     try {
-      const proof = await buildDeviceProof();
-      const result = await apiRequest<{ token: string; expiresAt: string; refreshAfterMs: number; jti: string; deviceId?: string }>("/api/v1/portal/qr/dynamic", {
-        method: "POST",
-        body: JSON.stringify(proof)
-      });
+      const result = await requestPersonalDynamicQr((status) => (deviceStatus = status));
       dynamicEnabled = true;
       qrToken = result.token;
       expiresAt = result.expiresAt;
@@ -152,15 +55,36 @@
       if (refreshTimer) clearTimeout(refreshTimer);
       refreshTimer = setTimeout(loadDynamicQr, result.refreshAfterMs);
     } catch (dynamicError) {
-      const code = dynamicError instanceof Error && "code" in dynamicError ? String(dynamicError.code) : "";
+      const code = getApiErrorCode(dynamicError);
       if (code === "SIGNED_QR_DISABLED") {
         dynamicEnabled = false;
         qrCredential = (await apiRequest<{ credential: Row | null }>("/api/v1/portal/qr")).credential;
         error = "QR dinamico desactivado";
         return;
       }
+      if (isDeviceBindingError(code)) {
+        await clearStoredDevice().catch(() => null);
+        deviceStatus = "Dispositivo requiere vinculacion";
+        canRegenerateDevice = true;
+        error = "El vinculo de este dispositivo ya no es valido. Regenera el vinculo local para continuar.";
+        return;
+      }
       qrToken = "";
       error = dynamicError instanceof Error ? dynamicError.message : "No se pudo generar el QR dinamico";
+    }
+  }
+
+  async function regenerateDeviceAndRefresh() {
+    error = "";
+    canRegenerateDevice = false;
+    deviceStatus = "Registrando dispositivo...";
+    try {
+      await clearStoredDevice().catch(() => null);
+      await ensureDevice((status) => (deviceStatus = status));
+      await loadDynamicQr();
+    } catch (deviceError) {
+      canRegenerateDevice = true;
+      error = deviceError instanceof Error ? deviceError.message : "No se pudo registrar el dispositivo";
     }
   }
 
@@ -203,6 +127,9 @@
           <button onclick={loadDynamicQr}>Actualizar QR dinamico</button>
         {:else}
           <button onclick={rotateQr}>Rotar QR personal</button>
+        {/if}
+        {#if canRegenerateDevice}
+          <button class="ghost" onclick={regenerateDeviceAndRefresh}>Regenerar vinculo local</button>
         {/if}
       </section>
   {/if}
