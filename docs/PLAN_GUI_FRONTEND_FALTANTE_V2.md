@@ -44,6 +44,29 @@ worker, portal, scanner, admin shell y QR dinamico firmado ya existen.
   vinculo local cuando IndexedDB se pierde o queda invalido.
 - El backend ya tiene rate limit durable opcional con `RATE_LIMIT_DRIVER=postgres`
   y migracion `0006_durable_rate_limit.sql`.
+- Storage externo S3/R2 ya usa adapter S3-compatible con URLs firmadas; R2 queda
+  como default recomendado de produccion.
+- Se agregaron E2E de QR firmado para personal, temporal y vehicular con replay
+  de JTI.
+- La GUI admin ya usa buscadores server-side para persona/vehiculo en QR
+  temporal y permisos, con paginacion dedicada en temporales, vehiculos y
+  permisos.
+- `/portal` y `/portal/qr` comparten helpers de device binding y QR dinamico.
+- Registros y asistencias ya tienen paginacion dedicada en UI, sin compartir el
+  mismo estado de pagina entre tabs.
+- Materias y horarios ya exponen filtros y paginacion backend/UI; horarios
+  muestran persona y materia legibles.
+- `/portal/qr` permite regenerar el vinculo local del dispositivo cuando el
+  device binding queda invalido.
+- Hot-QR ya expone paginacion dedicada en UI.
+- Permisos vehiculares ya pueden filtrarse con buscadores explicitos de persona
+  y vehiculo, ademas de texto/estado.
+- Los helpers de device binding tienen pruebas unitarias para clasificar errores
+  recuperables del portal.
+- El historial de credenciales personales en editar persona ya usa paginacion
+  backend/UI.
+- Storage S3/R2 tiene pruebas unitarias con cliente mock para `put`, `delete`,
+  `signedUrl` y errores claros de configuracion faltante.
 
 Lo pendiente para cerrar v2 no es mas CRUD basico, sino:
 
@@ -155,9 +178,9 @@ robustecer edge cases y completar reportes/operacion avanzada.
 ### Asistencias y catalogos pendiente parcial
 
 - Ajuste manual auditado de asistencia ya aplicado.
-- Paginar y filtrar materias/horarios.
+- Paginar y filtrar materias/horarios ya aplicado.
 - Paginar y filtrar credenciales:
-  - QR personal,
+  - QR personal aplicado,
   - QR temporal,
   - QR vehicular.
 
@@ -328,13 +351,15 @@ No se debe convertir en landing page, dashboard SaaS generico ni rediseño libre
 - Mostrar materia, aula, horario, porcentaje y estado descriptivo.
 - Agregar ajuste manual auditado cuando backend lo exponga.
 - Integrar subpanel de materias y horarios sin romper estilo legacy.
+- Estado actual: tabla principal, materias y horarios ya tienen filtros y
+  paginacion operativa.
 
 ### Hot-QR
 
 - Formulario compacto.
 - QR visible solo al emitir.
 - Descargar/compartir.
-- Tabla del dia con filtros y revocacion.
+- Tabla del dia con filtros, paginacion y revocacion.
 
 ### Vehiculos
 
@@ -345,6 +370,7 @@ No se debe convertir en landing page, dashboard SaaS generico ni rediseño libre
   - emitir QR,
   - rotar/revocar.
 - Buscar por matricula y placa.
+- Filtrar permisos por persona y vehiculo con buscadores server-side.
 - Mostrar estado de vehiculo, permiso y QR.
 - QR vehicular dinamico cuando este habilitado.
 
@@ -412,6 +438,11 @@ No se debe convertir en landing page, dashboard SaaS generico ni rediseño libre
 - Rate limit y bloqueo temporal.
 - Cambio de password.
 - Validacion de foto.
+- Storage S3/R2 con mock aplicado:
+  - `put`,
+  - `delete`,
+  - `signedUrl`,
+  - configuracion faltante.
 
 ### Backend integracion con Postgres
 
