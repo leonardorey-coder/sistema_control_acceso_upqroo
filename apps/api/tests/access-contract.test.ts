@@ -5,6 +5,7 @@ import { app } from "../src/app";
 
 const migrationsDir = join(import.meta.dir, "../drizzle/migrations");
 const modulesDir = join(import.meta.dir, "../src/modules");
+const srcDir = join(import.meta.dir, "../src");
 
 function readMigration(name: string) {
   return readFileSync(join(migrationsDir, name), "utf8");
@@ -12,6 +13,10 @@ function readMigration(name: string) {
 
 function readModule(path: string) {
   return readFileSync(join(modulesDir, path), "utf8");
+}
+
+function readSource(path: string) {
+  return readFileSync(join(srcDir, path), "utf8");
 }
 
 describe("access atomic contracts", () => {
@@ -133,5 +138,63 @@ describe("access atomic contracts", () => {
     expect(migration).toContain("CREATE TABLE IF NOT EXISTS \"login_rate_limits\"");
     expect(migration).toContain("\"key\" text PRIMARY KEY");
     expect(migration).toContain("\"locked_until\" timestamptz");
+  });
+
+  it("ships S3-compatible storage for R2/S3 instead of local-only placeholders", () => {
+    const envSource = readSource("config/env.ts");
+    const storageSource = readSource("shared/storage.ts");
+    const filesRoutes = readModule("files/files.routes.ts");
+
+    expect(envSource).toContain("STORAGE_DRIVER: z.enum([\"local\", \"s3\", \"r2\"])");
+    expect(envSource).toContain("STORAGE_BUCKET");
+    expect(envSource).toContain("STORAGE_ENDPOINT");
+    expect(envSource).toContain("STORAGE_ACCESS_KEY_ID");
+    expect(envSource).toContain("STORAGE_SECRET_ACCESS_KEY");
+    expect(envSource).toContain("STORAGE_SIGNED_URL_TTL_SECONDS");
+
+    expect(storageSource).toContain("@aws-sdk/client-s3");
+    expect(storageSource).toContain("@aws-sdk/s3-request-presigner");
+    expect(storageSource).toContain("class S3CompatibleStorageAdapter implements StorageAdapter");
+    expect(storageSource).toContain("new PutObjectCommand");
+    expect(storageSource).toContain("new DeleteObjectCommand");
+    expect(storageSource).toContain("new GetObjectCommand");
+    expect(storageSource).toContain("getSignedUrl");
+    expect(storageSource).toContain("requireStorageConfig(config, config.STORAGE_BUCKET, \"BUCKET\")");
+    expect(storageSource).toContain("options: { s3Client?: S3Client; signedUrlFactory?: SignedUrlFactory }");
+    expect(storageSource).not.toContain("S3_STORAGE_NOT_CONFIGURED");
+    expect(storageSource).not.toContain("R2_STORAGE_NOT_CONFIGURED");
+
+    expect(filesRoutes).toContain("storageAdapter.signedUrl(file.objectKey)");
+    expect(filesRoutes).toContain("c.redirect(await storageAdapter.signedUrl(file.objectKey), 302)");
+  });
+
+  it("keeps attendance catalogs paginated and filterable for the admin UI", () => {
+    const attendanceRoutes = readModule("attendance/attendance.routes.ts");
+    const attendanceRepository = readModule("attendance/attendance.repository.ts");
+
+    expect(attendanceRoutes).toContain("const subjectQuerySchema");
+    expect(attendanceRoutes).toContain("const scheduleQuerySchema");
+    expect(attendanceRoutes).toContain("const pagination = parsePagination(c.req.query())");
+    expect(attendanceRoutes).toContain("data: paginated(result.rows, result.total, pagination");
+
+    expect(attendanceRepository).toContain("export async function listSubjects(filters: SubjectFilters, pagination: Pagination)");
+    expect(attendanceRepository).toContain("export async function listSchedules(filters: ScheduleFilters, pagination: Pagination)");
+    expect(attendanceRepository).toContain("ilike(subjects.clave, q)");
+    expect(attendanceRepository).toContain("ilike(personas.matricula, q)");
+    expect(attendanceRepository).toContain(".limit(pagination.pageSize)");
+    expect(attendanceRepository).toContain(".offset(pagination.offset)");
+    expect(attendanceRepository).not.toContain(".limit(200)");
+  });
+
+  it("keeps personal credential history paginated for the admin UI", () => {
+    const credentialsRoutes = readModule("credentials/credentials.routes.ts");
+    const credentialsRepository = readModule("credentials/credentials.repository.ts");
+
+    expect(credentialsRoutes).toContain("credentialsRoutes.get(\"/person/:personId\"");
+    expect(credentialsRoutes).toContain("const pagination = parsePagination(c.req.query())");
+    expect(credentialsRoutes).toContain("paginated(result.rows, result.total, pagination)");
+    expect(credentialsRepository).toContain("export async function listPersonQrTokens(personId: string, pagination: Pagination)");
+    expect(credentialsRepository).toContain(".limit(pagination.pageSize)");
+    expect(credentialsRepository).toContain(".offset(pagination.offset)");
   });
 });

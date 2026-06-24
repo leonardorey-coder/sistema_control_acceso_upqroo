@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { CareerRowPayload, PersonTypeRowPayload, TemporaryDailyQrRowPayload } from "@control-acceso/shared";
   import DataTable from "./DataTable.svelte";
+  import EntitySearchSelect from "./EntitySearchSelect.svelte";
+  import PaginationControls from "./PaginationControls.svelte";
   import QrPreview from "./QrPreview.svelte";
 
   type Row = Record<string, unknown>;
@@ -15,7 +17,16 @@
     generatedToken,
     generatedTitle,
     temporaryQrForm,
+    temporaryQrPersonLabel,
     temporaryRows,
+    temporaryFilters,
+    temporaryTotal,
+    temporaryPage,
+    temporaryPageSize,
+    onTemporaryPageChange,
+    onFilterTemporaryQr,
+    searchPeople,
+    onSelectTemporaryPerson,
     onSubmit,
     onCreateTemporaryQr,
     onShowTemporaryQr,
@@ -45,7 +56,16 @@
       maxUses: number;
       validUntil: string;
     };
+    temporaryQrPersonLabel: string;
     temporaryRows: TemporaryQrRow[];
+    temporaryFilters: { q: string; status: string; operationalDate: string };
+    temporaryTotal: number;
+    temporaryPage: number;
+    temporaryPageSize: number;
+    onTemporaryPageChange: (next: { page: number; pageSize: number }) => void;
+    onFilterTemporaryQr: () => void;
+    searchPeople: (query: string) => Promise<Row[]>;
+    onSelectTemporaryPerson: (row: Row | null) => void;
     onSubmit: (mode: "register" | "generate") => void;
     onCreateTemporaryQr: () => void;
     onShowTemporaryQr: (row: TemporaryQrRow) => void;
@@ -56,6 +76,10 @@
 
   const selectedType = $derived(personTypeRows.find((row) => row.code === personForm.tipoPersona));
   const requiresCareer = $derived(Boolean(selectedType?.requiresCareer));
+
+  function displayPerson(row: Row) {
+    return `${row.matricula ?? ""} - ${row.nombres ?? ""} ${row.apellidos ?? ""}`.trim();
+  }
 </script>
 
 <section class="grid two">
@@ -105,7 +129,15 @@
 <section class="grid two">
   <form class="panel form-grid" onsubmit={(event) => { event.preventDefault(); onCreateTemporaryQr(); }}>
     <h2>QR temporal diario</h2>
-    <input bind:value={temporaryQrForm.personId} placeholder="ID persona" required />
+    <EntitySearchSelect
+      label="Persona"
+      value={temporaryQrForm.personId}
+      displayValue={temporaryQrPersonLabel}
+      placeholder="Matricula, nombre o correo"
+      search={searchPeople}
+      displayResult={displayPerson}
+      onSelect={onSelectTemporaryPerson}
+    />
     <input bind:value={temporaryQrForm.operationalDate} type="date" required />
     <select bind:value={temporaryQrForm.missingCredentialType}>
       <option value="personal_qr">Credencial QR personal</option>
@@ -125,9 +157,23 @@
   </form>
   <section class="panel">
     <h2>Temporales recientes</h2>
+    <div class="toolbar">
+      <input bind:value={temporaryFilters.q} placeholder="Buscar persona o motivo" />
+      <input bind:value={temporaryFilters.operationalDate} type="date" />
+      <select bind:value={temporaryFilters.status}>
+        <option value="">Todos</option>
+        <option value="active">Activo</option>
+        <option value="revoked">Revocado</option>
+        <option value="expired">Expirado</option>
+        <option value="rotated">Rotado</option>
+      </select>
+      <button onclick={onFilterTemporaryQr}>Filtrar</button>
+    </div>
     <DataTable
       rows={temporaryRows}
       columns={[
+        { key: "matricula", label: "Matricula" },
+        { key: "personName", label: "Persona" },
         { key: "operationalDate", label: "Fecha" },
         { key: "missingCredentialType", label: "Tipo" },
         { key: "reasonCode", label: "Motivo" },
@@ -138,6 +184,12 @@
         { label: "QR dinamico", onClick: (row) => onShowTemporaryQr(row as TemporaryQrRow) },
         { label: "Revocar", onClick: (row) => onRevokeTemporaryQr(row as TemporaryQrRow), tone: "ghost" }
       ]}
+    />
+    <PaginationControls
+      page={temporaryPage}
+      pageSize={temporaryPageSize}
+      total={temporaryTotal}
+      onChange={onTemporaryPageChange}
     />
   </section>
 </section>

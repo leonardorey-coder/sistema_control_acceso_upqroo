@@ -1,5 +1,6 @@
 <script lang="ts">
   import DataTable from "./DataTable.svelte";
+  import PaginationControls from "./PaginationControls.svelte";
 
   type Row = Record<string, unknown>;
 
@@ -7,14 +8,20 @@
     rows,
     total,
     filters,
+    page,
+    pageSize,
     personTypeRows,
-    onFilter
+    onFilter,
+    onPageChange
   }: {
     rows: Row[];
     total: number;
     filters: { q: string; date: string; page: number; pageSize: number; personType: string; accessMode: string; status: string };
+    page: number;
+    pageSize: number;
     personTypeRows: Row[];
     onFilter: () => void;
+    onPageChange: (next: { page: number; pageSize: number }) => void;
   } = $props();
 </script>
 
@@ -61,4 +68,5 @@
     { key: "accessMode", label: "Modo" },
     { key: "vehiclePlate", label: "Vehiculo" }
   ]} />
+  <PaginationControls {page} {pageSize} {total} onChange={onPageChange} />
 </section>

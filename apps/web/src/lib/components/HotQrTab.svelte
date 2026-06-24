@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { HotQrRowPayload } from "@control-acceso/shared";
   import DataTable from "./DataTable.svelte";
+  import PaginationControls from "./PaginationControls.svelte";
   import QrPreview from "./QrPreview.svelte";
 
   type Row = Record<string, unknown>;
@@ -12,8 +13,12 @@
     generatedToken,
     generatedTitle,
     filters,
+    total,
+    page,
+    pageSize,
     onCreate,
     onFilter,
+    onPageChange,
     onRevoke
   }: {
     rows: HotQrRow[];
@@ -21,8 +26,12 @@
     generatedToken: string;
     generatedTitle: string;
     filters: { q: string; date: string; hotQrStatus: string };
+    total: number;
+    page: number;
+    pageSize: number;
     onCreate: () => void;
     onFilter: () => void;
+    onPageChange: (next: { page: number; pageSize: number }) => void;
     onRevoke: (row: HotQrRow) => void;
   } = $props();
 </script>
@@ -50,6 +59,7 @@
 <section class="panel">
   <div class="tabla-header">
     <h2>Hot-QR del dia</h2>
+    <span>{total} tokens</span>
   </div>
   <div class="toolbar">
     <input bind:value={filters.q} placeholder="Buscar visitante o motivo" />
@@ -69,6 +79,7 @@
       { key: "reason", label: "Motivo" },
       { key: "status", label: "Estado", kind: "status" },
       { key: "validUntil", label: "Expira", kind: "date" },
-      { key: "createdByAdminId", label: "Creador" }
-    ]} actions={[{ label: "Revocar", onClick: (row) => onRevoke(row as HotQrRow), tone: "ghost" }]} />
+    { key: "createdByAdminId", label: "Creador" }
+  ]} actions={[{ label: "Revocar", onClick: (row) => onRevoke(row as HotQrRow), tone: "ghost" }]} />
+  <PaginationControls {page} {pageSize} {total} onChange={onPageChange} />
 </section>

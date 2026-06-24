@@ -79,15 +79,22 @@
   let personTypeRows = $state<Array<PersonTypeRowPayload & Row>>([]);
   let careerRows = $state<Array<CareerRowPayload & Row>>([]);
   let credentialRows = $state<Array<PersonCredentialRowPayload & Row>>([]);
+  let credentialTotal = $state(0);
   let temporaryQrRows = $state<Array<TemporaryDailyQrRowPayload & Row>>([]);
+  let temporaryQrTotal = $state(0);
   let hotQrRows = $state<Array<HotQrRowPayload & Row>>([]);
+  let hotQrTotal = $state(0);
   let vehicleRows = $state<Array<VehicleRowPayload & Row>>([]);
+  let vehicleTotal = $state(0);
   let permitRows = $state<Array<VehiclePermitRowPayload & Row>>([]);
+  let permitTotal = $state(0);
   let adminRows = $state<Array<AdminRowPayload & Row>>([]);
   let adminSessionRows = $state<Array<AdminSessionRowPayload & Row>>([]);
   let adminAuditRows = $state<Array<AuditLogRowPayload & Row>>([]);
   let subjectRows = $state<Row[]>([]);
+  let subjectTotal = $state(0);
   let scheduleRows = $state<Row[]>([]);
+  let scheduleTotal = $state(0);
   let configForm = $state<OperationalConfigPayload>({
     retryEnabled: true,
     retryDelayMs: 1200,
@@ -115,8 +122,24 @@
     subject: "",
     careerId: "",
     hotQrStatus: "",
-    vehicleStatus: ""
+    vehicleStatus: "",
+    permitStatus: "",
+    permitPersonId: "",
+    permitVehicleId: ""
   });
+
+  let temporaryPagination = $state({ page: 1, pageSize: 25 });
+  let accessPagination = $state({ page: 1, pageSize: 25 });
+  let attendancePagination = $state({ page: 1, pageSize: 25 });
+  let vehiclePagination = $state({ page: 1, pageSize: 25 });
+  let permitPagination = $state({ page: 1, pageSize: 25 });
+  let hotQrPagination = $state({ page: 1, pageSize: 25 });
+  let credentialPagination = $state({ page: 1, pageSize: 10 });
+  let temporaryFilters = $state({ q: "", status: "", operationalDate: "" });
+  let subjectPagination = $state({ page: 1, pageSize: 10 });
+  let subjectFilters = $state({ q: "", active: "" });
+  let schedulePagination = $state({ page: 1, pageSize: 25 });
+  let scheduleFilters = $state({ q: "", subjectId: "", weekday: "", active: "" });
 
   let personForm = $state({
     matricula: "",
@@ -141,9 +164,15 @@
     maxUses: 10,
     validUntil: ""
   });
+  let temporaryQrPersonLabel = $state("");
   let hotQrForm = $state({ visitorName: "", reason: "", minutes: 60 });
   let vehicleForm = $state({ ownerPersonId: "", plate: "", make: "", model: "", color: "" });
   let permitForm = $state({ personId: "", vehicleId: "", validUntil: "" });
+  let vehicleOwnerLabel = $state("");
+  let permitPersonLabel = $state("");
+  let permitVehicleLabel = $state("");
+  let permitFilterPersonLabel = $state("");
+  let permitFilterVehicleLabel = $state("");
   let adminForm = $state({ username: "", displayName: "", email: "", role: "admin", temporaryPassword: "" });
   let adminEditForm = $state({
     id: "",
@@ -157,6 +186,7 @@
   let auditFilters = $state({ q: "", action: "", entityType: "", from: "", to: "" });
   let subjectForm = $state({ clave: "", nombre: "" });
   let scheduleForm = $state({ personId: "", subjectId: "", weekday: 1, horaInicio: "08:00", horaFin: "09:00", aula: "", validFrom: new Date().toISOString().slice(0, 10), validUntil: "" });
+  let schedulePersonLabel = $state("");
 
   const tabs = [
     { id: "generator", label: "Generar QR" },
@@ -258,8 +288,8 @@
     const result = await apiRequest<PaginatedRows<Row>>(`/api/v1/access/today${toQuery({
       q: filters.q,
       date: filters.date,
-      page: filters.page,
-      pageSize: filters.pageSize,
+      page: accessPagination.page,
+      pageSize: accessPagination.pageSize,
       personType: filters.personType,
       accessMode: filters.accessMode,
       status: filters.status
@@ -272,8 +302,8 @@
     const result = await apiRequest<PaginatedRows<AttendanceRowPayload & Row>>(`/api/v1/attendance/today${toQuery({
       q: filters.q,
       date: filters.date,
-      page: filters.page,
-      pageSize: filters.pageSize,
+      page: attendancePagination.page,
+      pageSize: attendancePagination.pageSize,
       subject: filters.subject,
       status: filters.status,
       careerId: filters.careerId
@@ -287,6 +317,16 @@
     peopleRows = result.rows;
   }
 
+  async function searchPeopleOptions(query: string) {
+    const result = await apiRequest<PaginatedRows<PersonRowPayload & Row>>(`/api/v1/people${toQuery({ q: query, page: 1, pageSize: 10 })}`);
+    return result.rows;
+  }
+
+  async function searchVehicleOptions(query: string) {
+    const result = await apiRequest<PaginatedRows<VehicleRowPayload & Row>>(`/api/v1/vehicles${toQuery({ q: query, page: 1, pageSize: 10 })}`);
+    return result.rows;
+  }
+
   async function refreshPersonTypes() {
     personTypeRows = (await apiRequest<{ rows: Array<PersonTypeRowPayload & Row> }>("/api/v1/person-types")).rows;
   }
@@ -298,26 +338,63 @@
   async function refreshCredentials(personId = editPerson?.id ? String(editPerson.id) : "") {
     if (!personId) {
       credentialRows = [];
+      credentialTotal = 0;
       return;
     }
-    credentialRows = (await apiRequest<{ rows: Array<PersonCredentialRowPayload & Row> }>(`/api/v1/credentials/person/${personId}`)).rows;
+    const result = await apiRequest<PaginatedRows<PersonCredentialRowPayload & Row>>(`/api/v1/credentials/person/${personId}${toQuery({
+      page: credentialPagination.page,
+      pageSize: credentialPagination.pageSize
+    })}`);
+    credentialRows = result.rows;
+    credentialTotal = result.total;
   }
 
   async function refreshTemporaryQr() {
-    temporaryQrRows = (await apiRequest<{ rows: Array<TemporaryDailyQrRowPayload & Row> }>("/api/v1/credentials/temporary-daily")).rows;
+    const result = await apiRequest<PaginatedRows<TemporaryDailyQrRowPayload & Row>>(`/api/v1/credentials/temporary-daily${toQuery({
+      q: temporaryFilters.q,
+      status: temporaryFilters.status,
+      operationalDate: temporaryFilters.operationalDate,
+      page: temporaryPagination.page,
+      pageSize: temporaryPagination.pageSize
+    })}`);
+    temporaryQrRows = result.rows;
+    temporaryQrTotal = result.total;
   }
 
   async function refreshHotQr() {
-    const result = await apiRequest<PaginatedRows<HotQrRowPayload & Row>>(`/api/v1/hot-qr/today${toQuery({ q: filters.q, status: filters.hotQrStatus, date: filters.date, page: filters.page, pageSize: filters.pageSize })}`);
+    const result = await apiRequest<PaginatedRows<HotQrRowPayload & Row>>(`/api/v1/hot-qr/today${toQuery({
+      q: filters.q,
+      status: filters.hotQrStatus,
+      date: filters.date,
+      page: hotQrPagination.page,
+      pageSize: hotQrPagination.pageSize
+    })}`);
     hotQrRows = result.rows;
+    hotQrTotal = result.total;
   }
 
   async function refreshVehicles() {
-    vehicleRows = (await apiRequest<PaginatedRows<VehicleRowPayload & Row>>(`/api/v1/vehicles${toQuery({ q: filters.q, status: filters.vehicleStatus, page: filters.page, pageSize: filters.pageSize })}`)).rows;
+    const result = await apiRequest<PaginatedRows<VehicleRowPayload & Row>>(`/api/v1/vehicles${toQuery({
+      q: filters.q,
+      status: filters.vehicleStatus,
+      page: vehiclePagination.page,
+      pageSize: vehiclePagination.pageSize
+    })}`);
+    vehicleRows = result.rows;
+    vehicleTotal = result.total;
   }
 
   async function refreshPermits() {
-    permitRows = (await apiRequest<PaginatedRows<VehiclePermitRowPayload & Row>>(`/api/v1/vehicles/permits${toQuery({ q: filters.q, page: filters.page, pageSize: filters.pageSize })}`)).rows;
+    const result = await apiRequest<PaginatedRows<VehiclePermitRowPayload & Row>>(`/api/v1/vehicles/permits${toQuery({
+      q: filters.q,
+      status: filters.permitStatus,
+      personId: filters.permitPersonId,
+      vehicleId: filters.permitVehicleId,
+      page: permitPagination.page,
+      pageSize: permitPagination.pageSize
+    })}`);
+    permitRows = result.rows;
+    permitTotal = result.total;
   }
 
   async function refreshAdmins() {
@@ -340,11 +417,27 @@
   }
 
   async function refreshSubjects() {
-    subjectRows = (await apiRequest<{ rows: Row[] }>("/api/v1/subjects")).rows;
+    const result = await apiRequest<PaginatedRows<Row>>(`/api/v1/subjects${toQuery({
+      q: subjectFilters.q,
+      active: subjectFilters.active,
+      page: subjectPagination.page,
+      pageSize: subjectPagination.pageSize
+    })}`);
+    subjectRows = result.rows;
+    subjectTotal = result.total;
   }
 
   async function refreshSchedules() {
-    scheduleRows = (await apiRequest<{ rows: Row[] }>("/api/v1/schedules")).rows;
+    const result = await apiRequest<PaginatedRows<Row>>(`/api/v1/schedules${toQuery({
+      q: scheduleFilters.q,
+      subjectId: scheduleFilters.subjectId,
+      weekday: scheduleFilters.weekday,
+      active: scheduleFilters.active,
+      page: schedulePagination.page,
+      pageSize: schedulePagination.pageSize
+    })}`);
+    scheduleRows = result.rows;
+    scheduleTotal = result.total;
   }
 
   async function refreshAll() {
@@ -430,7 +523,125 @@
     temporaryQrForm.personId = String(editPerson.id ?? "");
     permitForm.personId = String(editPerson.id ?? permitForm.personId);
     vehicleForm.ownerPersonId = String(editPerson.id ?? vehicleForm.ownerPersonId);
+    const label = `${editPerson.matricula ?? ""} - ${editPerson.nombres ?? ""} ${editPerson.apellidos ?? ""}`.trim();
+    temporaryQrPersonLabel = label;
+    permitPersonLabel = label;
+    vehicleOwnerLabel = label;
+    credentialPagination.page = 1;
     await refreshCredentials(String(editPerson.id));
+  }
+
+  function selectTemporaryPerson(row: Row | null) {
+    temporaryQrForm.personId = row?.id ? String(row.id) : "";
+    temporaryQrPersonLabel = row ? `${row.matricula ?? ""} - ${row.nombres ?? ""} ${row.apellidos ?? ""}`.trim() : "";
+    temporaryPagination.page = 1;
+  }
+
+  function selectVehicleOwner(row: Row | null) {
+    vehicleForm.ownerPersonId = row?.id ? String(row.id) : "";
+    vehicleOwnerLabel = row ? `${row.matricula ?? ""} - ${row.nombres ?? ""} ${row.apellidos ?? ""}`.trim() : "";
+  }
+
+  function selectPermitPerson(row: Row | null) {
+    permitForm.personId = row?.id ? String(row.id) : "";
+    permitPersonLabel = row ? `${row.matricula ?? ""} - ${row.nombres ?? ""} ${row.apellidos ?? ""}`.trim() : "";
+  }
+
+  function selectPermitVehicle(row: Row | null) {
+    permitForm.vehicleId = row?.id ? String(row.id) : "";
+    permitVehicleLabel = row ? `${row.plate ?? ""}${row.make ? ` - ${row.make}` : ""}${row.model ? ` ${row.model}` : ""}`.trim() : "";
+  }
+
+  function selectPermitFilterPerson(row: Row | null) {
+    filters.permitPersonId = row?.id ? String(row.id) : "";
+    permitFilterPersonLabel = row ? `${row.matricula ?? ""} - ${row.nombres ?? ""} ${row.apellidos ?? ""}`.trim() : "";
+    permitPagination.page = 1;
+  }
+
+  function selectPermitFilterVehicle(row: Row | null) {
+    filters.permitVehicleId = row?.id ? String(row.id) : "";
+    permitFilterVehicleLabel = row ? `${row.plate ?? ""}${row.make ? ` - ${row.make}` : ""}${row.model ? ` ${row.model}` : ""}`.trim() : "";
+    permitPagination.page = 1;
+  }
+
+  function selectSchedulePerson(row: Row | null) {
+    scheduleForm.personId = row?.id ? String(row.id) : "";
+    schedulePersonLabel = row ? `${row.matricula ?? ""} - ${row.nombres ?? ""} ${row.apellidos ?? ""}`.trim() : "";
+  }
+
+  async function changeAccessPage(next: { page: number; pageSize: number }) {
+    accessPagination = next;
+    await refreshAccess();
+  }
+
+  async function filterAccess() {
+    accessPagination.page = 1;
+    await refreshAccess();
+  }
+
+  async function changeAttendancePage(next: { page: number; pageSize: number }) {
+    attendancePagination = next;
+    await refreshAttendance();
+  }
+
+  async function filterAttendance() {
+    attendancePagination.page = 1;
+    await refreshAttendance();
+  }
+
+  async function changeSubjectPage(next: { page: number; pageSize: number }) {
+    subjectPagination = next;
+    await refreshSubjects();
+  }
+
+  async function filterSubjects() {
+    subjectPagination.page = 1;
+    await refreshSubjects();
+  }
+
+  async function changeSchedulePage(next: { page: number; pageSize: number }) {
+    schedulePagination = next;
+    await refreshSchedules();
+  }
+
+  async function filterSchedules() {
+    schedulePagination.page = 1;
+    await refreshSchedules();
+  }
+
+  async function changeTemporaryPage(next: { page: number; pageSize: number }) {
+    temporaryPagination = next;
+    await refreshTemporaryQr();
+  }
+
+  async function filterTemporaryQr() {
+    temporaryPagination.page = 1;
+    await refreshTemporaryQr();
+  }
+
+  async function changeVehiclePage(next: { page: number; pageSize: number }) {
+    vehiclePagination = next;
+    await refreshVehicles();
+  }
+
+  async function changePermitPage(next: { page: number; pageSize: number }) {
+    permitPagination = next;
+    await refreshPermits();
+  }
+
+  async function changeHotQrPage(next: { page: number; pageSize: number }) {
+    hotQrPagination = next;
+    await refreshHotQr();
+  }
+
+  async function filterHotQr() {
+    hotQrPagination.page = 1;
+    await refreshHotQr();
+  }
+
+  async function changeCredentialPage(next: { page: number; pageSize: number }) {
+    credentialPagination = next;
+    await refreshCredentials();
   }
 
   async function saveEditPerson() {
@@ -548,6 +759,7 @@
   async function createVehicle() {
     await apiRequest("/api/v1/vehicles", { method: "POST", body: JSON.stringify(vehicleForm) });
     vehicleForm = { ownerPersonId: "", plate: "", make: "", model: "", color: "" };
+    vehicleOwnerLabel = "";
     await refreshVehicles();
   }
 
@@ -567,6 +779,9 @@
       })
     });
     await showDynamicPermitQr(permit, result.token);
+    permitPersonLabel = "";
+    permitVehicleLabel = "";
+    permitForm = { personId: "", vehicleId: "", validUntil: "" };
     await Promise.allSettled([refreshPermits(), refreshVehicles()]);
   }
 
@@ -696,6 +911,8 @@
         validUntil: scheduleForm.validUntil || undefined
       })
     });
+    scheduleForm = { personId: "", subjectId: "", weekday: 1, horaInicio: "08:00", horaFin: "09:00", aula: "", validFrom: new Date().toISOString().slice(0, 10), validUntil: "" };
+    schedulePersonLabel = "";
     await refreshSchedules();
   }
 
@@ -763,7 +980,16 @@
         {generatedToken}
         {generatedTitle}
         {temporaryQrForm}
+        {temporaryQrPersonLabel}
         temporaryRows={temporaryQrRows}
+        {temporaryFilters}
+        temporaryTotal={temporaryQrTotal}
+        temporaryPage={temporaryPagination.page}
+        temporaryPageSize={temporaryPagination.pageSize}
+        onTemporaryPageChange={changeTemporaryPage}
+        onFilterTemporaryQr={filterTemporaryQr}
+        searchPeople={searchPeopleOptions}
+        onSelectTemporaryPerson={selectTemporaryPerson}
         onSubmit={createPersonAndQr}
         onCreateTemporaryQr={createTemporaryQr}
         onShowTemporaryQr={showTemporaryQr}
@@ -778,6 +1004,9 @@
         {personTypeRows}
         {careerRows}
         credentialRows={credentialRows}
+        credentialTotal={credentialTotal}
+        credentialPage={credentialPagination.page}
+        credentialPageSize={credentialPagination.pageSize}
         {generatedToken}
         {generatedTitle}
         onSearch={searchPerson}
@@ -786,12 +1015,22 @@
         onEnable={enableEditPerson}
         onRotateQr={rotatePersonQr}
         onRevokeQr={revokePersonQr}
+        onCredentialPageChange={changeCredentialPage}
         onPhoto={uploadPersonPhoto}
       />
     {/if}
 
     {#if activeTab === "access"}
-      <AccessTab rows={accessRows} total={accessTotal} {filters} {personTypeRows} onFilter={refreshAccess} />
+      <AccessTab
+        rows={accessRows}
+        total={accessTotal}
+        {filters}
+        page={accessPagination.page}
+        pageSize={accessPagination.pageSize}
+        {personTypeRows}
+        onFilter={filterAccess}
+        onPageChange={changeAccessPage}
+      />
     {/if}
 
     {#if activeTab === "attendance"}
@@ -799,12 +1038,30 @@
         rows={attendanceRows}
         total={attendanceTotal}
         {filters}
+        page={attendancePagination.page}
+        pageSize={attendancePagination.pageSize}
         {careerRows}
         {subjectRows}
+        {subjectTotal}
+        subjectPage={subjectPagination.page}
+        subjectPageSize={subjectPagination.pageSize}
+        {subjectFilters}
         {scheduleRows}
+        {scheduleTotal}
+        schedulePage={schedulePagination.page}
+        schedulePageSize={schedulePagination.pageSize}
+        {scheduleFilters}
         {subjectForm}
         {scheduleForm}
-        onFilter={refreshAttendance}
+        {schedulePersonLabel}
+        searchPeople={searchPeopleOptions}
+        onSelectSchedulePerson={selectSchedulePerson}
+        onFilter={filterAttendance}
+        onPageChange={changeAttendancePage}
+        onFilterSubjects={filterSubjects}
+        onSubjectPageChange={changeSubjectPage}
+        onFilterSchedules={filterSchedules}
+        onSchedulePageChange={changeSchedulePage}
         onCreateSubject={createSubject}
         onCreateSchedule={createSchedule}
         onAdjustAttendance={adjustAttendance}
@@ -812,7 +1069,20 @@
     {/if}
 
     {#if activeTab === "hotqr"}
-      <HotQrTab rows={hotQrRows} form={hotQrForm} {generatedToken} {generatedTitle} {filters} onCreate={createHotQr} onFilter={refreshHotQr} onRevoke={revokeHotQr} />
+      <HotQrTab
+        rows={hotQrRows}
+        form={hotQrForm}
+        {generatedToken}
+        {generatedTitle}
+        {filters}
+        total={hotQrTotal}
+        page={hotQrPagination.page}
+        pageSize={hotQrPagination.pageSize}
+        onCreate={createHotQr}
+        onFilter={filterHotQr}
+        onPageChange={changeHotQrPage}
+        onRevoke={revokeHotQr}
+      />
     {/if}
 
     {#if activeTab === "vehicles"}
@@ -821,16 +1091,40 @@
         permitRows={permitRows}
         {vehicleForm}
         {permitForm}
-        {peopleRows}
+        {vehicleOwnerLabel}
+        {permitPersonLabel}
+        {permitVehicleLabel}
+        {permitFilterPersonLabel}
+        {permitFilterVehicleLabel}
         {generatedToken}
         {generatedTitle}
         {filters}
+        vehicleTotal={vehicleTotal}
+        vehiclePage={vehiclePagination.page}
+        vehiclePageSize={vehiclePagination.pageSize}
+        permitTotal={permitTotal}
+        permitPage={permitPagination.page}
+        permitPageSize={permitPagination.pageSize}
+        searchPeople={searchPeopleOptions}
+        searchVehicles={searchVehicleOptions}
+        onSelectVehicleOwner={selectVehicleOwner}
+        onSelectPermitPerson={selectPermitPerson}
+        onSelectPermitVehicle={selectPermitVehicle}
+        onSelectPermitFilterPerson={selectPermitFilterPerson}
+        onSelectPermitFilterVehicle={selectPermitFilterVehicle}
+        onVehiclePageChange={changeVehiclePage}
+        onPermitPageChange={changePermitPage}
         onCreateVehicle={createVehicle}
         onCreatePermitQr={createPermitQr}
         onCreateDynamicPermitQr={showDynamicPermitQr}
         onRevokePermit={revokePermit}
         onDisableVehicle={disableVehicle}
-        onFilter={refreshVehicles}
+        onFilter={() => {
+          vehiclePagination.page = 1;
+          permitPagination.page = 1;
+          refreshVehicles();
+          refreshPermits();
+        }}
       />
     {/if}
 

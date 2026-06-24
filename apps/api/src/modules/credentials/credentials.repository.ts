@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gt, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, ilike, or, sql, type SQL } from "drizzle-orm";
 import { db } from "../../db/client";
 import { carreras, personas, qrTokens, registrosAcceso, temporaryDailyQrTokens } from "../../db/schema";
 import type { Pagination } from "../../shared/pagination";
@@ -50,7 +50,44 @@ export async function createTemporaryDailyQr(input: typeof temporaryDailyQrToken
   return row!;
 }
 
-export async function listTemporaryDailyQr(pagination: Pagination) {
+export type TemporaryDailyQrFilters = {
+  q?: string;
+  personId?: string;
+  status?: "active" | "revoked" | "expired" | "rotated";
+  operationalDate?: string;
+};
+
+function buildTemporaryDailyQrWhere(filters: TemporaryDailyQrFilters) {
+  const where: SQL[] = [];
+
+  if (filters.q) {
+    const q = `%${filters.q}%`;
+    where.push(or(
+      ilike(personas.matricula, q),
+      ilike(personas.nombres, q),
+      ilike(personas.apellidos, q),
+      ilike(temporaryDailyQrTokens.reasonCode, q),
+      ilike(temporaryDailyQrTokens.missingCredentialType, q)
+    )!);
+  }
+
+  if (filters.personId) {
+    where.push(eq(temporaryDailyQrTokens.personId, filters.personId));
+  }
+
+  if (filters.status) {
+    where.push(eq(temporaryDailyQrTokens.status, filters.status));
+  }
+
+  if (filters.operationalDate) {
+    where.push(eq(temporaryDailyQrTokens.operationalDate, filters.operationalDate));
+  }
+
+  return where.length ? and(...where) : undefined;
+}
+
+export async function listTemporaryDailyQr(filters: TemporaryDailyQrFilters, pagination: Pagination) {
+  const where = buildTemporaryDailyQrWhere(filters);
   const [rows, totalRows] = await Promise.all([
     db.select({
       id: temporaryDailyQrTokens.id,
@@ -64,13 +101,20 @@ export async function listTemporaryDailyQr(pagination: Pagination) {
       status: temporaryDailyQrTokens.status,
       validUntil: temporaryDailyQrTokens.validUntil,
       revokedAt: temporaryDailyQrTokens.revokedAt,
-      createdAt: temporaryDailyQrTokens.createdAt
+      createdAt: temporaryDailyQrTokens.createdAt,
+      matricula: personas.matricula,
+      personName: sql<string>`trim(coalesce(${personas.nombres}, '') || ' ' || coalesce(${personas.apellidos}, ''))`
     })
       .from(temporaryDailyQrTokens)
+      .innerJoin(personas, eq(temporaryDailyQrTokens.personId, personas.id))
+      .where(where)
       .orderBy(desc(temporaryDailyQrTokens.createdAt))
       .limit(pagination.pageSize)
       .offset(pagination.offset),
-    db.select({ total: count() }).from(temporaryDailyQrTokens)
+    db.select({ total: count() })
+      .from(temporaryDailyQrTokens)
+      .innerJoin(personas, eq(temporaryDailyQrTokens.personId, personas.id))
+      .where(where)
   ]);
 
   return { rows, total: totalRows[0]?.total ?? 0 };

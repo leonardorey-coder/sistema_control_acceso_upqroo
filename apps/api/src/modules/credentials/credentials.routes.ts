@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getActorMetadata, getAdminSession } from "../../http/middleware/session";
 import { recordAudit } from "../../shared/audit";
 import { HttpError } from "../../shared/http-error";
+import { withoutUndefined } from "../../shared/object";
 import { paginated, parsePagination } from "../../shared/pagination";
 import { stripSecretFields } from "../../shared/sanitize";
 import { issueOpaqueToken } from "../../shared/security";
@@ -34,6 +35,13 @@ const temporaryDailyQrSchema = z.object({
   maxUses: z.number().int().min(1).max(10).default(10),
   validUntil: z.coerce.date()
 }).strict();
+
+const temporaryDailyQrQuerySchema = z.object({
+  q: z.string().trim().min(1).optional(),
+  personId: z.string().uuid().optional(),
+  status: z.enum(["active", "revoked", "expired", "rotated"]).optional(),
+  operationalDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
+});
 
 export const credentialsRoutes = new Hono();
 
@@ -108,7 +116,8 @@ credentialsRoutes.post("/person/:personId/revoke", async (c) => {
 
 credentialsRoutes.get("/temporary-daily", async (c) => {
   const pagination = parsePagination(c.req.query());
-  const result = await listTemporaryDailyQr(pagination);
+  const query = withoutUndefined(temporaryDailyQrQuerySchema.parse(c.req.query()));
+  const result = await listTemporaryDailyQr(query, pagination);
   return c.json({ data: paginated(result.rows, result.total, pagination) });
 });
 

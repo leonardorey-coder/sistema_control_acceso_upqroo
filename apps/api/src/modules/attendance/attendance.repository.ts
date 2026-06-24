@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gte, ilike, lte, or, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, ilike, lte, or, sql, type SQL } from "drizzle-orm";
 import { db } from "../../db/client";
 import { asistenciasPotenciales, carreras, personas, schedules, subjects } from "../../db/schema";
 import type { Pagination } from "../../shared/pagination";
@@ -9,6 +9,19 @@ export type AttendanceFilters = {
   status?: "in_progress" | "confirmed" | "partial" | "unverified" | "assumed";
   careerId?: string;
   date: string;
+};
+
+export type SubjectFilters = {
+  q?: string;
+  active?: boolean;
+};
+
+export type ScheduleFilters = {
+  q?: string;
+  personId?: string;
+  subjectId?: string;
+  weekday?: number;
+  active?: boolean;
 };
 
 function buildAttendanceWhere(filters: AttendanceFilters) {
@@ -137,8 +150,39 @@ export async function adjustAttendance(id: string, input: {
   return row;
 }
 
-export function listSubjects() {
-  return db.select().from(subjects).orderBy(asc(subjects.nombre));
+function buildSubjectWhere(filters: SubjectFilters) {
+  const where: SQL[] = [];
+
+  if (filters.q) {
+    const q = `%${filters.q}%`;
+    where.push(or(ilike(subjects.clave, q), ilike(subjects.nombre, q))!);
+  }
+
+  if (typeof filters.active === "boolean") {
+    where.push(eq(subjects.active, filters.active));
+  }
+
+  return where.length ? and(...where) : undefined;
+}
+
+export async function listSubjects(filters: SubjectFilters, pagination: Pagination) {
+  const where = buildSubjectWhere(filters);
+  const [rows, totalRows] = await Promise.all([
+    db.select()
+      .from(subjects)
+      .where(where)
+      .orderBy(asc(subjects.nombre))
+      .limit(pagination.pageSize)
+      .offset(pagination.offset),
+    db.select({ total: count() })
+      .from(subjects)
+      .where(where)
+  ]);
+
+  return {
+    rows,
+    total: totalRows[0]?.total ?? 0
+  };
 }
 
 export async function createSubject(input: typeof subjects.$inferInsert) {
@@ -151,8 +195,79 @@ export async function updateSubject(id: string, input: Partial<typeof subjects.$
   return row;
 }
 
-export function listSchedules() {
-  return db.select().from(schedules).orderBy(asc(schedules.weekday), asc(schedules.horaInicio)).limit(200);
+function buildScheduleWhere(filters: ScheduleFilters) {
+  const where: SQL[] = [];
+
+  if (filters.q) {
+    const q = `%${filters.q}%`;
+    where.push(or(
+      ilike(personas.matricula, q),
+      ilike(personas.nombres, q),
+      ilike(personas.apellidos, q),
+      ilike(subjects.clave, q),
+      ilike(subjects.nombre, q),
+      ilike(schedules.aula, q)
+    )!);
+  }
+
+  if (filters.personId) {
+    where.push(eq(schedules.personId, filters.personId));
+  }
+
+  if (filters.subjectId) {
+    where.push(eq(schedules.subjectId, filters.subjectId));
+  }
+
+  if (typeof filters.weekday === "number") {
+    where.push(eq(schedules.weekday, filters.weekday));
+  }
+
+  if (typeof filters.active === "boolean") {
+    where.push(eq(schedules.active, filters.active));
+  }
+
+  return where.length ? and(...where) : undefined;
+}
+
+export async function listSchedules(filters: ScheduleFilters, pagination: Pagination) {
+  const where = buildScheduleWhere(filters);
+  const [rows, totalRows] = await Promise.all([
+    db.select({
+    id: schedules.id,
+    personId: schedules.personId,
+    subjectId: schedules.subjectId,
+    weekday: schedules.weekday,
+    horaInicio: schedules.horaInicio,
+    horaFin: schedules.horaFin,
+    aula: schedules.aula,
+    validFrom: schedules.validFrom,
+    validUntil: schedules.validUntil,
+    active: schedules.active,
+    createdAt: schedules.createdAt,
+    updatedAt: schedules.updatedAt,
+    matricula: personas.matricula,
+    personName: sql<string>`trim(coalesce(${personas.nombres}, '') || ' ' || coalesce(${personas.apellidos}, ''))`,
+    subjectClave: subjects.clave,
+    subjectName: subjects.nombre
+  })
+    .from(schedules)
+    .innerJoin(personas, eq(schedules.personId, personas.id))
+    .innerJoin(subjects, eq(schedules.subjectId, subjects.id))
+    .where(where)
+    .orderBy(asc(schedules.weekday), asc(schedules.horaInicio), asc(personas.apellidos), asc(personas.nombres))
+    .limit(pagination.pageSize)
+    .offset(pagination.offset),
+    db.select({ total: count() })
+      .from(schedules)
+      .innerJoin(personas, eq(schedules.personId, personas.id))
+      .innerJoin(subjects, eq(schedules.subjectId, subjects.id))
+      .where(where)
+  ]);
+
+  return {
+    rows,
+    total: totalRows[0]?.total ?? 0
+  };
 }
 
 export async function createSchedule(input: typeof schedules.$inferInsert) {

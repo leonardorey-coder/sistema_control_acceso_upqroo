@@ -32,6 +32,13 @@ const subjectSchema = z.object({
   active: z.boolean().default(true)
 });
 
+const booleanQuerySchema = z.enum(["true", "false"]).transform((value) => value === "true");
+
+const subjectQuerySchema = z.object({
+  q: z.string().trim().min(1).optional(),
+  active: booleanQuerySchema.optional()
+});
+
 const scheduleSchema = z.object({
   personId: z.string().uuid(),
   subjectId: z.string().uuid(),
@@ -42,6 +49,14 @@ const scheduleSchema = z.object({
   validFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   validUntil: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   active: z.boolean().default(true)
+});
+
+const scheduleQuerySchema = z.object({
+  q: z.string().trim().min(1).optional(),
+  personId: z.string().uuid().optional(),
+  subjectId: z.string().uuid().optional(),
+  weekday: z.coerce.number().int().min(0).max(6).optional(),
+  active: booleanQuerySchema.optional()
 });
 
 const attendanceAdjustSchema = z.object({
@@ -106,8 +121,15 @@ attendanceRoutes.patch("/:id/adjust", async (c) => {
 });
 
 subjectsRoutes.get("/", async (c) => {
-  const rows = await listSubjects();
-  return c.json({ data: { rows } });
+  const pagination = parsePagination(c.req.query());
+  const query = withoutUndefined(subjectQuerySchema.parse(c.req.query()));
+  const result = await listSubjects(query, pagination);
+
+  return c.json({
+    data: paginated(result.rows, result.total, pagination, {
+      filtered: Boolean(query.q || typeof query.active === "boolean")
+    })
+  });
 });
 
 subjectsRoutes.post("/", async (c) => {
@@ -137,8 +159,15 @@ subjectsRoutes.patch("/:id", async (c) => {
 });
 
 schedulesRoutes.get("/", async (c) => {
-  const rows = await listSchedules();
-  return c.json({ data: { rows } });
+  const pagination = parsePagination(c.req.query());
+  const query = withoutUndefined(scheduleQuerySchema.parse(c.req.query()));
+  const result = await listSchedules(query, pagination);
+
+  return c.json({
+    data: paginated(result.rows, result.total, pagination, {
+      filtered: Boolean(query.q || query.personId || query.subjectId || typeof query.weekday === "number" || typeof query.active === "boolean")
+    })
+  });
 });
 
 schedulesRoutes.post("/", async (c) => {

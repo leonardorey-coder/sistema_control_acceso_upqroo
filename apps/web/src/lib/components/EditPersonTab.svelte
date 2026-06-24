@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { CareerRowPayload, PersonCredentialRowPayload, PersonRowPayload, PersonTypeRowPayload } from "@control-acceso/shared";
   import DataTable from "./DataTable.svelte";
+  import PaginationControls from "./PaginationControls.svelte";
   import QrPreview from "./QrPreview.svelte";
 
   type Row = Record<string, unknown>;
@@ -15,6 +16,9 @@
     personTypeRows,
     careerRows,
     credentialRows,
+    credentialTotal,
+    credentialPage,
+    credentialPageSize,
     generatedToken,
     generatedTitle,
     onSearch,
@@ -23,6 +27,7 @@
     onEnable,
     onRotateQr,
     onRevokeQr,
+    onCredentialPageChange,
     onPhoto
   }: {
     editMatricula: string;
@@ -30,6 +35,9 @@
     personTypeRows: PersonTypeRow[];
     careerRows: CareerRow[];
     credentialRows: CredentialRow[];
+    credentialTotal: number;
+    credentialPage: number;
+    credentialPageSize: number;
     generatedToken: string;
     generatedTitle: string;
     onSearch: () => void;
@@ -38,6 +46,7 @@
     onEnable: () => void;
     onRotateQr: () => void;
     onRevokeQr: () => void;
+    onCredentialPageChange: (next: { page: number; pageSize: number }) => void;
     onPhoto: (file: File) => void;
   } = $props();
 
@@ -107,6 +116,12 @@
           { key: "expiresAt", label: "Expira", kind: "date" },
           { key: "lastUsedAt", label: "Ultimo uso", kind: "date" }
         ]}
+      />
+      <PaginationControls
+        page={credentialPage}
+        pageSize={credentialPageSize}
+        total={credentialTotal}
+        onChange={onCredentialPageChange}
       />
       <div class="button-row">
         <button onclick={onRotateQr}>Rotar QR</button>

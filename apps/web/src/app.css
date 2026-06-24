@@ -378,6 +378,67 @@ form.panel,
   margin-bottom: 14px;
 }
 
+.entity-search {
+  position: relative;
+  display: grid;
+  gap: 6px;
+}
+
+.entity-search label {
+  color: var(--medium-gray);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.entity-search-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.entity-results {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  left: 0;
+  z-index: 20;
+  display: grid;
+  max-height: 260px;
+  overflow: auto;
+  border: 1px solid var(--border-gray);
+  border-radius: 6px;
+  background: var(--white);
+  box-shadow: 0 12px 28px rgb(0 0 0 / 0.12);
+  padding: 6px;
+}
+
+.entity-results button {
+  justify-content: flex-start;
+  border-radius: 4px;
+  background: var(--white);
+  color: var(--dark-gray);
+  text-align: left;
+}
+
+.entity-results button:hover {
+  background: #fff8f0;
+  color: var(--orange);
+}
+
+.pagination-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.pagination-controls select {
+  width: auto;
+  min-width: 84px;
+}
+
 .tabla-header {
   display: flex;
   align-items: center;
