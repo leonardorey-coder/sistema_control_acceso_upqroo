@@ -3,7 +3,18 @@ import { beforeAll, describe, expect, it } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { app } from "../src/app";
 import { db } from "../src/db/client";
-import { administradores, personas, registrosAcceso, temporaryDailyQrTokens, userAccounts } from "../src/db/schema";
+import {
+  accessScanEvents,
+  administradores,
+  operationalConfig,
+  personas,
+  qrJtiConsumptions,
+  registrosAcceso,
+  temporaryDailyQrTokens,
+  userAccounts
+} from "../src/db/schema";
+import { currentOperationalDate } from "../src/shared/date-range";
+import { signDynamicQr } from "../src/modules/qr-signing/qr-signing.service";
 import { runWorkerCycle } from "../src/worker";
 
 async function canUsePostgres() {
@@ -94,6 +105,103 @@ async function ensurePortalUser() {
   }).returning();
 
   return { account: account!, person: person!, email, password };
+}
+
+async function createActivePerson(prefix: string) {
+  const suffix = randomUUID().slice(0, 8);
+  const [person] = await db.insert(personas).values({
+    matricula: `${prefix}-${suffix}`,
+    nombres: prefix,
+    apellidos: "Firmado",
+    tipoPersona: "docente",
+    estado: "activo"
+  }).returning();
+
+  return person!;
+}
+
+async function enableSignedQr() {
+  await db.insert(operationalConfig).values({
+    key: "signed_qr",
+    value: {
+      enabled: true,
+      ttlSeconds: 30,
+      clockToleranceSeconds: 5,
+      compatibilityOpaqueTokens: true,
+      requireDeviceBinding: false
+    },
+    description: "Integration signed QR config"
+  }).onConflictDoUpdate({
+    target: operationalConfig.key,
+    set: {
+      value: {
+        enabled: true,
+        ttlSeconds: 30,
+        clockToleranceSeconds: 5,
+        compatibilityOpaqueTokens: true,
+        requireDeviceBinding: false
+      },
+      description: "Integration signed QR config",
+      updatedAt: new Date()
+    }
+  });
+}
+
+async function loginPortalUser() {
+  const portalUser = await ensurePortalUser();
+  const loginResponse = await app.request("/api/v1/portal/auth/login", {
+    method: "POST",
+    headers: jsonHeaders(),
+    body: JSON.stringify({
+      identity: portalUser.email,
+      password: portalUser.password
+    })
+  });
+
+  expect(loginResponse.status).toBe(200);
+  return {
+    ...portalUser,
+    cookie: loginResponse.headers.get("set-cookie") ?? ""
+  };
+}
+
+async function scanSignedQr(adminCookie: string, token: string) {
+  const response = await app.request("/api/v1/access/scan", {
+    method: "POST",
+    headers: jsonHeaders(adminCookie),
+    body: JSON.stringify({ signedQr: token, scannerId: "integration-scanner" })
+  });
+  const body = await response.json();
+
+  expect(response.status).toBe(200);
+  return body.data as Record<string, unknown>;
+}
+
+async function expectSignedQrPersisted(
+  jti: string,
+  registroId: string,
+  credentialType: "person_qr" | "temporary_daily_qr" | "vehicle_permit_qr"
+) {
+  const accessRecord = await db.query.registrosAcceso.findFirst({
+    where: eq(registrosAcceso.id, registroId)
+  });
+  const consumption = await db.query.qrJtiConsumptions.findFirst({
+    where: eq(qrJtiConsumptions.jti, jti)
+  });
+  const event = await db.query.accessScanEvents.findFirst({
+    where: eq(accessScanEvents.jti, jti)
+  });
+
+  expect(accessRecord?.scannedTokenJti).toBe(jti);
+  expect(consumption?.jti).toBe(jti);
+  expect(consumption?.accessRecordId).toBe(registroId);
+  expect(event?.signatureVerified).toBe(true);
+  expect(event?.credentialType).toBe(credentialType);
+}
+
+function tamperJwt(token: string) {
+  const parts = token.split(".");
+  return `${parts[0]}.${parts[1]}.invalid-signature`;
 }
 
 function expectCookieSecurity(setCookie: string, cookieName: string) {
@@ -311,6 +419,136 @@ describeIfPostgres("postgres integration", () => {
     });
     expect(temporaryRecord?.createdByAdminId).toBe(sessionAdminId);
     expect(temporaryRecord?.createdByAdminId).not.toBe(spoofAdminId);
+  });
+
+  it("scans signed personal QR once and rejects replayed JTI", async () => {
+    await enableSignedQr();
+    const portalUser = await loginPortalUser();
+
+    const dynamicResponse = await app.request("/api/v1/portal/qr/dynamic", {
+      method: "POST",
+      headers: jsonHeaders(portalUser.cookie),
+      body: JSON.stringify({})
+    });
+    const dynamicBody = await dynamicResponse.json();
+
+    expect(dynamicResponse.status).toBe(200);
+    expect(dynamicBody.data.token.split(".")).toHaveLength(3);
+
+    const firstScan = await scanSignedQr(cookie, dynamicBody.data.token);
+    expect(firstScan.accepted).toBe(true);
+    expect(firstScan.credentialType).toBe("person_qr");
+    await expectSignedQrPersisted(dynamicBody.data.jti, String(firstScan.registroId), "person_qr");
+
+    const replayScan = await scanSignedQr(cookie, dynamicBody.data.token);
+    expect(replayScan.accepted).toBe(false);
+    expect(replayScan.reasonCode).toBe("JTI_ALREADY_CONSUMED");
+  });
+
+  it("scans signed temporary daily QR once and rejects replayed JTI", async () => {
+    await enableSignedQr();
+    const person = await createActivePerson("TEMP");
+
+    const temporaryResponse = await app.request("/api/v1/credentials/temporary-daily", {
+      method: "POST",
+      headers: jsonHeaders(cookie),
+      body: JSON.stringify({
+        personId: person.id,
+        operationalDate: currentOperationalDate(),
+        missingCredentialType: "personal_qr",
+        reasonCode: "integration_signed_temp",
+        maxUses: 2,
+        validUntil: new Date(Date.now() + 3_600_000).toISOString()
+      })
+    });
+    const temporaryBody = await temporaryResponse.json();
+    expect(temporaryResponse.status).toBe(201);
+
+    const dynamicResponse = await app.request(`/api/v1/credentials/temporary-daily/${temporaryBody.data.credential.id}/dynamic`, {
+      method: "POST",
+      headers: jsonHeaders(cookie)
+    });
+    const dynamicBody = await dynamicResponse.json();
+    expect(dynamicResponse.status).toBe(201);
+
+    const firstScan = await scanSignedQr(cookie, dynamicBody.data.token);
+    expect(firstScan.accepted).toBe(true);
+    expect(firstScan.credentialType).toBe("temporary_daily_qr");
+    await expectSignedQrPersisted(dynamicBody.data.jti, String(firstScan.registroId), "temporary_daily_qr");
+
+    const replayScan = await scanSignedQr(cookie, dynamicBody.data.token);
+    expect(replayScan.accepted).toBe(false);
+    expect(replayScan.reasonCode).toBe("JTI_ALREADY_CONSUMED");
+  });
+
+  it("scans signed vehicle permit QR once and rejects replayed JTI", async () => {
+    await enableSignedQr();
+    const person = await createActivePerson("VEH");
+
+    const vehicleResponse = await app.request("/api/v1/vehicles", {
+      method: "POST",
+      headers: jsonHeaders(cookie),
+      body: JSON.stringify({
+        ownerPersonId: person.id,
+        plate: `QR-${randomUUID().slice(0, 6)}`,
+        make: "Integracion",
+        model: "Firmado",
+        color: "Blanco"
+      })
+    });
+    const vehicleBody = await vehicleResponse.json();
+    expect(vehicleResponse.status).toBe(201);
+
+    const permitResponse = await app.request("/api/v1/vehicles/permits", {
+      method: "POST",
+      headers: jsonHeaders(cookie),
+      body: JSON.stringify({
+        personId: person.id,
+        vehicleId: vehicleBody.data.id,
+        validUntil: new Date(Date.now() + 86_400_000).toISOString()
+      })
+    });
+    const permitBody = await permitResponse.json();
+    expect(permitResponse.status).toBe(201);
+
+    const dynamicResponse = await app.request(`/api/v1/vehicles/permits/${permitBody.data.id}/qr/dynamic`, {
+      method: "POST",
+      headers: jsonHeaders(cookie)
+    });
+    const dynamicBody = await dynamicResponse.json();
+    expect(dynamicResponse.status).toBe(201);
+
+    const firstScan = await scanSignedQr(cookie, dynamicBody.data.token);
+    expect(firstScan.accepted).toBe(true);
+    expect(firstScan.credentialType).toBe("vehicle_permit_qr");
+    await expectSignedQrPersisted(dynamicBody.data.jti, String(firstScan.registroId), "vehicle_permit_qr");
+
+    const replayScan = await scanSignedQr(cookie, dynamicBody.data.token);
+    expect(replayScan.accepted).toBe(false);
+    expect(replayScan.reasonCode).toBe("JTI_ALREADY_CONSUMED");
+  });
+
+  it("rejects tampered and expired signed QR tokens during scan", async () => {
+    await enableSignedQr();
+    const person = await createActivePerson("BAD");
+    const valid = await signDynamicQr({
+      sub: person.id,
+      uid: person.matricula,
+      typ: "person_qr"
+    }, 15);
+    const expired = await signDynamicQr({
+      sub: person.id,
+      uid: person.matricula,
+      typ: "person_qr"
+    }, -30);
+
+    const tamperedScan = await scanSignedQr(cookie, tamperJwt(valid.token));
+    expect(tamperedScan.accepted).toBe(false);
+    expect(tamperedScan.reasonCode).toBe("INVALID_SIGNED_QR");
+
+    const expiredScan = await scanSignedQr(cookie, expired.token);
+    expect(expiredScan.accepted).toBe(false);
+    expect(expiredScan.reasonCode).toBe("SIGNED_QR_EXPIRED");
   });
 
   it("rejects inactive people and expires worker-managed records", async () => {
