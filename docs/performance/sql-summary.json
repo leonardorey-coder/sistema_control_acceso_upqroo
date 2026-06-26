@@ -1,0 +1,38 @@
+{
+  "kind": "sql",
+  "allowMutatingAnalyze": false,
+  "operationalDate": "2026-06-26",
+  "generatedAt": "2026-06-26T20:30:40.389Z",
+  "summaries": [
+    {
+      "name": "access-today",
+      "durationMs": 55.34,
+      "path": "/Users/leonardocruz/Documents/proyectos/sistema_control_acceso_upqroo/docs/performance/sql-plans/access-today.json"
+    },
+    {
+      "name": "access-search",
+      "durationMs": 5.5,
+      "path": "/Users/leonardocruz/Documents/proyectos/sistema_control_acceso_upqroo/docs/performance/sql-plans/access-search.json"
+    },
+    {
+      "name": "attendance-today",
+      "durationMs": 8.61,
+      "path": "/Users/leonardocruz/Documents/proyectos/sistema_control_acceso_upqroo/docs/performance/sql-plans/attendance-today.json"
+    },
+    {
+      "name": "people-search",
+      "durationMs": 46.52,
+      "path": "/Users/leonardocruz/Documents/proyectos/sistema_control_acceso_upqroo/docs/performance/sql-plans/people-search.json"
+    },
+    {
+      "name": "vehicle-search",
+      "durationMs": 0.55,
+      "path": "/Users/leonardocruz/Documents/proyectos/sistema_control_acceso_upqroo/docs/performance/sql-plans/vehicle-search.json"
+    },
+    {
+      "name": "access-scan-manual-plan-only",
+      "durationMs": 5.24,
+      "path": "/Users/leonardocruz/Documents/proyectos/sistema_control_acceso_upqroo/docs/performance/sql-plans/access-scan-manual-plan-only.json"
+    }
+  ]
+}

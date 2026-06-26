@@ -8,7 +8,10 @@ const optionalNonEmptyString = z.preprocess(
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   DATABASE_URL: z.string().url().default("postgres://postgres:postgres@localhost:5432/control_acceso_v2"),
+  POSTGRES_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
   API_PORT: z.coerce.number().int().positive().default(4000),
+  EVENT_COALESCE_MS: z.coerce.number().int().min(0).max(5000).default(300),
+  WORKER_INTERVAL_MS: z.coerce.number().int().min(1000).default(60_000),
   OPERATING_TIMEZONE: z.string().min(1).default("America/Cancun"),
   WEB_ORIGIN: z.string().url().default("http://localhost:5173"),
   WEB_ORIGINS: optionalNonEmptyString,

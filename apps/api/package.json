@@ -13,7 +13,13 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
-    "db:seed": "bun src/seed.ts"
+    "db:seed": "bun src/seed.ts",
+    "perf:seed": "bun src/performance/seed.ts",
+    "perf:http": "bun src/performance/http.ts",
+    "perf:sql": "bun src/performance/sql.ts",
+    "perf:worker": "bun src/performance/worker.ts",
+    "perf:report": "bun src/performance/report.ts",
+    "perf:repair-chain": "bun src/performance/repair-chain.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1073.0",

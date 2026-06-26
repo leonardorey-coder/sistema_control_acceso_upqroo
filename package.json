@@ -18,7 +18,13 @@
     "db:generate": "bun run --cwd apps/api db:generate",
     "db:migrate": "bun run --cwd apps/api db:migrate",
     "db:seed": "bun run --cwd apps/api db:seed",
-    "worker": "bun run --cwd apps/api worker"
+    "worker": "bun run --cwd apps/api worker",
+    "perf:seed": "bun run --cwd apps/api perf:seed",
+    "perf:http": "bun run --cwd apps/api perf:http",
+    "perf:sql": "bun run --cwd apps/api perf:sql",
+    "perf:worker": "bun run --cwd apps/api perf:worker",
+    "perf:report": "bun run --cwd apps/api perf:report",
+    "perf:repair-chain": "bun run --cwd apps/api perf:repair-chain"
   },
   "devDependencies": {
     "@types/bun": "^1.2.17",

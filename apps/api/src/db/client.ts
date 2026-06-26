@@ -5,7 +5,7 @@ import * as schema from "./schema";
 
 const queryClient = postgres(env.DATABASE_URL, {
   prepare: false,
-  max: 10,
+  max: env.POSTGRES_POOL_MAX,
   connection: {
     TimeZone: env.OPERATING_TIMEZONE
   }

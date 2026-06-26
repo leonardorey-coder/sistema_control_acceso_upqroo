@@ -1,0 +1,439 @@
+{
+  "kind": "worker",
+  "runs": 5,
+  "generatedAt": "2026-06-26T20:10:25.003Z",
+  "summary": [
+    {
+      "target": "worker-cycle",
+      "samples": 5,
+      "ok": 5,
+      "errors": 0,
+      "errorRate": 0,
+      "minMs": 1.3,
+      "p50Ms": 2.2,
+      "p95Ms": 62.38,
+      "p99Ms": 62.38,
+      "maxMs": 62.38,
+      "avgMs": 14.4,
+      "requestsPerSecond": 69.45,
+      "bytes": 0
+    }
+  ],
+  "metrics": {
+    "running": false,
+    "skippedOverlaps": 0,
+    "cycles": 5,
+    "failures": 0,
+    "lastSteps": [
+      {
+        "name": "autoExits",
+        "durationMs": 0.2
+      },
+      {
+        "name": "expireHotQr",
+        "durationMs": 0.11,
+        "rows": 0
+      },
+      {
+        "name": "expireTemporaryDailyQr",
+        "durationMs": 0.11,
+        "rows": 0
+      },
+      {
+        "name": "expireVehiclePermitQr",
+        "durationMs": 0.1,
+        "rows": 0
+      },
+      {
+        "name": "expirePersonQr",
+        "durationMs": 0.19,
+        "rows": 0
+      },
+      {
+        "name": "expireAdminSessions",
+        "durationMs": 0.12,
+        "rows": 0
+      },
+      {
+        "name": "expireUserSessions",
+        "durationMs": 0.11,
+        "rows": 0
+      },
+      {
+        "name": "deleteExpiredQrJtiConsumptions",
+        "durationMs": 0.11,
+        "rows": 0
+      },
+      {
+        "name": "expireQrSigningKeys",
+        "durationMs": 0.12,
+        "rows": 0
+      },
+      {
+        "name": "deleteExpiredUserDeviceChallenges",
+        "durationMs": 0.11,
+        "rows": 0
+      }
+    ],
+    "lastStartedAt": "2026-06-26T20:10:25.001Z",
+    "lastFinishedAt": "2026-06-26T20:10:25.003Z",
+    "lastDurationMs": 1.3
+  },
+  "cycles": [
+    {
+      "skipped": false,
+      "autoExits": {
+        "ok": true,
+        "closed": 0,
+        "targetDate": "2026-06-25"
+      },
+      "expired": {
+        "hotQr": 0,
+        "temporaryDailyQr": 0,
+        "vehiclePermitQr": 0,
+        "personQr": 0,
+        "sessions": 0,
+        "userSessions": 0,
+        "qrJtiConsumptions": 0,
+        "qrSigningKeys": 0,
+        "userDeviceChallenges": 0
+      },
+      "durationMs": 62.13,
+      "steps": [
+        {
+          "name": "autoExits",
+          "durationMs": 45.69
+        },
+        {
+          "name": "expireHotQr",
+          "durationMs": 2.65,
+          "rows": 0
+        },
+        {
+          "name": "expireTemporaryDailyQr",
+          "durationMs": 2.65,
+          "rows": 0
+        },
+        {
+          "name": "expireVehiclePermitQr",
+          "durationMs": 0.72,
+          "rows": 0
+        },
+        {
+          "name": "expirePersonQr",
+          "durationMs": 2.44,
+          "rows": 0
+        },
+        {
+          "name": "expireAdminSessions",
+          "durationMs": 2.58,
+          "rows": 0
+        },
+        {
+          "name": "expireUserSessions",
+          "durationMs": 2.04,
+          "rows": 0
+        },
+        {
+          "name": "deleteExpiredQrJtiConsumptions",
+          "durationMs": 1.3,
+          "rows": 0
+        },
+        {
+          "name": "expireQrSigningKeys",
+          "durationMs": 1.16,
+          "rows": 0
+        },
+        {
+          "name": "deleteExpiredUserDeviceChallenges",
+          "durationMs": 0.74,
+          "rows": 0
+        }
+      ]
+    },
+    {
+      "skipped": false,
+      "autoExits": {
+        "ok": true,
+        "closed": 0,
+        "targetDate": "2026-06-25"
+      },
+      "expired": {
+        "hotQr": 0,
+        "temporaryDailyQr": 0,
+        "vehiclePermitQr": 0,
+        "personQr": 0,
+        "sessions": 0,
+        "userSessions": 0,
+        "qrJtiConsumptions": 0,
+        "qrSigningKeys": 0,
+        "userDeviceChallenges": 0
+      },
+      "durationMs": 3.95,
+      "steps": [
+        {
+          "name": "autoExits",
+          "durationMs": 0.4
+        },
+        {
+          "name": "expireHotQr",
+          "durationMs": 0.23,
+          "rows": 0
+        },
+        {
+          "name": "expireTemporaryDailyQr",
+          "durationMs": 0.55,
+          "rows": 0
+        },
+        {
+          "name": "expireVehiclePermitQr",
+          "durationMs": 0.4,
+          "rows": 0
+        },
+        {
+          "name": "expirePersonQr",
+          "durationMs": 0.32,
+          "rows": 0
+        },
+        {
+          "name": "expireAdminSessions",
+          "durationMs": 1.01,
+          "rows": 0
+        },
+        {
+          "name": "expireUserSessions",
+          "durationMs": 0.37,
+          "rows": 0
+        },
+        {
+          "name": "deleteExpiredQrJtiConsumptions",
+          "durationMs": 0.21,
+          "rows": 0
+        },
+        {
+          "name": "expireQrSigningKeys",
+          "durationMs": 0.21,
+          "rows": 0
+        },
+        {
+          "name": "deleteExpiredUserDeviceChallenges",
+          "durationMs": 0.21,
+          "rows": 0
+        }
+      ]
+    },
+    {
+      "skipped": false,
+      "autoExits": {
+        "ok": true,
+        "closed": 0,
+        "targetDate": "2026-06-25"
+      },
+      "expired": {
+        "hotQr": 0,
+        "temporaryDailyQr": 0,
+        "vehiclePermitQr": 0,
+        "personQr": 0,
+        "sessions": 0,
+        "userSessions": 0,
+        "qrJtiConsumptions": 0,
+        "qrSigningKeys": 0,
+        "userDeviceChallenges": 0
+      },
+      "durationMs": 2.15,
+      "steps": [
+        {
+          "name": "autoExits",
+          "durationMs": 0.34
+        },
+        {
+          "name": "expireHotQr",
+          "durationMs": 0.2,
+          "rows": 0
+        },
+        {
+          "name": "expireTemporaryDailyQr",
+          "durationMs": 0.21,
+          "rows": 0
+        },
+        {
+          "name": "expireVehiclePermitQr",
+          "durationMs": 0.17,
+          "rows": 0
+        },
+        {
+          "name": "expirePersonQr",
+          "durationMs": 0.29,
+          "rows": 0
+        },
+        {
+          "name": "expireAdminSessions",
+          "durationMs": 0.23,
+          "rows": 0
+        },
+        {
+          "name": "expireUserSessions",
+          "durationMs": 0.16,
+          "rows": 0
+        },
+        {
+          "name": "deleteExpiredQrJtiConsumptions",
+          "durationMs": 0.17,
+          "rows": 0
+        },
+        {
+          "name": "expireQrSigningKeys",
+          "durationMs": 0.16,
+          "rows": 0
+        },
+        {
+          "name": "deleteExpiredUserDeviceChallenges",
+          "durationMs": 0.2,
+          "rows": 0
+        }
+      ]
+    },
+    {
+      "skipped": false,
+      "autoExits": {
+        "ok": true,
+        "closed": 0,
+        "targetDate": "2026-06-25"
+      },
+      "expired": {
+        "hotQr": 0,
+        "temporaryDailyQr": 0,
+        "vehiclePermitQr": 0,
+        "personQr": 0,
+        "sessions": 0,
+        "userSessions": 0,
+        "qrJtiConsumptions": 0,
+        "qrSigningKeys": 0,
+        "userDeviceChallenges": 0
+      },
+      "durationMs": 2.19,
+      "steps": [
+        {
+          "name": "autoExits",
+          "durationMs": 0.32
+        },
+        {
+          "name": "expireHotQr",
+          "durationMs": 0.19,
+          "rows": 0
+        },
+        {
+          "name": "expireTemporaryDailyQr",
+          "durationMs": 0.18,
+          "rows": 0
+        },
+        {
+          "name": "expireVehiclePermitQr",
+          "durationMs": 0.47,
+          "rows": 0
+        },
+        {
+          "name": "expirePersonQr",
+          "durationMs": 0.33,
+          "rows": 0
+        },
+        {
+          "name": "expireAdminSessions",
+          "durationMs": 0.18,
+          "rows": 0
+        },
+        {
+          "name": "expireUserSessions",
+          "durationMs": 0.13,
+          "rows": 0
+        },
+        {
+          "name": "deleteExpiredQrJtiConsumptions",
+          "durationMs": 0.13,
+          "rows": 0
+        },
+        {
+          "name": "expireQrSigningKeys",
+          "durationMs": 0.12,
+          "rows": 0
+        },
+        {
+          "name": "deleteExpiredUserDeviceChallenges",
+          "durationMs": 0.12,
+          "rows": 0
+        }
+      ]
+    },
+    {
+      "skipped": false,
+      "autoExits": {
+        "ok": true,
+        "closed": 0,
+        "targetDate": "2026-06-25"
+      },
+      "expired": {
+        "hotQr": 0,
+        "temporaryDailyQr": 0,
+        "vehiclePermitQr": 0,
+        "personQr": 0,
+        "sessions": 0,
+        "userSessions": 0,
+        "qrJtiConsumptions": 0,
+        "qrSigningKeys": 0,
+        "userDeviceChallenges": 0
+      },
+      "durationMs": 1.3,
+      "steps": [
+        {
+          "name": "autoExits",
+          "durationMs": 0.2
+        },
+        {
+          "name": "expireHotQr",
+          "durationMs": 0.11,
+          "rows": 0
+        },
+        {
+          "name": "expireTemporaryDailyQr",
+          "durationMs": 0.11,
+          "rows": 0
+        },
+        {
+          "name": "expireVehiclePermitQr",
+          "durationMs": 0.1,
+          "rows": 0
+        },
+        {
+          "name": "expirePersonQr",
+          "durationMs": 0.19,
+          "rows": 0
+        },
+        {
+          "name": "expireAdminSessions",
+          "durationMs": 0.12,
+          "rows": 0
+        },
+        {
+          "name": "expireUserSessions",
+          "durationMs": 0.11,
+          "rows": 0
+        },
+        {
+          "name": "deleteExpiredQrJtiConsumptions",
+          "durationMs": 0.11,
+          "rows": 0
+        },
+        {
+          "name": "expireQrSigningKeys",
+          "durationMs": 0.12,
+          "rows": 0
+        },
+        {
+          "name": "deleteExpiredUserDeviceChallenges",
+          "durationMs": 0.11,
+          "rows": 0
+        }
+      ]
+    }
+  ]
+}

@@ -140,6 +140,24 @@ describe("access atomic contracts", () => {
     expect(migration).toContain("\"locked_until\" timestamptz");
   });
 
+  it("serializes global access hash-chain assignment", () => {
+    const migration = readMigration("0007_access_hash_chain_serialization.sql");
+
+    expect(migration).toContain("CREATE OR REPLACE FUNCTION access_hash_chain_assign_v1");
+    expect(migration).toContain("pg_advisory_xact_lock(hashtext('access:hash-chain'))");
+    expect(migration).toContain("CREATE TRIGGER registros_acceso_hash_chain_assign");
+    expect(migration).toContain("WHEN (OLD.hash_registro IS NULL AND NEW.hash_registro IS NOT NULL)");
+  });
+
+  it("indexes the global access hash-chain predecessor lookup", () => {
+    const migration = readMigration("0008_access_hash_chain_lookup_index.sql");
+
+    expect(migration).toContain("CREATE INDEX IF NOT EXISTS registros_acceso_hash_chain_latest_idx");
+    expect(migration).toContain("ON registros_acceso (entrada_at DESC, id DESC)");
+    expect(migration).toContain("INCLUDE (hash_registro)");
+    expect(migration).toContain("WHERE hash_registro IS NOT NULL");
+  });
+
   it("ships S3-compatible storage for R2/S3 instead of local-only placeholders", () => {
     const envSource = readSource("config/env.ts");
     const storageSource = readSource("shared/storage.ts");

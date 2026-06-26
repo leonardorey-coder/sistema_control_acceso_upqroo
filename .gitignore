@@ -12,3 +12,5 @@ coverage
 .vercel
 .cursor
 .vscode
+docs/performance/*samples*.json
+docs/performance/raw-*.json

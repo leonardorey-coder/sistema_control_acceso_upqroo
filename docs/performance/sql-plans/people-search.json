@@ -1,0 +1,153 @@
+{
+  "name": "people-search",
+  "mutates": false,
+  "analyzeExecuted": true,
+  "durationMs": 46.52,
+  "generatedAt": "2026-06-26T20:30:40.382Z",
+  "statement": "SELECT id, matricula, nombres, apellidos\n      FROM personas\n      WHERE matricula ILIKE '%PERF%' OR nombres ILIKE '%PERF%' OR apellidos ILIKE '%PERF%' OR curp ILIKE '%PERF%'\n      ORDER BY apellidos ASC, nombres ASC, matricula ASC\n      LIMIT 25",
+  "plan": {
+    "QUERY PLAN": [
+      {
+        "Plan": {
+          "Node Type": "Limit",
+          "Parallel Aware": false,
+          "Async Capable": false,
+          "Startup Cost": 6286.94,
+          "Total Cost": 6289.82,
+          "Plan Rows": 25,
+          "Plan Width": 46,
+          "Actual Startup Time": 42.9,
+          "Actual Total Time": 44.364,
+          "Actual Rows": 25,
+          "Actual Loops": 1,
+          "Shared Hit Blocks": 2477,
+          "Shared Read Blocks": 7,
+          "Shared Dirtied Blocks": 0,
+          "Shared Written Blocks": 0,
+          "Local Hit Blocks": 0,
+          "Local Read Blocks": 0,
+          "Local Dirtied Blocks": 0,
+          "Local Written Blocks": 0,
+          "Temp Read Blocks": 0,
+          "Temp Written Blocks": 0,
+          "Plans": [
+            {
+              "Node Type": "Gather Merge",
+              "Parent Relationship": "Outer",
+              "Parallel Aware": false,
+              "Async Capable": false,
+              "Startup Cost": 6286.94,
+              "Total Cost": 13059.98,
+              "Plan Rows": 58896,
+              "Plan Width": 46,
+              "Actual Startup Time": 42.899,
+              "Actual Total Time": 44.361,
+              "Actual Rows": 25,
+              "Actual Loops": 1,
+              "Workers Planned": 1,
+              "Workers Launched": 1,
+              "Shared Hit Blocks": 2477,
+              "Shared Read Blocks": 7,
+              "Shared Dirtied Blocks": 0,
+              "Shared Written Blocks": 0,
+              "Local Hit Blocks": 0,
+              "Local Read Blocks": 0,
+              "Local Dirtied Blocks": 0,
+              "Local Written Blocks": 0,
+              "Temp Read Blocks": 0,
+              "Temp Written Blocks": 0,
+              "Plans": [
+                {
+                  "Node Type": "Sort",
+                  "Parent Relationship": "Outer",
+                  "Parallel Aware": false,
+                  "Async Capable": false,
+                  "Startup Cost": 5286.93,
+                  "Total Cost": 5434.17,
+                  "Plan Rows": 58896,
+                  "Plan Width": 46,
+                  "Actual Startup Time": 38.275,
+                  "Actual Total Time": 38.276,
+                  "Actual Rows": 16,
+                  "Actual Loops": 2,
+                  "Sort Key": [
+                    "apellidos",
+                    "nombres",
+                    "matricula"
+                  ],
+                  "Sort Method": "top-N heapsort",
+                  "Sort Space Used": 27,
+                  "Sort Space Type": "Memory",
+                  "Shared Hit Blocks": 2477,
+                  "Shared Read Blocks": 7,
+                  "Shared Dirtied Blocks": 0,
+                  "Shared Written Blocks": 0,
+                  "Local Hit Blocks": 0,
+                  "Local Read Blocks": 0,
+                  "Local Dirtied Blocks": 0,
+                  "Local Written Blocks": 0,
+                  "Temp Read Blocks": 0,
+                  "Temp Written Blocks": 0,
+                  "Workers": [
+                    {
+                      "Worker Number": 0,
+                      "Sort Method": "top-N heapsort",
+                      "Sort Space Used": 26,
+                      "Sort Space Type": "Memory"
+                    }
+                  ],
+                  "Plans": [
+                    {
+                      "Node Type": "Seq Scan",
+                      "Parent Relationship": "Outer",
+                      "Parallel Aware": true,
+                      "Async Capable": false,
+                      "Relation Name": "personas",
+                      "Alias": "personas",
+                      "Startup Cost": 0,
+                      "Total Cost": 3624.93,
+                      "Plan Rows": 58896,
+                      "Plan Width": 46,
+                      "Actual Startup Time": 0.392,
+                      "Actual Total Time": 26.342,
+                      "Actual Rows": 50000,
+                      "Actual Loops": 2,
+                      "Filter": "(((matricula)::text ~~* '%PERF%'::text) OR ((nombres)::text ~~* '%PERF%'::text) OR ((apellidos)::text ~~* '%PERF%'::text) OR ((curp)::text ~~* '%PERF%'::text))",
+                      "Rows Removed by Filter": 62,
+                      "Shared Hit Blocks": 2440,
+                      "Shared Read Blocks": 7,
+                      "Shared Dirtied Blocks": 0,
+                      "Shared Written Blocks": 0,
+                      "Local Hit Blocks": 0,
+                      "Local Read Blocks": 0,
+                      "Local Dirtied Blocks": 0,
+                      "Local Written Blocks": 0,
+                      "Temp Read Blocks": 0,
+                      "Temp Written Blocks": 0,
+                      "Workers": []
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "Planning": {
+          "Shared Hit Blocks": 5,
+          "Shared Read Blocks": 4,
+          "Shared Dirtied Blocks": 0,
+          "Shared Written Blocks": 0,
+          "Local Hit Blocks": 0,
+          "Local Read Blocks": 0,
+          "Local Dirtied Blocks": 0,
+          "Local Written Blocks": 0,
+          "Temp Read Blocks": 0,
+          "Temp Written Blocks": 0
+        },
+        "Planning Time": 1.327,
+        "Triggers": [],
+        "Execution Time": 44.381
+      }
+    ]
+  }
+}

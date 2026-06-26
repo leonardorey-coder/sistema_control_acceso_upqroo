@@ -202,6 +202,7 @@
   const apiOnline = $derived(Boolean(data.health));
   let eventsSocket: WebSocket | null = null;
   let eventsReconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  const refreshTimers = new Map<string, ReturnType<typeof setTimeout>>();
   let eventsReconnectDelay = 1000;
   let eventsShouldReconnect = false;
 
@@ -211,6 +212,39 @@
     eventsReconnectTimer = null;
     eventsSocket?.close();
     eventsSocket = null;
+    for (const timer of refreshTimers.values()) clearTimeout(timer);
+    refreshTimers.clear();
+  }
+
+  function scheduleRefresh(key: string, action: () => Promise<void>) {
+    const current = refreshTimers.get(key);
+    if (current) clearTimeout(current);
+    refreshTimers.set(key, setTimeout(() => {
+      refreshTimers.delete(key);
+      action().catch(() => null);
+    }, 300));
+  }
+
+  function handleEventMessage(message: EventMessage) {
+    if ((message.topic === "access.scan" || message.topic === "access.table") && activeTab === "access") {
+      scheduleRefresh("access", refreshAccess);
+    }
+    if ((message.topic === "access.scan" || message.topic === "attendance.table") && activeTab === "attendance") {
+      scheduleRefresh("attendance", refreshAttendance);
+    }
+    if (message.topic === "hot-qr.table" && activeTab === "hotqr") scheduleRefresh("hotqr", refreshHotQr);
+    if (message.topic === "credentials.table" && activeTab === "edit") scheduleRefresh("credentials", () => refreshCredentials());
+    if (message.topic === "temporary-daily-qr.table" && activeTab === "generator") scheduleRefresh("temporary", refreshTemporaryQr);
+    if (message.topic === "vehicles.table" && activeTab === "vehicles") scheduleRefresh("vehicles", refreshVehicles);
+    if (message.topic === "vehicle-permits.table" && activeTab === "vehicles") scheduleRefresh("permits", refreshPermits);
+    if ((message.topic === "admins.table" || message.topic === "audit.table") && activeTab === "admins") {
+      scheduleRefresh("admins", refreshAdmins);
+    }
+    if (message.topic === "admin-sessions.table" && activeTab === "admins") {
+      adminSessionRows = [];
+      scheduleRefresh("admins", refreshAdmins);
+    }
+    if (message.topic === "config.table" && activeTab === "config") scheduleRefresh("config", refreshConfig);
   }
 
   function connectEventsSocket() {
@@ -231,19 +265,7 @@
         return;
       }
 
-      if (message.topic === "access.scan" || message.topic === "access.table") refreshAccess();
-      if (message.topic === "access.scan" || message.topic === "attendance.table") refreshAttendance();
-      if (message.topic === "hot-qr.table") refreshHotQr();
-      if (message.topic === "credentials.table") refreshCredentials();
-      if (message.topic === "temporary-daily-qr.table") refreshTemporaryQr();
-      if (message.topic === "vehicles.table") refreshVehicles();
-      if (message.topic === "vehicle-permits.table") refreshPermits();
-      if (message.topic === "admins.table" || message.topic === "audit.table") refreshAdmins();
-      if (message.topic === "admin-sessions.table") {
-        refreshAdmins();
-        adminSessionRows = [];
-      }
-      if (message.topic === "config.table") refreshConfig();
+      handleEventMessage(message);
     });
 
     eventsSocket.addEventListener("close", () => {
@@ -261,7 +283,7 @@
         body: JSON.stringify({ identity: loginIdentity, password: loginPassword })
       });
       loginPassword = "";
-      await refreshAll();
+      await refreshInitial();
       connectEventsSocket();
     } catch (error) {
       loginError = error instanceof Error ? error.message : "No se pudo iniciar sesion";
@@ -277,7 +299,7 @@
   async function loadSession() {
     try {
       session = await apiRequest<Session>("/api/v1/auth/me");
-      await refreshAll();
+      await refreshInitial();
       connectEventsSocket();
     } catch {
       session = null;
@@ -440,22 +462,28 @@
     scheduleTotal = result.total;
   }
 
-  async function refreshAll() {
+  async function refreshInitial() {
     await Promise.allSettled([
       refreshPersonTypes(),
       refreshCareers(),
-      refreshAccess(),
-      refreshAttendance(),
-      refreshPeople(),
-      refreshTemporaryQr(),
-      refreshHotQr(),
-      refreshVehicles(),
-      refreshPermits(),
-      refreshAdmins(),
-      refreshConfig(),
-      refreshSubjects(),
-      refreshSchedules()
+      refreshActiveTab()
     ]);
+  }
+
+  async function refreshActiveTab() {
+    if (activeTab === "generator") await refreshTemporaryQr();
+    else if (activeTab === "edit") await refreshCredentials();
+    else if (activeTab === "access") await refreshAccess();
+    else if (activeTab === "attendance") await Promise.allSettled([refreshAttendance(), refreshSubjects(), refreshSchedules()]);
+    else if (activeTab === "hotqr") await refreshHotQr();
+    else if (activeTab === "vehicles") await Promise.allSettled([refreshVehicles(), refreshPermits()]);
+    else if (activeTab === "admins") await refreshAdmins();
+    else if (activeTab === "config") await refreshConfig();
+  }
+
+  function switchTab(id: string) {
+    activeTab = id;
+    if (session) refreshActiveTab().catch(() => null);
   }
 
   async function changeAdminPassword() {
@@ -956,7 +984,7 @@
     {tabs}
     {session}
     {apiOnline}
-    onTab={(id) => (activeTab = id)}
+    onTab={switchTab}
     onLogout={logout}
   >
     {#if notice}<p class="notice">{notice}</p>{/if}

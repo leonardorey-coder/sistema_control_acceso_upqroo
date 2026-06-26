@@ -1,0 +1,23 @@
+{
+  "name": "access-scan-manual-plan-only",
+  "mutates": true,
+  "analyzeExecuted": false,
+  "durationMs": 5.24,
+  "generatedAt": "2026-06-26T20:30:40.389Z",
+  "statement": "SELECT access_scan_v1('{\"manualMatricula\":\"PERF-000001\",\"scannerId\":\"perf-sql\"}'::jsonb)",
+  "plan": {
+    "QUERY PLAN": [
+      {
+        "Plan": {
+          "Node Type": "Result",
+          "Parallel Aware": false,
+          "Async Capable": false,
+          "Startup Cost": 0,
+          "Total Cost": 0.26,
+          "Plan Rows": 1,
+          "Plan Width": 32
+        }
+      }
+    ]
+  }
+}

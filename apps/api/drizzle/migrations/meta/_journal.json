@@ -50,6 +50,20 @@
       "when": 1781835400000,
       "tag": "0006_durable_rate_limit",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1781837200000,
+      "tag": "0007_access_hash_chain_serialization",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1781839000000,
+      "tag": "0008_access_hash_chain_lookup_index",
+      "breakpoints": true
     }
   ]
 }

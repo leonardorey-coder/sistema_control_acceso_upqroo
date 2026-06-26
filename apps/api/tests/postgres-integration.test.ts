@@ -328,6 +328,53 @@ describeIfPostgres("postgres integration", () => {
     expect(integrityBody.data.valid).toBe(true);
   });
 
+  it("keeps the access hash chain valid during concurrent scans over different people", async () => {
+    const people = await Promise.all(
+      Array.from({ length: 50 }, async (_, index) => {
+        const suffix = randomUUID().slice(0, 8);
+        const matricula = `HC-${index}-${suffix}`;
+
+        await db.insert(personas).values({
+          matricula,
+          nombres: "Hash",
+          apellidos: "Concurrente",
+          tipoPersona: "docente",
+          estado: "activo"
+        });
+
+        return matricula;
+      })
+    );
+
+    const scanResults = await Promise.all(
+      people.map(async (matricula) => {
+        const response = await app.request("/api/v1/access/scan", {
+          method: "POST",
+          headers: jsonHeaders(cookie),
+          body: JSON.stringify({ manualMatricula: matricula })
+        });
+        const body = await response.json();
+
+        return { response, body };
+      })
+    );
+
+    for (const result of scanResults) {
+      expect(result.response.status).toBe(200);
+      expect(result.body.data.accepted).toBe(true);
+      expect(result.body.data.action).toBe("entry");
+    }
+
+    const integrityResponse = await app.request("/api/v1/integrity/access-chain", {
+      headers: jsonHeaders(cookie)
+    });
+    const integrityBody = await integrityResponse.json();
+
+    expect(integrityResponse.status).toBe(200);
+    expect(integrityBody.data.valid).toBe(true);
+    expect(integrityBody.data.checked).toBeGreaterThanOrEqual(50);
+  });
+
   it("rejects spoofed actor fields and persists the session admin for access and temporary QR audit", async () => {
     const suffix = randomUUID().slice(0, 8);
     const matricula = `SP-${suffix}`;

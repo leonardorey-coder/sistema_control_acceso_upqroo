@@ -37,6 +37,11 @@ cp .env.example .env
 Variables principales:
 
 - `DATABASE_URL`: conexion PostgreSQL.
+- `POSTGRES_POOL_MAX`: maximo de conexiones del pool PostgreSQL por proceso
+  API/worker; default `10`.
+- `EVENT_COALESCE_MS`: ventana para agrupar eventos de tablas por WebSocket;
+  default `300`.
+- `WORKER_INTERVAL_MS`: intervalo del worker operativo; default `60000`.
 - `OPERATING_TIMEZONE`: zona operativa; default recomendado `America/Cancun`.
 - `WEB_ORIGIN` / `WEB_ORIGINS`: origenes permitidos con cookies.
 - `SESSION_COOKIE_NAME` y `USER_SESSION_COOKIE_NAME`: cookies admin y portal.
@@ -66,6 +71,41 @@ bun run dev:worker
 bun run check
 bun test
 ```
+
+## Performance
+
+El arnes de rendimiento vive en `apps/api/src/performance` y escribe resultados
+en `docs/performance`.
+
+```sh
+bun run perf:seed
+bun run perf:http
+bun run perf:sql
+bun run perf:worker
+bun run perf:report
+bun run perf:repair-chain
+```
+
+Variables principales:
+
+- `PERF_DATASET`: `small`, `medium` o `large`.
+- `PERF_DATABASE_URL`: conexion usada por seed, SQL y worker.
+- `PERF_BASE_URL`: URL de la API para pruebas HTTP.
+- `PERF_CONCURRENCY` y `PERF_DURATION_SECONDS`: carga sostenida para HTTP.
+- `PERF_MANUAL_POOL`: cantidad de matriculas `PERF-*` usadas para distribuir
+  scans manuales; usa `1` para medir contencion sobre una sola persona.
+- `PERF_OUTPUT`: archivo JSON de salida cuando se quiere comparar fases.
+- `PERF_INCLUDE_SAMPLES=true`: incluye muestras crudas HTTP; por defecto solo
+  se guarda resumen para evitar artefactos grandes.
+
+`perf:sql` no ejecuta `EXPLAIN ANALYZE` sobre operaciones mutantes por defecto.
+Para medir `access_scan_v1` ejecutandose realmente, usa
+`PERF_ALLOW_MUTATING_SQL_ANALYZE=true` sobre una base de pruebas.
+
+`perf:repair-chain` recompone `hash_anterior`/`hash_registro` en orden
+cronologico y desactiva temporalmente el trigger de cadena. Usalo solo en bases
+de benchmark o verificacion despues de resets destructivos; no es una operacion
+normal de produccion.
 
 Las pruebas de integracion usan la misma configuracion de la API, especialmente
 `DATABASE_URL`. Si no hay Postgres disponible, esos casos se saltan
