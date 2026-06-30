@@ -55,7 +55,7 @@
             <td data-label="Acciones">
               <div class="row-actions">
                 {#each actions as action}
-                  <button class={action.tone === "ghost" ? "ghost" : ""} onclick={() => action.onClick(row)}>
+                  <button type="button" class={action.tone === "ghost" ? "ghost" : ""} onclick={() => action.onClick(row)}>
                     {action.label}
                   </button>
                 {/each}

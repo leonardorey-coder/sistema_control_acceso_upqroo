@@ -39,16 +39,25 @@
 <section class="grid two">
   <form class="panel" onsubmit={(event) => { event.preventDefault(); onCreate(); }}>
     <h2>Hot-QR</h2>
-    <input bind:value={form.visitorName} placeholder="Visitante" required />
-    <input bind:value={form.reason} placeholder="Motivo" required />
-    <select bind:value={form.minutes}>
-      <option value={15}>15 min</option>
-      <option value={30}>30 min</option>
-      <option value={60}>1 hora</option>
-      <option value={120}>2 horas</option>
-      <option value={240}>4 horas</option>
-      <option value={480}>8 horas</option>
-    </select>
+    <label class="form-field">
+      <span>Visitante</span>
+      <input bind:value={form.visitorName} placeholder="Visitante" required />
+    </label>
+    <label class="form-field">
+      <span>Motivo</span>
+      <input bind:value={form.reason} placeholder="Motivo" required />
+    </label>
+    <label class="form-field">
+      <span>Vigencia</span>
+      <select bind:value={form.minutes}>
+        <option value={15}>15 min</option>
+        <option value={30}>30 min</option>
+        <option value={60}>1 hora</option>
+        <option value={120}>2 horas</option>
+        <option value={240}>4 horas</option>
+        <option value={480}>8 horas</option>
+      </select>
+    </label>
     <button>Generar Hot-QR</button>
   </form>
   <section class="panel">
@@ -62,16 +71,25 @@
     <span>{total} tokens</span>
   </div>
   <div class="toolbar">
-    <input bind:value={filters.q} placeholder="Buscar visitante o motivo" />
-    <input bind:value={filters.date} type="date" />
-    <select bind:value={filters.hotQrStatus}>
-      <option value="">Todos</option>
-      <option value="active">Activo</option>
-      <option value="used">Usado</option>
-      <option value="expired">Expirado</option>
-      <option value="revoked">Revocado</option>
-      <option value="disabled">Deshabilitado</option>
-    </select>
+    <label class="form-field">
+      <span>Busqueda</span>
+      <input bind:value={filters.q} placeholder="Buscar visitante o motivo" />
+    </label>
+    <label class="form-field">
+      <span>Fecha</span>
+      <input bind:value={filters.date} type="date" />
+    </label>
+    <label class="form-field">
+      <span>Estado</span>
+      <select bind:value={filters.hotQrStatus}>
+        <option value="">Todos</option>
+        <option value="active">Activo</option>
+        <option value="used">Usado</option>
+        <option value="expired">Expirado</option>
+        <option value="revoked">Revocado</option>
+        <option value="disabled">Deshabilitado</option>
+      </select>
+    </label>
     <button onclick={onFilter}>Filtrar</button>
   </div>
     <DataTable rows={rows} columns={[

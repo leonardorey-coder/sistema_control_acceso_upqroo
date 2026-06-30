@@ -199,8 +199,14 @@
         <p class="muted">Actualiza tu password para continuar usando el portal.</p>
         {#if passwordNotice}<p class="notice">{passwordNotice}</p>{/if}
         {#if passwordError}<p class="error">{passwordError}</p>{/if}
-        <input type="password" bind:value={passwordForm.currentPassword} placeholder="Password actual" required />
-        <input type="password" bind:value={passwordForm.newPassword} placeholder="Nuevo password" minlength="8" required />
+        <label class="form-field">
+          <span>Password actual</span>
+          <input type="password" bind:value={passwordForm.currentPassword} placeholder="Password actual" required />
+        </label>
+        <label class="form-field">
+          <span>Nuevo password</span>
+          <input type="password" bind:value={passwordForm.newPassword} placeholder="Nuevo password" minlength="8" required />
+        </label>
         <button>Actualizar password</button>
       </form>
     {/if}
@@ -253,12 +259,18 @@
     <section class="grid two">
       <form class="panel form-grid" onsubmit={(event) => { event.preventDefault(); requestTemporaryQr(); }}>
         <h2>QR temporal diario</h2>
-        <select bind:value={temporaryForm.reasonCode}>
-          <option value="credential_unavailable">Credencial no disponible</option>
-          <option value="credential_lost">Credencial extraviada</option>
-          <option value="credential_damaged">Credencial dañada</option>
-        </select>
-        <textarea bind:value={temporaryForm.reasonText} placeholder="Detalle opcional"></textarea>
+        <label class="form-field">
+          <span>Motivo</span>
+          <select bind:value={temporaryForm.reasonCode}>
+            <option value="credential_unavailable">Credencial no disponible</option>
+            <option value="credential_lost">Credencial extraviada</option>
+            <option value="credential_damaged">Credencial dañada</option>
+          </select>
+        </label>
+        <label class="form-field">
+          <span>Detalle</span>
+          <textarea bind:value={temporaryForm.reasonText} placeholder="Detalle opcional"></textarea>
+        </label>
         <button>Solicitar QR temporal</button>
       </form>
       <section class="panel qr-focus">

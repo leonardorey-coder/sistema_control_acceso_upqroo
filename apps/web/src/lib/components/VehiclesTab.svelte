@@ -100,10 +100,22 @@
       displayResult={displayPerson}
       onSelect={onSelectVehicleOwner}
     />
-    <input bind:value={vehicleForm.plate} placeholder="Placa" required />
-    <input bind:value={vehicleForm.make} placeholder="Marca" />
-    <input bind:value={vehicleForm.model} placeholder="Modelo" />
-    <input bind:value={vehicleForm.color} placeholder="Color" />
+    <label class="form-field">
+      <span>Placa</span>
+      <input bind:value={vehicleForm.plate} placeholder="Placa" required />
+    </label>
+    <label class="form-field">
+      <span>Marca</span>
+      <input bind:value={vehicleForm.make} placeholder="Marca" />
+    </label>
+    <label class="form-field">
+      <span>Modelo</span>
+      <input bind:value={vehicleForm.model} placeholder="Modelo" />
+    </label>
+    <label class="form-field">
+      <span>Color</span>
+      <input bind:value={vehicleForm.color} placeholder="Color" />
+    </label>
     <button>Guardar vehiculo</button>
   </form>
   <form class="panel" onsubmit={(event) => { event.preventDefault(); onCreatePermitQr(); }}>
@@ -126,7 +138,10 @@
       displayResult={displayVehicle}
       onSelect={onSelectPermitVehicle}
     />
-    <input bind:value={permitForm.validUntil} type="datetime-local" />
+    <label class="form-field">
+      <span>Vigencia</span>
+      <input bind:value={permitForm.validUntil} type="datetime-local" />
+    </label>
     <button>Generar QR vehicular</button>
   </form>
 </section>
@@ -140,13 +155,19 @@
     <h2>Vehiculos</h2>
   </div>
   <div class="toolbar">
-    <input bind:value={filters.q} placeholder="Buscar placa, marca o persona" />
-    <select bind:value={filters.vehicleStatus}>
-      <option value="">Todos</option>
-      <option value="active">Activo</option>
-      <option value="inactive">Inactivo</option>
-      <option value="blocked">Bloqueado</option>
-    </select>
+    <label class="form-field">
+      <span>Busqueda</span>
+      <input bind:value={filters.q} placeholder="Buscar placa, marca o persona" />
+    </label>
+    <label class="form-field">
+      <span>Estado</span>
+      <select bind:value={filters.vehicleStatus}>
+        <option value="">Todos</option>
+        <option value="active">Activo</option>
+        <option value="inactive">Inactivo</option>
+        <option value="blocked">Bloqueado</option>
+      </select>
+    </label>
     <button onclick={onFilter}>Filtrar</button>
   </div>
   <DataTable rows={rows} columns={[
@@ -170,7 +191,10 @@
     <h2>Permisos vehiculares</h2>
   </div>
   <div class="toolbar">
-    <input bind:value={filters.q} placeholder="Buscar persona o placa" />
+    <label class="form-field">
+      <span>Busqueda</span>
+      <input bind:value={filters.q} placeholder="Buscar persona o placa" />
+    </label>
     <EntitySearchSelect
       label="Persona"
       value={filters.permitPersonId}
@@ -189,13 +213,16 @@
       displayResult={displayVehicle}
       onSelect={onSelectPermitFilterVehicle}
     />
-    <select bind:value={filters.permitStatus}>
-      <option value="">Todos</option>
-      <option value="active">Activo</option>
-      <option value="expired">Expirado</option>
-      <option value="revoked">Revocado</option>
-      <option value="suspended">Suspendido</option>
-    </select>
+    <label class="form-field">
+      <span>Estado</span>
+      <select bind:value={filters.permitStatus}>
+        <option value="">Todos</option>
+        <option value="active">Activo</option>
+        <option value="expired">Expirado</option>
+        <option value="revoked">Revocado</option>
+        <option value="suspended">Suspendido</option>
+      </select>
+    </label>
     <button onclick={onFilter}>Filtrar</button>
   </div>
   <DataTable rows={permitRows} columns={[

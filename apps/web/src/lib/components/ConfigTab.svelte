@@ -21,8 +21,8 @@
       <span>Auto-escaneo QR</span>
       <input bind:checked={config.retryEnabled} type="checkbox" />
     </label>
-    <label>
-      Delay entre escaneos
+    <label class="form-field">
+      <span>Delay entre escaneos</span>
       <input bind:value={config.retryDelayMs} type="number" min="250" step="50" />
     </label>
     <label class="switch-row">
@@ -50,12 +50,12 @@
       <span>Activar QR firmado</span>
       <input bind:checked={signedQrConfig.enabled} type="checkbox" />
     </label>
-    <label>
-      Vigencia del token
+    <label class="form-field">
+      <span>Vigencia del token</span>
       <input bind:value={signedQrConfig.ttlSeconds} type="number" min="15" max="30" step="1" />
     </label>
-    <label>
-      Tolerancia de reloj
+    <label class="form-field">
+      <span>Tolerancia de reloj</span>
       <input bind:value={signedQrConfig.clockToleranceSeconds} type="number" min="0" max="30" step="1" />
     </label>
     <label class="switch-row">

@@ -57,43 +57,70 @@
 <section class="grid two">
   <form class="panel" onsubmit={(event) => { event.preventDefault(); onSearch(); }}>
     <h2>Editar persona</h2>
-    <input bind:value={editMatricula} placeholder="Buscar por matricula" />
+    <label class="form-field">
+      <span>Matricula</span>
+      <input bind:value={editMatricula} placeholder="Buscar por matricula" />
+    </label>
     <button>Buscar</button>
   </form>
   {#if editPerson}
     <form class="panel form-grid" onsubmit={(event) => { event.preventDefault(); onSave(); }}>
-      <input bind:value={editPerson.matricula} placeholder="Matricula" />
-      <input bind:value={editPerson.nombres} placeholder="Nombres" />
-      <input bind:value={editPerson.apellidos} placeholder="Apellidos" />
-      <select bind:value={editPerson.tipoPersona}>
-        {#each personTypeRows as type}
-          <option value={String(type.code)}>{type.label}</option>
-        {/each}
-      </select>
-      {#if requiresCareer}
-        <select bind:value={editPerson.carreraId}>
-          <option value="">Seleccione carrera</option>
-          {#each careerRows as career}
-            <option value={String(career.id)}>{career.nombre}</option>
+      <label class="form-field">
+        <span>Matricula</span>
+        <input bind:value={editPerson.matricula} placeholder="Matricula" />
+      </label>
+      <label class="form-field">
+        <span>Nombres</span>
+        <input bind:value={editPerson.nombres} placeholder="Nombres" />
+      </label>
+      <label class="form-field">
+        <span>Apellidos</span>
+        <input bind:value={editPerson.apellidos} placeholder="Apellidos" />
+      </label>
+      <label class="form-field">
+        <span>Tipo de persona</span>
+        <select bind:value={editPerson.tipoPersona}>
+          {#each personTypeRows as type}
+            <option value={String(type.code)}>{type.label}</option>
           {/each}
         </select>
+      </label>
+      {#if requiresCareer}
+        <label class="form-field">
+          <span>Carrera</span>
+          <select bind:value={editPerson.carreraId}>
+            <option value="">Seleccione carrera</option>
+            {#each careerRows as career}
+              <option value={String(career.id)}>{career.nombre}</option>
+            {/each}
+          </select>
+        </label>
       {/if}
-      <select bind:value={editPerson.estado}>
-        <option value="activo">Activo</option>
-        <option value="inactivo">Inactivo</option>
-        <option value="suspendido">Suspendido</option>
-        <option value="egresado">Egresado</option>
-        <option value="baja">Baja</option>
-      </select>
-      <textarea bind:value={editPerson.notas} placeholder="Notas"></textarea>
-      <input
-        type="file"
-        accept="image/*"
-        onchange={(event) => {
-          const file = event.currentTarget.files?.[0];
-          if (file) onPhoto(file);
-        }}
-      />
+      <label class="form-field">
+        <span>Estado</span>
+        <select bind:value={editPerson.estado}>
+          <option value="activo">Activo</option>
+          <option value="inactivo">Inactivo</option>
+          <option value="suspendido">Suspendido</option>
+          <option value="egresado">Egresado</option>
+          <option value="baja">Baja</option>
+        </select>
+      </label>
+      <label class="form-field">
+        <span>Notas</span>
+        <textarea bind:value={editPerson.notas} placeholder="Notas"></textarea>
+      </label>
+      <label class="form-field">
+        <span>Foto</span>
+        <input
+          type="file"
+          accept="image/*"
+          onchange={(event) => {
+            const file = event.currentTarget.files?.[0];
+            if (file) onPhoto(file);
+          }}
+        />
+      </label>
       <button>Guardar cambios</button>
       <div class="button-row">
         <button type="button" class="ghost" onclick={onEnable}>Activar</button>
@@ -104,32 +131,30 @@
 </section>
 
 {#if editPerson}
-  <section class="grid two">
-    <section class="panel">
-      <h2>Credenciales QR</h2>
-      <DataTable
-        rows={credentialRows}
-        columns={[
-          { key: "status", label: "Estado", kind: "status" },
-          { key: "tokenVersion", label: "Version" },
-          { key: "issuedAt", label: "Emitido", kind: "date" },
-          { key: "expiresAt", label: "Expira", kind: "date" },
-          { key: "lastUsedAt", label: "Ultimo uso", kind: "date" }
-        ]}
-      />
-      <PaginationControls
-        page={credentialPage}
-        pageSize={credentialPageSize}
-        total={credentialTotal}
-        onChange={onCredentialPageChange}
-      />
-      <div class="button-row">
-        <button onclick={onRotateQr}>Rotar QR</button>
-        <button class="ghost" onclick={onRevokeQr}>Revocar activos</button>
-      </div>
-    </section>
-    <section class="panel">
-      <QrPreview token={generatedToken} title={generatedTitle || "QR personal"} subtitle="El token solo se muestra al generar o rotar." />
-    </section>
+  <section class="panel">
+    <h2>Credenciales QR</h2>
+    <DataTable
+      rows={credentialRows}
+      columns={[
+        { key: "status", label: "Estado", kind: "status" },
+        { key: "tokenVersion", label: "Version" },
+        { key: "issuedAt", label: "Emitido", kind: "date" },
+        { key: "expiresAt", label: "Expira", kind: "date" },
+        { key: "lastUsedAt", label: "Ultimo uso", kind: "date" }
+      ]}
+    />
+    <PaginationControls
+      page={credentialPage}
+      pageSize={credentialPageSize}
+      total={credentialTotal}
+      onChange={onCredentialPageChange}
+    />
+    <div class="button-row">
+      <button onclick={onRotateQr}>Rotar QR</button>
+      <button class="ghost" onclick={onRevokeQr}>Revocar activos</button>
+    </div>
+  </section>
+  <section class="panel">
+    <QrPreview token={generatedToken} title={generatedTitle || "QR personal"} subtitle="El token solo se muestra al generar o rotar." />
   </section>
 {/if}

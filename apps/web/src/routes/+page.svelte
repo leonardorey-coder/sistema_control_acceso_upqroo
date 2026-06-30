@@ -37,6 +37,13 @@
     refreshAfterMs: number;
     jti: string;
   };
+  type ImportSummary = {
+    created: number;
+    updated: number;
+    issuedQr: number;
+    skipped: number;
+    errors: Array<{ row: number; code: string; message: string }>;
+  };
   type EventTopic =
     | "access.scan"
     | "access.table"
@@ -57,6 +64,17 @@
   };
   type Session = AdminSessionPayload;
 
+  function operatingDateValue(date = new Date()) {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Cancun",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }).formatToParts(date);
+    const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    return `${values.year}-${values.month}-${values.day}`;
+  }
+
   let { data }: { data: PageData } = $props();
 
   let activeTab = $state("generator");
@@ -70,6 +88,9 @@
   let passwordForm = $state({ currentPassword: "", newPassword: "" });
   let generatedToken = $state("");
   let generatedTitle = $state("");
+  let temporaryGeneratedToken = $state("");
+  let temporaryGeneratedTitle = $state("");
+  let temporaryQrError = $state("");
 
   let accessRows = $state<Row[]>([]);
   let accessTotal = $state(0);
@@ -91,6 +112,7 @@
   let adminRows = $state<Array<AdminRowPayload & Row>>([]);
   let adminSessionRows = $state<Array<AdminSessionRowPayload & Row>>([]);
   let adminAuditRows = $state<Array<AuditLogRowPayload & Row>>([]);
+  let adminAuditTotal = $state(0);
   let subjectRows = $state<Row[]>([]);
   let subjectTotal = $state(0);
   let scheduleRows = $state<Row[]>([]);
@@ -113,9 +135,9 @@
 
   let filters = $state({
     q: "",
-    date: new Date().toISOString().slice(0, 10),
+    date: operatingDateValue(),
     page: 1,
-    pageSize: 25,
+    pageSize: 10,
     personType: "",
     accessMode: "",
     status: "",
@@ -128,18 +150,23 @@
     permitVehicleId: ""
   });
 
-  let temporaryPagination = $state({ page: 1, pageSize: 25 });
-  let accessPagination = $state({ page: 1, pageSize: 25 });
-  let attendancePagination = $state({ page: 1, pageSize: 25 });
-  let vehiclePagination = $state({ page: 1, pageSize: 25 });
-  let permitPagination = $state({ page: 1, pageSize: 25 });
-  let hotQrPagination = $state({ page: 1, pageSize: 25 });
+  let temporaryPagination = $state({ page: 1, pageSize: 10 });
+  let accessPagination = $state({ page: 1, pageSize: 10 });
+  let attendancePagination = $state({ page: 1, pageSize: 10 });
+  let vehiclePagination = $state({ page: 1, pageSize: 10 });
+  let permitPagination = $state({ page: 1, pageSize: 10 });
+  let hotQrPagination = $state({ page: 1, pageSize: 10 });
   let credentialPagination = $state({ page: 1, pageSize: 10 });
+  let adminAuditPagination = $state({ page: 1, pageSize: 10 });
   let temporaryFilters = $state({ q: "", status: "", operationalDate: "" });
   let subjectPagination = $state({ page: 1, pageSize: 10 });
   let subjectFilters = $state({ q: "", active: "" });
-  let schedulePagination = $state({ page: 1, pageSize: 25 });
+  let schedulePagination = $state({ page: 1, pageSize: 10 });
   let scheduleFilters = $state({ q: "", subjectId: "", weekday: "", active: "" });
+  let peopleImportResult = $state<ImportSummary | null>(null);
+  let peopleImportError = $state("");
+  let scheduleImportResult = $state<ImportSummary | null>(null);
+  let scheduleImportError = $state("");
 
   let personForm = $state({
     matricula: "",
@@ -157,7 +184,7 @@
   let editPerson = $state<(PersonRowPayload & Row) | null>(null);
   let temporaryQrForm = $state({
     personId: "",
-    operationalDate: new Date().toISOString().slice(0, 10),
+    operationalDate: operatingDateValue(),
     missingCredentialType: "personal_qr",
     reasonCode: "credential_unavailable",
     reasonText: "",
@@ -184,9 +211,6 @@
     mustChangePassword: false
   });
   let auditFilters = $state({ q: "", action: "", entityType: "", from: "", to: "" });
-  let subjectForm = $state({ clave: "", nombre: "" });
-  let scheduleForm = $state({ personId: "", subjectId: "", weekday: 1, horaInicio: "08:00", horaFin: "09:00", aula: "", validFrom: new Date().toISOString().slice(0, 10), validUntil: "" });
-  let schedulePersonLabel = $state("");
 
   const tabs = [
     { id: "generator", label: "Generar QR" },
@@ -422,13 +446,17 @@
   async function refreshAdmins() {
     if (session?.admin.role !== "super_admin") return;
     adminRows = (await apiRequest<{ rows: Array<AdminRowPayload & Row> }>("/api/v1/admins")).rows;
-    adminAuditRows = (await apiRequest<{ rows: Array<AuditLogRowPayload & Row> }>(`/api/v1/admins/audit${toQuery({
+    const auditResult = await apiRequest<PaginatedRows<AuditLogRowPayload & Row>>(`/api/v1/admins/audit${toQuery({
       q: auditFilters.q,
       action: auditFilters.action,
       entityType: auditFilters.entityType,
       from: auditFilters.from ? new Date(auditFilters.from).toISOString() : "",
-      to: auditFilters.to ? new Date(auditFilters.to).toISOString() : ""
-    })}`)).rows;
+      to: auditFilters.to ? new Date(auditFilters.to).toISOString() : "",
+      page: adminAuditPagination.page,
+      pageSize: adminAuditPagination.pageSize
+    })}`);
+    adminAuditRows = auditResult.rows;
+    adminAuditTotal = auditResult.total;
   }
 
   async function refreshConfig() {
@@ -592,11 +620,6 @@
     permitPagination.page = 1;
   }
 
-  function selectSchedulePerson(row: Row | null) {
-    scheduleForm.personId = row?.id ? String(row.id) : "";
-    schedulePersonLabel = row ? `${row.matricula ?? ""} - ${row.nombres ?? ""} ${row.apellidos ?? ""}`.trim() : "";
-  }
-
   async function changeAccessPage(next: { page: number; pageSize: number }) {
     accessPagination = next;
     await refreshAccess();
@@ -672,6 +695,16 @@
     await refreshCredentials();
   }
 
+  async function changeAuditPage(next: { page: number; pageSize: number }) {
+    adminAuditPagination = next;
+    await refreshAdmins();
+  }
+
+  async function filterAudit() {
+    adminAuditPagination.page = 1;
+    await refreshAdmins();
+  }
+
   async function saveEditPerson() {
     if (!editPerson?.id) return;
     const payload = {
@@ -734,6 +767,7 @@
   }
 
   async function createTemporaryQr() {
+    temporaryQrError = "";
     const validUntil = temporaryQrForm.validUntil ? new Date(temporaryQrForm.validUntil).toISOString() : new Date(Date.now() + 1000 * 60 * 60 * 8).toISOString();
     const result = await apiRequest<{ credential: Row; token: string }>("/api/v1/credentials/temporary-daily", {
       method: "POST",
@@ -744,16 +778,20 @@
   }
 
   async function showTemporaryQr(row: Row, fallbackToken = "") {
+    temporaryQrError = "";
     try {
       const result = await apiRequest<DynamicQrResult>(`/api/v1/credentials/temporary-daily/${row.id}/dynamic`, { method: "POST" });
-      generatedToken = result.token;
-      generatedTitle = "QR temporal diario dinamico";
+      temporaryGeneratedToken = result.token;
+      temporaryGeneratedTitle = "QR temporal diario dinamico";
       notice = `QR temporal dinamico generado. Expira: ${new Date(result.expiresAt).toLocaleTimeString("es-MX")}`;
     } catch (error) {
       const code = error instanceof Error && "code" in error ? String(error.code) : "";
       if (code && code !== "SIGNED_QR_DISABLED") throw error;
-      generatedToken = fallbackToken;
-      generatedTitle = "QR temporal diario";
+      temporaryGeneratedToken = fallbackToken;
+      temporaryGeneratedTitle = "QR temporal diario";
+      if (!fallbackToken) {
+        temporaryQrError = "No se pudo generar el QR dinamico porque QR firmado esta deshabilitado y este registro no conserva el token visible. Genera un nuevo QR temporal o activa QR firmado.";
+      }
       notice = "QR temporal generado en modo compatible";
     }
   }
@@ -923,25 +961,32 @@
     notice = "Configuracion de QR firmado guardada";
   }
 
-  async function createSubject() {
-    await apiRequest("/api/v1/subjects", { method: "POST", body: JSON.stringify(subjectForm) });
-    subjectForm = { clave: "", nombre: "" };
-    await refreshSubjects();
+  async function importPeopleCsv(file: File) {
+    peopleImportError = "";
+    const body = new FormData();
+    body.set("file", file);
+
+    try {
+      peopleImportResult = await apiRequest<ImportSummary>("/api/v1/people/import", { method: "POST", body });
+      notice = "Importacion de usuarios finalizada";
+      await Promise.allSettled([refreshPeople(), refreshCredentials()]);
+    } catch (error) {
+      peopleImportError = error instanceof Error ? error.message : "No se pudo importar usuarios";
+    }
   }
 
-  async function createSchedule() {
-    await apiRequest("/api/v1/schedules", {
-      method: "POST",
-      body: JSON.stringify({
-        ...scheduleForm,
-        weekday: Number(scheduleForm.weekday),
-        aula: scheduleForm.aula || undefined,
-        validUntil: scheduleForm.validUntil || undefined
-      })
-    });
-    scheduleForm = { personId: "", subjectId: "", weekday: 1, horaInicio: "08:00", horaFin: "09:00", aula: "", validFrom: new Date().toISOString().slice(0, 10), validUntil: "" };
-    schedulePersonLabel = "";
-    await refreshSchedules();
+  async function importSchedulesCsv(file: File) {
+    scheduleImportError = "";
+    const body = new FormData();
+    body.set("file", file);
+
+    try {
+      scheduleImportResult = await apiRequest<ImportSummary>("/api/v1/schedules/import", { method: "POST", body });
+      notice = "Importacion de horarios finalizada";
+      await Promise.allSettled([refreshSubjects(), refreshSchedules(), refreshAttendance()]);
+    } catch (error) {
+      scheduleImportError = error instanceof Error ? error.message : "No se pudo importar horarios";
+    }
   }
 
   async function adjustAttendance(row: AttendanceRowPayload & Row, estado: "confirmed" | "partial" | "unverified") {
@@ -994,8 +1039,14 @@
         <p class="muted">Debes actualizar tu password antes de continuar con tareas sensibles.</p>
         {#if passwordNotice}<p class="notice">{passwordNotice}</p>{/if}
         {#if passwordError}<p class="error">{passwordError}</p>{/if}
-        <input type="password" bind:value={passwordForm.currentPassword} placeholder="Password actual" required />
-        <input type="password" bind:value={passwordForm.newPassword} placeholder="Nuevo password" minlength="8" required />
+        <label class="form-field">
+          <span>Password actual</span>
+          <input type="password" bind:value={passwordForm.currentPassword} placeholder="Password actual" required />
+        </label>
+        <label class="form-field">
+          <span>Nuevo password</span>
+          <input type="password" bind:value={passwordForm.newPassword} placeholder="Nuevo password" minlength="8" required />
+        </label>
         <button>Actualizar password</button>
       </form>
     {/if}
@@ -1007,6 +1058,9 @@
         {careerRows}
         {generatedToken}
         {generatedTitle}
+        {temporaryGeneratedToken}
+        {temporaryGeneratedTitle}
+        {temporaryQrError}
         {temporaryQrForm}
         {temporaryQrPersonLabel}
         temporaryRows={temporaryQrRows}
@@ -1019,6 +1073,9 @@
         searchPeople={searchPeopleOptions}
         onSelectTemporaryPerson={selectTemporaryPerson}
         onSubmit={createPersonAndQr}
+        importResult={peopleImportResult}
+        importError={peopleImportError}
+        onImportPeople={importPeopleCsv}
         onCreateTemporaryQr={createTemporaryQr}
         onShowTemporaryQr={showTemporaryQr}
         onRevokeTemporaryQr={revokeTemporaryQr}
@@ -1079,19 +1136,15 @@
         schedulePage={schedulePagination.page}
         schedulePageSize={schedulePagination.pageSize}
         {scheduleFilters}
-        {subjectForm}
-        {scheduleForm}
-        {schedulePersonLabel}
-        searchPeople={searchPeopleOptions}
-        onSelectSchedulePerson={selectSchedulePerson}
+        importResult={scheduleImportResult}
+        importError={scheduleImportError}
         onFilter={filterAttendance}
         onPageChange={changeAttendancePage}
         onFilterSubjects={filterSubjects}
         onSubjectPageChange={changeSubjectPage}
         onFilterSchedules={filterSchedules}
         onSchedulePageChange={changeSchedulePage}
-        onCreateSubject={createSubject}
-        onCreateSchedule={createSchedule}
+        onImportSchedules={importSchedulesCsv}
         onAdjustAttendance={adjustAttendance}
       />
     {/if}
@@ -1165,6 +1218,9 @@
         isSuperAdmin={session.admin.role === "super_admin"}
         sessionRows={adminSessionRows}
         auditRows={adminAuditRows}
+        auditTotal={adminAuditTotal}
+        auditPage={adminAuditPagination.page}
+        auditPageSize={adminAuditPagination.pageSize}
         onCreate={createAdmin}
         onSelect={selectAdminForEdit}
         onUpdate={updateAdmin}
@@ -1173,7 +1229,8 @@
         onResetPassword={resetAdminPassword}
         onLoadSessions={loadAdminSessions}
         onRevokeSession={revokeAdminSession}
-        onFilterAudit={refreshAdmins}
+        onFilterAudit={filterAudit}
+        onAuditPageChange={changeAuditPage}
       />
     {/if}
 

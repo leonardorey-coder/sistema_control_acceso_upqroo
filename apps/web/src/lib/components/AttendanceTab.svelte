@@ -1,10 +1,17 @@
 <script lang="ts">
   import type { AttendanceRowPayload } from "@control-acceso/shared";
   import DataTable from "./DataTable.svelte";
-  import EntitySearchSelect from "./EntitySearchSelect.svelte";
   import PaginationControls from "./PaginationControls.svelte";
 
   type Row = Record<string, unknown>;
+
+  type ImportSummary = {
+    created: number;
+    updated: number;
+    issuedQr: number;
+    skipped: number;
+    errors: Array<{ row: number; code: string; message: string }>;
+  };
 
   let {
     rows,
@@ -23,19 +30,15 @@
     schedulePage,
     schedulePageSize,
     scheduleFilters,
-    subjectForm,
-    scheduleForm,
-    schedulePersonLabel,
-    searchPeople,
-    onSelectSchedulePerson,
+    importResult,
+    importError,
     onFilter,
     onPageChange,
     onFilterSubjects,
     onSubjectPageChange,
     onFilterSchedules,
     onSchedulePageChange,
-    onCreateSubject,
-    onCreateSchedule,
+    onImportSchedules,
     onAdjustAttendance
   }: {
     rows: Array<AttendanceRowPayload & Row>;
@@ -54,19 +57,15 @@
     schedulePage: number;
     schedulePageSize: number;
     scheduleFilters: { q: string; subjectId: string; weekday: string; active: string };
-    subjectForm: { clave: string; nombre: string };
-    scheduleForm: { personId: string; subjectId: string; weekday: number; horaInicio: string; horaFin: string; aula: string; validFrom: string; validUntil: string };
-    schedulePersonLabel: string;
-    searchPeople: (query: string) => Promise<Row[]>;
-    onSelectSchedulePerson: (row: Row | null) => void;
+    importResult: ImportSummary | null;
+    importError: string;
     onFilter: () => void;
     onPageChange: (next: { page: number; pageSize: number }) => void;
     onFilterSubjects: () => void;
     onSubjectPageChange: (next: { page: number; pageSize: number }) => void;
     onFilterSchedules: () => void;
     onSchedulePageChange: (next: { page: number; pageSize: number }) => void;
-    onCreateSubject: () => void;
-    onCreateSchedule: () => void;
+    onImportSchedules: (file: File) => void;
     onAdjustAttendance: (row: AttendanceRowPayload & Row, estado: "confirmed" | "partial" | "unverified") => void;
   } = $props();
 
@@ -74,9 +73,6 @@
     return row as AttendanceRowPayload & Row;
   }
 
-  function displayPerson(row: Row) {
-    return `${row.matricula ?? ""} - ${row.nombres ?? ""} ${row.apellidos ?? ""}`.trim();
-  }
 </script>
 
 <section class="panel">
@@ -85,23 +81,38 @@
     <span>{total} asistencias</span>
   </div>
   <div class="toolbar">
-    <input bind:value={filters.q} placeholder="Buscar alumno o materia" />
-    <input bind:value={filters.date} type="date" />
-    <input bind:value={filters.subject} placeholder="Materia" />
-    <select bind:value={filters.status}>
-      <option value="">Todos los estados</option>
-      <option value="in_progress">En curso</option>
-      <option value="confirmed">Confirmada</option>
-      <option value="partial">Parcial</option>
-      <option value="unverified">Sin verificar</option>
-      <option value="assumed">Asumida</option>
-    </select>
-    <select bind:value={filters.careerId}>
-      <option value="">Todas las carreras</option>
-      {#each careerRows as career}
-        <option value={String(career.id)}>{career.nombre}</option>
-      {/each}
-    </select>
+    <label class="form-field">
+      <span>Busqueda</span>
+      <input bind:value={filters.q} placeholder="Buscar alumno o materia" />
+    </label>
+    <label class="form-field">
+      <span>Fecha</span>
+      <input bind:value={filters.date} type="date" />
+    </label>
+    <label class="form-field">
+      <span>Materia</span>
+      <input bind:value={filters.subject} placeholder="Materia" />
+    </label>
+    <label class="form-field">
+      <span>Estado</span>
+      <select bind:value={filters.status}>
+        <option value="">Todos los estados</option>
+        <option value="in_progress">En curso</option>
+        <option value="confirmed">Confirmada</option>
+        <option value="partial">Parcial</option>
+        <option value="unverified">Sin verificar</option>
+        <option value="assumed">Asumida</option>
+      </select>
+    </label>
+    <label class="form-field">
+      <span>Carrera</span>
+      <select bind:value={filters.careerId}>
+        <option value="">Todas las carreras</option>
+        {#each careerRows as career}
+          <option value={String(career.id)}>{career.nombre}</option>
+        {/each}
+      </select>
+    </label>
     <button onclick={onFilter}>Filtrar</button>
   </div>
   <DataTable rows={rows} columns={[
@@ -125,62 +136,69 @@
   <PaginationControls {page} {pageSize} {total} onChange={onPageChange} />
 </section>
 
-<section class="grid two">
-  <form class="panel form-grid" onsubmit={(event) => { event.preventDefault(); onCreateSubject(); }}>
-    <h2>Materias</h2>
-    <input bind:value={subjectForm.clave} placeholder="Clave" required />
-    <input bind:value={subjectForm.nombre} placeholder="Nombre de materia" required />
-    <button>Guardar materia</button>
-    <div class="toolbar compact">
+<section class="panel form-grid">
+  <div class="section-header">
+    <h2>Importar horarios</h2>
+    <p>CSV: matricula,subjectClave,subjectName,weekday,horaInicio,horaFin,aula,validFrom,validUntil</p>
+  </div>
+  <label class="form-field">
+    <span>Archivo CSV</span>
+    <input
+      type="file"
+      accept=".csv,text/csv"
+      onchange={(event) => {
+        const file = event.currentTarget.files?.[0];
+        if (file) onImportSchedules(file);
+        event.currentTarget.value = "";
+      }}
+    />
+  </label>
+  {#if importError}
+    <p class="error">{importError}</p>
+  {/if}
+  {#if importResult}
+    <div class="import-summary">
+      <span>Creados: {importResult.created}</span>
+      <span>Actualizados: {importResult.updated}</span>
+      <span>QR emitidos: {importResult.issuedQr}</span>
+      <span>Omitidos: {importResult.skipped}</span>
+    </div>
+    {#if importResult.errors.length}
+      <DataTable rows={importResult.errors} columns={[
+        { key: "row", label: "Fila" },
+        { key: "code", label: "Codigo" },
+        { key: "message", label: "Error" }
+      ]} />
+    {/if}
+  {/if}
+</section>
+
+<section class="panel">
+  <div class="tabla-header">
+    <h2>Materias registradas</h2>
+    <span>{subjectTotal} materias</span>
+  </div>
+  <div class="toolbar">
+    <label class="form-field">
+      <span>Materia</span>
       <input bind:value={subjectFilters.q} placeholder="Filtrar materia" />
+    </label>
+    <label class="form-field">
+      <span>Estado</span>
       <select bind:value={subjectFilters.active}>
         <option value="">Todas</option>
         <option value="true">Activas</option>
         <option value="false">Inactivas</option>
       </select>
-      <button type="button" onclick={onFilterSubjects}>Filtrar</button>
-    </div>
-    <DataTable rows={subjectRows} columns={[
-      { key: "clave", label: "Clave" },
-      { key: "nombre", label: "Materia" },
-      { key: "active", label: "Activa" }
-    ]} />
-    <PaginationControls page={subjectPage} pageSize={subjectPageSize} total={subjectTotal} onChange={onSubjectPageChange} />
-  </form>
-
-  <form class="panel form-grid" onsubmit={(event) => { event.preventDefault(); onCreateSchedule(); }}>
-    <h2>Horarios</h2>
-    <EntitySearchSelect
-      label="Persona"
-      value={scheduleForm.personId}
-      displayValue={schedulePersonLabel}
-      placeholder="Buscar por matricula o nombre"
-      search={searchPeople}
-      displayResult={displayPerson}
-      onSelect={onSelectSchedulePerson}
-    />
-    <select bind:value={scheduleForm.subjectId} required>
-      <option value="">Seleccione materia</option>
-      {#each subjectRows as subject}
-        <option value={String(subject.id)}>{subject.nombre}</option>
-      {/each}
-    </select>
-    <select bind:value={scheduleForm.weekday}>
-      <option value={1}>Lunes</option>
-      <option value={2}>Martes</option>
-      <option value={3}>Miercoles</option>
-      <option value={4}>Jueves</option>
-      <option value={5}>Viernes</option>
-      <option value={6}>Sabado</option>
-      <option value={0}>Domingo</option>
-    </select>
-    <input bind:value={scheduleForm.horaInicio} type="time" />
-    <input bind:value={scheduleForm.horaFin} type="time" />
-    <input bind:value={scheduleForm.aula} placeholder="Aula" />
-    <input bind:value={scheduleForm.validFrom} type="date" />
-    <input bind:value={scheduleForm.validUntil} type="date" />
-    <button>Guardar horario</button>
-  </form>
+    </label>
+    <button type="button" onclick={onFilterSubjects}>Filtrar</button>
+  </div>
+  <DataTable rows={subjectRows} columns={[
+    { key: "clave", label: "Clave" },
+    { key: "nombre", label: "Materia" },
+    { key: "active", label: "Activa" }
+  ]} />
+  <PaginationControls page={subjectPage} pageSize={subjectPageSize} total={subjectTotal} onChange={onSubjectPageChange} />
 </section>
 
 <section class="panel">
@@ -189,28 +207,40 @@
     <span>{scheduleTotal} horarios</span>
   </div>
   <div class="toolbar">
-    <input bind:value={scheduleFilters.q} placeholder="Buscar alumno, materia o aula" />
-    <select bind:value={scheduleFilters.subjectId}>
-      <option value="">Todas las materias</option>
-      {#each subjectRows as subject}
-        <option value={String(subject.id)}>{subject.nombre}</option>
-      {/each}
-    </select>
-    <select bind:value={scheduleFilters.weekday}>
-      <option value="">Todos los dias</option>
-      <option value="1">Lunes</option>
-      <option value="2">Martes</option>
-      <option value="3">Miercoles</option>
-      <option value="4">Jueves</option>
-      <option value="5">Viernes</option>
-      <option value="6">Sabado</option>
-      <option value="0">Domingo</option>
-    </select>
-    <select bind:value={scheduleFilters.active}>
-      <option value="">Todos</option>
-      <option value="true">Activos</option>
-      <option value="false">Inactivos</option>
-    </select>
+    <label class="form-field">
+      <span>Busqueda</span>
+      <input bind:value={scheduleFilters.q} placeholder="Buscar alumno, materia o aula" />
+    </label>
+    <label class="form-field">
+      <span>Materia</span>
+      <select bind:value={scheduleFilters.subjectId}>
+        <option value="">Todas las materias</option>
+        {#each subjectRows as subject}
+          <option value={String(subject.id)}>{subject.nombre}</option>
+        {/each}
+      </select>
+    </label>
+    <label class="form-field">
+      <span>Dia</span>
+      <select bind:value={scheduleFilters.weekday}>
+        <option value="">Todos los dias</option>
+        <option value="1">Lunes</option>
+        <option value="2">Martes</option>
+        <option value="3">Miercoles</option>
+        <option value="4">Jueves</option>
+        <option value="5">Viernes</option>
+        <option value="6">Sabado</option>
+        <option value="0">Domingo</option>
+      </select>
+    </label>
+    <label class="form-field">
+      <span>Estado</span>
+      <select bind:value={scheduleFilters.active}>
+        <option value="">Todos</option>
+        <option value="true">Activos</option>
+        <option value="false">Inactivos</option>
+      </select>
+    </label>
     <button onclick={onFilterSchedules}>Filtrar</button>
   </div>
   <DataTable rows={scheduleRows} columns={[

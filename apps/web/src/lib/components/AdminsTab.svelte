@@ -1,7 +1,8 @@
 <script lang="ts">
-  import type { AdminRowPayload, AdminSessionRowPayload, AuditLogRowPayload } from "@control-acceso/shared";
-  import DataTable from "./DataTable.svelte";
-  import Modal from "./Modal.svelte";
+import type { AdminRowPayload, AdminSessionRowPayload, AuditLogRowPayload } from "@control-acceso/shared";
+import DataTable from "./DataTable.svelte";
+import Modal from "./Modal.svelte";
+import PaginationControls from "./PaginationControls.svelte";
 
   type Row = Record<string, unknown>;
   type AdminRow = AdminRowPayload & Row;
@@ -16,6 +17,9 @@
     isSuperAdmin,
     sessionRows,
     auditRows,
+    auditTotal,
+    auditPage,
+    auditPageSize,
     onCreate,
     onSelect,
     onUpdate,
@@ -24,7 +28,8 @@
     onResetPassword,
     onLoadSessions,
     onRevokeSession,
-    onFilterAudit
+    onFilterAudit,
+    onAuditPageChange
   }: {
     rows: AdminRow[];
     form: { username: string; displayName: string; email: string; role: string; temporaryPassword: string };
@@ -42,6 +47,9 @@
     onCreate: () => void;
     sessionRows: AdminSessionRow[];
     auditRows: AuditRow[];
+    auditTotal: number;
+    auditPage: number;
+    auditPageSize: number;
     onSelect: (row: AdminRow) => void;
     onUpdate: () => void;
     onDisable: (row: Row) => void;
@@ -50,6 +58,7 @@
     onLoadSessions: (row: Row) => void;
     onRevokeSession: (row: Row) => void;
     onFilterAudit: () => void;
+    onAuditPageChange: (next: { page: number; pageSize: number }) => void;
   } = $props();
 
   let selectedAudit = $state<AuditRow | null>(null);
@@ -64,30 +73,60 @@
   <section class="grid two">
     <form class="panel" onsubmit={(event) => { event.preventDefault(); onCreate(); }}>
       <h2>Crear administrador</h2>
-      <input bind:value={form.username} placeholder="Usuario" required />
-      <input bind:value={form.displayName} placeholder="Nombre" required />
-      <input bind:value={form.email} placeholder="Correo" />
-      <select bind:value={form.role}>
-        <option value="admin">Admin</option>
-        <option value="super_admin">Super admin</option>
-      </select>
-      <input bind:value={form.temporaryPassword} placeholder="Password temporal opcional" />
+      <label class="form-field">
+        <span>Usuario</span>
+        <input bind:value={form.username} placeholder="Usuario" required />
+      </label>
+      <label class="form-field">
+        <span>Nombre</span>
+        <input bind:value={form.displayName} placeholder="Nombre" required />
+      </label>
+      <label class="form-field">
+        <span>Correo</span>
+        <input bind:value={form.email} placeholder="Correo" />
+      </label>
+      <label class="form-field">
+        <span>Rol</span>
+        <select bind:value={form.role}>
+          <option value="admin">Admin</option>
+          <option value="super_admin">Super admin</option>
+        </select>
+      </label>
+      <label class="form-field">
+        <span>Password temporal</span>
+        <input bind:value={form.temporaryPassword} placeholder="Password temporal opcional" />
+      </label>
       <button>Crear admin</button>
     </form>
     <form class="panel" onsubmit={(event) => { event.preventDefault(); onUpdate(); }}>
       <h2>Editar administrador</h2>
       {#if editForm.id}
-        <input bind:value={editForm.username} placeholder="Usuario" required />
-        <input bind:value={editForm.displayName} placeholder="Nombre" required />
-        <input bind:value={editForm.email} placeholder="Correo" />
-        <select bind:value={editForm.role}>
-          <option value="admin">Admin</option>
-          <option value="super_admin">Super admin</option>
-        </select>
-        <select bind:value={editForm.status}>
-          <option value="active">Activo</option>
-          <option value="disabled">Deshabilitado</option>
-        </select>
+        <label class="form-field">
+          <span>Usuario</span>
+          <input bind:value={editForm.username} placeholder="Usuario" required />
+        </label>
+        <label class="form-field">
+          <span>Nombre</span>
+          <input bind:value={editForm.displayName} placeholder="Nombre" required />
+        </label>
+        <label class="form-field">
+          <span>Correo</span>
+          <input bind:value={editForm.email} placeholder="Correo" />
+        </label>
+        <label class="form-field">
+          <span>Rol</span>
+          <select bind:value={editForm.role}>
+            <option value="admin">Admin</option>
+            <option value="super_admin">Super admin</option>
+          </select>
+        </label>
+        <label class="form-field">
+          <span>Estado</span>
+          <select bind:value={editForm.status}>
+            <option value="active">Activo</option>
+            <option value="disabled">Deshabilitado</option>
+          </select>
+        </label>
         <label class="check-row">
           <input type="checkbox" bind:checked={editForm.mustChangePassword} />
           Requerir cambio de password
@@ -121,39 +160,59 @@
     ]} />
   </section>
 
-  <section class="grid two">
-    <section class="panel">
-      <h2>Sesiones administrativas</h2>
-      <DataTable rows={sessionRows} columns={[
-        { key: "adminId", label: "Admin" },
-        { key: "ipAddress", label: "IP" },
-        { key: "userAgent", label: "User-Agent" },
-        { key: "lastUsedAt", label: "Ultimo uso", kind: "date" },
-        { key: "expiresAt", label: "Expira", kind: "date" },
-        { key: "revokedAt", label: "Revocada", kind: "date" }
-      ]} actions={[{ label: "Revocar", onClick: onRevokeSession, tone: "ghost" }]} />
-    </section>
-    <section class="panel">
-      <form class="filter-bar" onsubmit={(event) => { event.preventDefault(); onFilterAudit(); }}>
+  <section class="panel">
+    <h2>Sesiones administrativas</h2>
+    <DataTable rows={sessionRows} columns={[
+      { key: "adminId", label: "Admin" },
+      { key: "ipAddress", label: "IP" },
+      { key: "userAgent", label: "User-Agent" },
+      { key: "lastUsedAt", label: "Ultimo uso", kind: "date" },
+      { key: "expiresAt", label: "Expira", kind: "date" },
+      { key: "revokedAt", label: "Revocada", kind: "date" }
+    ]} actions={[{ label: "Revocar", onClick: onRevokeSession, tone: "ghost" }]} />
+  </section>
+
+  <section class="panel">
+    <form class="filter-bar" onsubmit={(event) => { event.preventDefault(); onFilterAudit(); }}>
+      <label class="form-field">
+        <span>Busqueda</span>
         <input bind:value={auditFilters.q} placeholder="Buscar auditoria" />
+      </label>
+      <label class="form-field">
+        <span>Accion</span>
         <input bind:value={auditFilters.action} placeholder="Accion" />
+      </label>
+      <label class="form-field">
+        <span>Entidad</span>
         <input bind:value={auditFilters.entityType} placeholder="Entidad" />
+      </label>
+      <label class="form-field">
+        <span>Desde</span>
         <input type="datetime-local" bind:value={auditFilters.from} />
+      </label>
+      <label class="form-field">
+        <span>Hasta</span>
         <input type="datetime-local" bind:value={auditFilters.to} />
-        <button>Filtrar</button>
-      </form>
-      <h2>Auditoria</h2>
-      <DataTable rows={auditRows} columns={[
-        { key: "action", label: "Accion" },
-        { key: "entityType", label: "Entidad" },
-        { key: "entityId", label: "ID" },
-        { key: "ipAddress", label: "IP" },
-        { key: "actorAdminId", label: "Actor admin" },
-        { key: "createdAt", label: "Fecha", kind: "date" }
-      ]} actions={[
-        { label: "Detalle", onClick: (row) => { selectedAudit = row as AuditRow; }, tone: "ghost" }
-      ]} />
-    </section>
+      </label>
+      <button>Filtrar</button>
+    </form>
+    <h2>Auditoria</h2>
+    <DataTable rows={auditRows} columns={[
+      { key: "action", label: "Accion" },
+      { key: "entityType", label: "Entidad" },
+      { key: "entityId", label: "ID" },
+      { key: "ipAddress", label: "IP" },
+      { key: "actorAdminId", label: "Actor admin" },
+      { key: "createdAt", label: "Fecha", kind: "date" }
+    ]} actions={[
+      { label: "Detalle", onClick: (row) => { selectedAudit = row as AuditRow; }, tone: "ghost" }
+    ]} />
+    <PaginationControls
+      page={auditPage}
+      pageSize={auditPageSize}
+      total={auditTotal}
+      onChange={onAuditPageChange}
+    />
   </section>
 
   <Modal open={Boolean(selectedAudit)} title="Detalle de auditoria" onClose={() => (selectedAudit = null)}>

@@ -1,18 +1,15 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
   import type { ScannerResultPayload } from "@control-acceso/shared";
-  import DataTable from "./DataTable.svelte";
   import StatusBadge from "./StatusBadge.svelte";
 
   type Row = Record<string, unknown>;
 
   let {
     result,
-    recentRows,
     onScan
   }: {
     result: (ScannerResultPayload & Row) | null;
-    recentRows: Row[];
     onScan: (payload: { token?: string; signedQr?: string; manualMatricula?: string }) => Promise<void>;
   } = $props();
 
@@ -118,13 +115,19 @@
           <button type="button" onclick={startCamera} disabled={cameraActive}>Iniciar camara</button>
           <button type="button" class="ghost" onclick={stopCamera} disabled={!cameraActive}>Detener</button>
         </div>
-        <input bind:value={token} placeholder="Token QR" autocomplete="off" />
+        <label class="form-field">
+          <span>Token QR</span>
+          <input bind:value={token} placeholder="Token QR" autocomplete="off" />
+        </label>
         <button disabled={busy || !token}>Registrar QR</button>
       </form>
     {:else}
       <form class="panel scanner-card" onsubmit={(event) => { event.preventDefault(); submitScan({ manualMatricula }); }}>
         <h2>Ingresa tu Matricula</h2>
-        <input bind:value={manualMatricula} placeholder="Ej: 21A00000" autocomplete="off" />
+        <label class="form-field">
+          <span>Matricula</span>
+          <input bind:value={manualMatricula} placeholder="Ej: 21A00000" autocomplete="off" />
+        </label>
         <div class="pin-pad">
           {#each keys as key}
             <button type="button" class="pin-key" onclick={() => pressKey(key)}>{key === "backspace" ? "⌫" : key === "enter" ? "✓" : key}</button>
@@ -169,20 +172,4 @@
       {/if}
     </section>
   </div>
-
-  <section class="panel">
-    <h2>Registros recientes</h2>
-    <DataTable
-      rows={recentRows}
-      columns={[
-        { key: "matricula", label: "Matricula" },
-        { key: "nombres", label: "Nombre", kind: "name" },
-        { key: "tipoPersona", label: "Tipo" },
-        { key: "entradaAt", label: "Entrada", kind: "date" },
-        { key: "salidaAt", label: "Salida", kind: "date" },
-        { key: "status", label: "Estado", kind: "status" },
-        { key: "accessMode", label: "Modo" }
-      ]}
-    />
-  </section>
 </section>

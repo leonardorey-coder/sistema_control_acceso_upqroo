@@ -227,8 +227,12 @@ a {
 .tab-button,
 .tabs button,
 .client-tabs button {
+  display: inline-flex;
   min-width: max-content;
   flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   border: none;
   border-bottom: 3px solid transparent;
   border-radius: 0;
@@ -237,6 +241,19 @@ a {
   padding: 16px 20px;
   font-size: 15px;
   font-weight: 500;
+}
+
+.tab-icon {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  align-items: center;
+  justify-content: center;
+}
+
+.tab-icon svg {
+  display: block;
 }
 
 .tab-button:hover,
@@ -378,6 +395,11 @@ form.panel,
   margin-bottom: 14px;
 }
 
+.toolbar > button,
+.filter-bar > button {
+  align-self: end;
+}
+
 .entity-search {
   position: relative;
   display: grid;
@@ -388,6 +410,21 @@ form.panel,
   color: var(--medium-gray);
   font-size: 13px;
   font-weight: 700;
+}
+
+.form-field {
+  display: grid;
+  gap: 6px;
+}
+
+.form-field > span {
+  color: var(--medium-gray);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.login-card .form-field {
+  text-align: left;
 }
 
 .entity-search-row {
@@ -437,6 +474,30 @@ form.panel,
 .pagination-controls select {
   width: auto;
   min-width: 84px;
+}
+
+.import-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.import-summary span {
+  border: 1px solid rgb(255 140 0 / 0.16);
+  border-radius: 6px;
+  background: #fff8f0;
+  color: var(--dark-gray);
+  padding: 8px 10px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.temporary-qr-preview {
+  margin: 0 0 16px;
+  border: 1px solid rgb(255 140 0 / 0.16);
+  border-radius: 8px;
+  background: #fffaf4;
+  padding: 16px;
 }
 
 .tabla-header {
@@ -660,14 +721,17 @@ form.panel,
 
 .scanner-page {
   display: grid;
-  width: min(720px, 100%);
+  width: min(960px, 100%);
   gap: 20px;
   margin: 0 auto;
+  justify-items: stretch;
 }
 
 .scanner-stack {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 20px;
+  align-items: start;
 }
 
 .scanner-card {
@@ -712,7 +776,9 @@ form.panel,
 .result-card {
   display: grid;
   align-content: start;
+  justify-items: center;
   gap: 12px;
+  text-align: center;
 }
 
 .avatar {
@@ -882,6 +948,7 @@ form.panel,
   }
 
   .two,
+  .scanner-stack,
   .toolbar,
   .filter-bar,
   .qr-preview,
