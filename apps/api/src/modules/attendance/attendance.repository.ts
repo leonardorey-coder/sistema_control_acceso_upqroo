@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gte, ilike, lte, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, or, sql, type SQL } from "drizzle-orm";
 import { db } from "../../db/client";
 import { asistenciasPotenciales, carreras, personas, schedules, subjects } from "../../db/schema";
 import type { Pagination } from "../../shared/pagination";
@@ -190,6 +190,12 @@ export async function createSubject(input: typeof subjects.$inferInsert) {
   return row!;
 }
 
+export function findSubjectByClave(clave: string) {
+  return db.query.subjects.findFirst({
+    where: eq(subjects.clave, clave)
+  });
+}
+
 export async function updateSubject(id: string, input: Partial<typeof subjects.$inferInsert>) {
   const [row] = await db.update(subjects).set({ ...input, updatedAt: new Date() }).where(eq(subjects.id, id)).returning();
   return row;
@@ -273,6 +279,22 @@ export async function listSchedules(filters: ScheduleFilters, pagination: Pagina
 export async function createSchedule(input: typeof schedules.$inferInsert) {
   const [row] = await db.insert(schedules).values(input).returning();
   return row!;
+}
+
+export function findMatchingSchedule(input: {
+  personId: string;
+  subjectId: string;
+  weekday: number;
+  horaInicio: string;
+}) {
+  return db.query.schedules.findFirst({
+    where: and(
+      eq(schedules.personId, input.personId),
+      eq(schedules.subjectId, input.subjectId),
+      eq(schedules.weekday, input.weekday),
+      eq(schedules.horaInicio, input.horaInicio)
+    )
+  });
 }
 
 export async function updateSchedule(id: string, input: Partial<typeof schedules.$inferInsert>) {

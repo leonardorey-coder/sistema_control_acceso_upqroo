@@ -2,14 +2,19 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { getActorMetadata } from "../../http/middleware/session";
 import { recordAudit } from "../../shared/audit";
+import { readCsvFile, requireCsvHeaders } from "../../shared/csv";
 import { toOperationalDateRange } from "../../shared/date-range";
+import { HttpError } from "../../shared/http-error";
 import { withoutUndefined } from "../../shared/object";
 import { paginated, parsePagination } from "../../shared/pagination";
 import { broadcastEvent } from "../events/events";
+import { findPersonByMatricula } from "../people/people.repository";
 import {
   adjustAttendance,
   createSchedule,
   createSubject,
+  findMatchingSchedule,
+  findSubjectByClave,
   listAttendanceByPerson,
   listAttendanceToday,
   listSchedules,
@@ -65,6 +70,91 @@ const attendanceAdjustSchema = z.object({
   porcentaje: z.number().int().min(0).max(100).optional(),
   reason: z.string().trim().max(500).optional()
 });
+
+const scheduleImportRowSchema = z.object({
+  matricula: z.string().trim().min(1),
+  subjectClave: z.string().trim().min(1).max(60),
+  subjectName: z.string().trim().min(1).max(180),
+  weekday: z.string().trim().min(1),
+  horaInicio: z.string().trim().regex(/^\d{2}:\d{2}(:\d{2})?$/),
+  horaFin: z.string().trim().regex(/^\d{2}:\d{2}(:\d{2})?$/),
+  aula: z.string().trim().max(80).optional(),
+  validFrom: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/),
+  validUntil: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
+});
+
+const scheduleImportHeaders = [
+  "matricula",
+  "subjectClave",
+  "subjectName",
+  "weekday",
+  "horaInicio",
+  "horaFin",
+  "aula",
+  "validFrom",
+  "validUntil"
+];
+
+type ImportError = {
+  row: number;
+  code: string;
+  message: string;
+};
+
+type ImportSummary = {
+  created: number;
+  updated: number;
+  issuedQr: number;
+  skipped: number;
+  errors: ImportError[];
+};
+
+function cleanOptional(value: string | undefined) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function parseWeekday(value: string) {
+  const normalized = value.trim().toLowerCase();
+  const aliases: Record<string, number> = {
+    domingo: 0,
+    lunes: 1,
+    martes: 2,
+    miercoles: 3,
+    "miércoles": 3,
+    jueves: 4,
+    viernes: 5,
+    sabado: 6,
+    "sábado": 6
+  };
+  const weekday = aliases[normalized] ?? Number(normalized);
+
+  if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6) {
+    throw new HttpError(400, "INVALID_WEEKDAY", "Weekday must be a number from 0 to 6 or a weekday name.");
+  }
+
+  return weekday;
+}
+
+function importError(row: number, error: unknown): ImportError {
+  if (error instanceof HttpError) {
+    return { row, code: error.code, message: error.message };
+  }
+
+  if (error instanceof z.ZodError) {
+    return {
+      row,
+      code: "CSV_ROW_INVALID",
+      message: error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("; ")
+    };
+  }
+
+  return {
+    row,
+    code: "CSV_ROW_FAILED",
+    message: error instanceof Error ? error.message : "Row could not be imported."
+  };
+}
 
 export const attendanceRoutes = new Hono();
 export const subjectsRoutes = new Hono();
@@ -180,6 +270,81 @@ schedulesRoutes.post("/", async (c) => {
     metadata: { personId: row.personId, subjectId: row.subjectId }
   });
   return c.json({ data: row }, 201);
+});
+
+schedulesRoutes.post("/import", async (c) => {
+  const csv = await readCsvFile(await c.req.parseBody());
+  requireCsvHeaders(csv.headers, scheduleImportHeaders);
+  const summary: ImportSummary = { created: 0, updated: 0, issuedQr: 0, skipped: 0, errors: [] };
+
+  for (const row of csv.rows) {
+    try {
+      const parsed = scheduleImportRowSchema.parse({
+        matricula: row.values.matricula,
+        subjectClave: row.values.subjectClave,
+        subjectName: row.values.subjectName,
+        weekday: row.values.weekday,
+        horaInicio: row.values.horaInicio,
+        horaFin: row.values.horaFin,
+        aula: cleanOptional(row.values.aula),
+        validFrom: row.values.validFrom,
+        validUntil: cleanOptional(row.values.validUntil)
+      });
+      const person = await findPersonByMatricula(parsed.matricula);
+
+      if (!person) {
+        throw new HttpError(400, "PERSON_NOT_FOUND", `Person with matricula ${parsed.matricula} was not found.`);
+      }
+
+      let subject = await findSubjectByClave(parsed.subjectClave);
+
+      if (!subject) {
+        subject = await createSubject({
+          clave: parsed.subjectClave,
+          nombre: parsed.subjectName,
+          active: true
+        });
+      }
+
+      const scheduleInput = withoutUndefined({
+        personId: person.id,
+        subjectId: subject.id,
+        weekday: parseWeekday(parsed.weekday),
+        horaInicio: parsed.horaInicio,
+        horaFin: parsed.horaFin,
+        aula: parsed.aula,
+        validFrom: parsed.validFrom,
+        validUntil: parsed.validUntil,
+        active: true
+      });
+      const existing = await findMatchingSchedule(scheduleInput);
+
+      if (existing) {
+        await updateSchedule(existing.id, scheduleInput);
+        summary.updated += 1;
+      } else {
+        await createSchedule(scheduleInput);
+        summary.created += 1;
+      }
+    } catch (error) {
+      summary.skipped += 1;
+      summary.errors.push(importError(row.rowNumber, error));
+    }
+  }
+
+  await recordAudit({
+    ...getActorMetadata(c),
+    action: "schedule.imported",
+    entityType: "schedule",
+    metadata: {
+      created: summary.created,
+      updated: summary.updated,
+      skipped: summary.skipped
+    }
+  });
+  broadcastEvent("attendance.table", { action: "schedules_imported", created: summary.created, updated: summary.updated });
+
+  return c.json({ data: summary }, 201);
 });
 
 schedulesRoutes.patch("/:id", async (c) => {

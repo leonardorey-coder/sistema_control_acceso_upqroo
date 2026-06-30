@@ -215,4 +215,27 @@ describe("access atomic contracts", () => {
     expect(credentialsRepository).toContain(".limit(pagination.pageSize)");
     expect(credentialsRepository).toContain(".offset(pagination.offset)");
   });
+
+  it("ships protected CSV import endpoints for people QR and schedules", async () => {
+    const peopleRoutes = readModule("people/people.routes.ts");
+    const attendanceRoutes = readModule("attendance/attendance.routes.ts");
+
+    expect(peopleRoutes).toContain("peopleRoutes.post(\"/import\"");
+    expect(peopleRoutes).toContain("readCsvFile(await c.req.parseBody())");
+    expect(peopleRoutes).toContain("createPersonQrToken");
+    expect(peopleRoutes).toContain("issuedQr");
+    expect(peopleRoutes).toContain("errors: ImportError[]");
+
+    expect(attendanceRoutes).toContain("schedulesRoutes.post(\"/import\"");
+    expect(attendanceRoutes).toContain("readCsvFile(await c.req.parseBody())");
+    expect(attendanceRoutes).toContain("findSubjectByClave");
+    expect(attendanceRoutes).toContain("findMatchingSchedule");
+    expect(attendanceRoutes).toContain("errors: ImportError[]");
+
+    const peopleResponse = await app.request("/api/v1/people/import", { method: "POST" });
+    const schedulesResponse = await app.request("/api/v1/schedules/import", { method: "POST" });
+
+    expect(peopleResponse.status).toBe(401);
+    expect(schedulesResponse.status).toBe(401);
+  });
 });
