@@ -38,15 +38,28 @@ function jsonHeaders(cookie?: string) {
 async function ensureIntegrationAdmin() {
   const username = "integration_super";
   const password = "Integration123!";
+  const passwordHash = await Bun.password.hash(password, { algorithm: "bcrypt", cost: 10 });
   const existing = await db.query.administradores.findFirst({
     where: eq(administradores.username, username)
   });
 
-  if (!existing) {
+  if (existing) {
+    await db.update(administradores)
+      .set({
+        displayName: "Integration Super Admin",
+        passwordHash,
+        role: "super_admin",
+        status: "active",
+        mustChangePassword: false,
+        disabledAt: null,
+        updatedAt: new Date()
+      })
+      .where(eq(administradores.id, existing.id));
+  } else {
     await db.insert(administradores).values({
       username,
       displayName: "Integration Super Admin",
-      passwordHash: await Bun.password.hash(password, { algorithm: "bcrypt", cost: 10 }),
+      passwordHash,
       role: "super_admin",
       status: "active",
       mustChangePassword: false
@@ -258,6 +271,7 @@ describeIfPostgres("postgres integration", () => {
 
     expect(adminsResponse.status).toBe(200);
     expect(adminsBody.data.rows.length).toBeGreaterThan(0);
+    expect(adminsBody.data.rows.find((row: { username: string }) => row.username === "integration_super")?.lastLoginAt).toBeTruthy();
     expectNoSecretFieldNames(adminsBody);
   });
 

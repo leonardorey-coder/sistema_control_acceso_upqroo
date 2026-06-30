@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getActorMetadata } from "../../http/middleware/session";
 import { recordAudit } from "../../shared/audit";
 import { withoutUndefined } from "../../shared/object";
+import { paginated, parsePagination } from "../../shared/pagination";
 import { issueTemporaryPassword } from "../../shared/security";
 import { broadcastEvent } from "../events/events";
 import {
@@ -86,12 +87,13 @@ adminManagementRoutes.post("/", async (c) => {
 
 adminManagementRoutes.get("/audit", async (c) => {
   const query = withoutUndefined(auditQuerySchema.parse(c.req.query()));
-  const rows = await listAuditLog(withoutUndefined({
+  const pagination = parsePagination(c.req.query());
+  const result = await listAuditLog(withoutUndefined({
     ...query,
     from: query.from ? new Date(query.from) : undefined,
     to: query.to ? new Date(query.to) : undefined
-  }));
-  return c.json({ data: { rows } });
+  }), pagination);
+  return c.json({ data: paginated(result.rows, result.total, pagination) });
 });
 
 adminManagementRoutes.get("/:id", async (c) => {
@@ -232,11 +234,12 @@ adminManagementRoutes.post("/:id/sessions/:sessionId/revoke", async (c) => {
 adminManagementRoutes.get("/:id/audit", async (c) => {
   const id = z.string().uuid().parse(c.req.param("id"));
   const query = withoutUndefined(auditQuerySchema.omit({ adminId: true }).parse(c.req.query()));
-  const rows = await listAuditLog(withoutUndefined({
+  const pagination = parsePagination(c.req.query());
+  const result = await listAuditLog(withoutUndefined({
     ...query,
     adminId: id,
     from: query.from ? new Date(query.from) : undefined,
     to: query.to ? new Date(query.to) : undefined
-  }));
-  return c.json({ data: { rows } });
+  }), pagination);
+  return c.json({ data: paginated(result.rows, result.total, pagination) });
 });

@@ -16,6 +16,16 @@ export async function createAdminSession(input: typeof adminSessions.$inferInser
   return row;
 }
 
+export async function updateAdminLastLogin(id: string, lastLoginAt: Date) {
+  const [row] = await db
+    .update(administradores)
+    .set({ lastLoginAt, updatedAt: lastLoginAt })
+    .where(eq(administradores.id, id))
+    .returning();
+
+  return row;
+}
+
 export function getAdminCredentialsById(id: string) {
   return db.query.administradores.findFirst({
     where: eq(administradores.id, id)

@@ -1,6 +1,7 @@
 import { and, asc, count, desc, eq, gte, ilike, isNull, lte, ne, or, type SQL } from "drizzle-orm";
 import { db } from "../../db/client";
 import { administradores, adminSessions, auditLog } from "../../db/schema";
+import type { Pagination } from "../../shared/pagination";
 
 const adminPublicColumns = {
   id: administradores.id,
@@ -101,7 +102,7 @@ export type AuditLogFilters = {
   to?: Date;
 };
 
-export function listAuditLog(filters: AuditLogFilters = {}) {
+export async function listAuditLog(filters: AuditLogFilters = {}, pagination?: Pagination) {
   const predicates: SQL[] = [];
 
   if (filters.adminId) {
@@ -131,8 +132,18 @@ export function listAuditLog(filters: AuditLogFilters = {}) {
     predicates.push(lte(auditLog.createdAt, filters.to));
   }
 
-  return db.select().from(auditLog)
-    .where(predicates.length ? and(...predicates) : undefined)
-    .orderBy(desc(auditLog.createdAt))
-    .limit(100);
+  const where = predicates.length ? and(...predicates) : undefined;
+  const rowsQuery = db.select().from(auditLog)
+    .where(where)
+    .orderBy(desc(auditLog.createdAt));
+
+  const [rows, totalRows] = await Promise.all([
+    pagination ? rowsQuery.limit(pagination.pageSize).offset(pagination.offset) : rowsQuery.limit(100),
+    db.select({ total: count() }).from(auditLog).where(where)
+  ]);
+
+  return {
+    rows,
+    total: totalRows[0]?.total ?? 0
+  };
 }

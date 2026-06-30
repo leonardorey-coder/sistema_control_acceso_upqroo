@@ -1,4 +1,5 @@
 import { and, count, desc, eq, gte, ilike, lte, or, sql, type SQL } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { db } from "../../db/client";
 import {
   administradores,
@@ -9,6 +10,9 @@ import {
   vehicles
 } from "../../db/schema";
 import type { Pagination } from "../../shared/pagination";
+
+const adminEntrada = alias(administradores, "admin_entrada");
+const adminSalida = alias(administradores, "admin_salida");
 
 export type AccessTodayFilters = {
   q?: string;
@@ -66,11 +70,15 @@ export async function listAccessToday(filters: AccessTodayFilters, pagination: P
       carrera: carreras.nombre,
       entradaAt: registrosAcceso.entradaAt,
       salidaAt: registrosAcceso.salidaAt,
-      adminEntrada: administradores.displayName,
-      adminSalidaId: registrosAcceso.adminSalidaId,
+      salidaAutomatica: registrosAcceso.salidaAutomatica,
+      adminEntrada: adminEntrada.displayName,
+      adminSalida: adminSalida.displayName,
       status: registrosAcceso.status,
       accessMode: registrosAcceso.accessMode,
+      subjectType: registrosAcceso.subjectType,
       credentialType: registrosAcceso.credentialType,
+      credentialOrigin: registrosAcceso.credentialOrigin,
+      isExceptionAccess: registrosAcceso.isExceptionAccess,
       vehiclePlate: vehicles.plate,
       visitorName: registrosAcceso.visitorName,
       hashRegistro: registrosAcceso.hashRegistro,
@@ -80,7 +88,8 @@ export async function listAccessToday(filters: AccessTodayFilters, pagination: P
       .leftJoin(personas, eq(registrosAcceso.personId, personas.id))
       .leftJoin(carreras, eq(personas.carreraId, carreras.id))
       .leftJoin(vehicles, eq(registrosAcceso.vehicleId, vehicles.id))
-      .leftJoin(administradores, eq(registrosAcceso.adminEntradaId, administradores.id))
+      .leftJoin(adminEntrada, eq(registrosAcceso.adminEntradaId, adminEntrada.id))
+      .leftJoin(adminSalida, eq(registrosAcceso.adminSalidaId, adminSalida.id))
       .where(where)
       .orderBy(desc(registrosAcceso.entradaAt))
       .limit(pagination.pageSize)

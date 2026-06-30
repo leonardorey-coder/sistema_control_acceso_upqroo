@@ -15,6 +15,7 @@ import {
   revokeOtherAdminSessions,
   revokeSession,
   touchSession,
+  updateAdminLastLogin,
   updateAdminPassword
 } from "./auth.repository";
 
@@ -108,7 +109,8 @@ authRoutes.post("/login", async (c) => {
 
   const token = issueSessionToken();
   const sessionHash = hashSessionToken(token);
-  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 12);
+  const loggedInAt = new Date();
+  const expiresAt = new Date(loggedInAt.getTime() + 1000 * 60 * 60 * 12);
 
   await createAdminSession({
     adminId: admin.id,
@@ -117,6 +119,7 @@ authRoutes.post("/login", async (c) => {
     userAgent: c.req.header("user-agent") ?? undefined,
     expiresAt
   });
+  await updateAdminLastLogin(admin.id, loggedInAt);
 
   await recordAudit({
     actorAdminId: admin.id,
