@@ -116,7 +116,10 @@ accessRoutes.post("/scan", async (c) => {
     entityId: responseObject && "registroId" in responseObject ? String(responseObject["registroId"]) : undefined,
     metadata: { result: responseResult }
   });
-  broadcastEvent("access.scan", { result: responseResult as Record<string, unknown> });
+  broadcastEvent("access.scan", withoutUndefined({
+    scannerId: body.scannerId,
+    result: responseResult as Record<string, unknown>
+  }));
   broadcastEvent("access.table", {});
   broadcastEvent("attendance.table", {});
 

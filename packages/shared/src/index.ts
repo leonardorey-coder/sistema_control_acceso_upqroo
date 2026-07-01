@@ -22,6 +22,7 @@ export type PaginatedResponse<Row, Summary = Record<string, unknown>> = {
 };
 
 export type AdminSessionPayload = {
+  sessionId: string;
   admin: {
     id: string;
     username: string;

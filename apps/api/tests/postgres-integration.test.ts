@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { beforeAll, describe, expect, it } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, gte, sql } from "drizzle-orm";
 import { app } from "../src/app";
 import { db } from "../src/db/client";
 import {
   accessScanEvents,
   administradores,
+  auditLog,
   operationalConfig,
   personas,
   qrJtiConsumptions,
@@ -261,6 +262,7 @@ describeIfPostgres("postgres integration", () => {
     const meBody = await meResponse.json();
 
     expect(meResponse.status).toBe(200);
+    expect(meBody.data.sessionId).toBeTruthy();
     expect(meBody.data.admin.username).toBe("integration_super");
     expectNoSecretFieldNames(meBody);
 
@@ -273,6 +275,51 @@ describeIfPostgres("postgres integration", () => {
     expect(adminsBody.data.rows.length).toBeGreaterThan(0);
     expect(adminsBody.data.rows.find((row: { username: string }) => row.username === "integration_super")?.lastLoginAt).toBeTruthy();
     expectNoSecretFieldNames(adminsBody);
+  });
+
+  it("exposes the current admin session id and audits login/logout", async () => {
+    const admin = await ensureIntegrationAdmin();
+    const loginStart = new Date();
+    const loginResponse = await app.request("/api/v1/auth/login", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ identity: admin.username, password: admin.password })
+    });
+    const loginBody = await loginResponse.json();
+    const loginCookie = loginResponse.headers.get("set-cookie") ?? "";
+
+    expect(loginResponse.status).toBe(200);
+    expect(loginBody.data.sessionId).toBeTruthy();
+    expectNoSecretFieldNames(loginBody);
+
+    const meResponse = await app.request("/api/v1/auth/me", {
+      headers: jsonHeaders(loginCookie)
+    });
+    const meBody = await meResponse.json();
+
+    expect(meResponse.status).toBe(200);
+    expect(meBody.data.sessionId).toBe(loginBody.data.sessionId);
+    expectNoSecretFieldNames(meBody);
+
+    const logoutResponse = await app.request("/api/v1/auth/logout", {
+      method: "POST",
+      headers: jsonHeaders(loginCookie)
+    });
+
+    expect(logoutResponse.status).toBe(200);
+
+    const [loginAudit] = await db.select().from(auditLog).where(and(
+      eq(auditLog.action, "admin.login_success"),
+      eq(auditLog.actorAdminId, sessionAdminId),
+      gte(auditLog.createdAt, loginStart)
+    )).limit(1);
+    const [logoutAudit] = await db.select().from(auditLog).where(and(
+      eq(auditLog.action, "admin.logout"),
+      eq(auditLog.entityId, String(loginBody.data.sessionId))
+    )).limit(1);
+
+    expect(loginAudit?.action).toBe("admin.login_success");
+    expect(logoutAudit?.action).toBe("admin.logout");
   });
 
   it("creates a person QR and scans entry, exit and integrity", async () => {

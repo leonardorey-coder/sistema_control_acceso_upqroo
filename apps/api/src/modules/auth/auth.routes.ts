@@ -41,6 +41,7 @@ function sessionCookieOptions(expires: Date) {
 
 function publicSession(row: NonNullable<Awaited<ReturnType<typeof getSessionByHash>>>) {
   return {
+    sessionId: row.sessionId,
     admin: {
       id: row.adminId,
       username: row.username,
@@ -112,13 +113,16 @@ authRoutes.post("/login", async (c) => {
   const loggedInAt = new Date();
   const expiresAt = new Date(loggedInAt.getTime() + 1000 * 60 * 60 * 12);
 
-  await createAdminSession({
+  const adminSession = await createAdminSession({
     adminId: admin.id,
     sessionHash,
     ipAddress,
     userAgent: c.req.header("user-agent") ?? undefined,
     expiresAt
   });
+  if (!adminSession) {
+    throw new HttpError(500, "SESSION_CREATE_FAILED", "Could not create admin session.");
+  }
   await updateAdminLastLogin(admin.id, loggedInAt);
 
   await recordAudit({
@@ -134,6 +138,7 @@ authRoutes.post("/login", async (c) => {
 
   return c.json({
     data: {
+      sessionId: adminSession.id,
       admin: {
         id: admin.id,
         username: admin.username,

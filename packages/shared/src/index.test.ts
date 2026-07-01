@@ -44,6 +44,7 @@ describe("shared contracts", () => {
 
   it("supports auth and scanner wire shapes", () => {
     const session: AdminSessionPayload = {
+      sessionId: "session-1",
       admin: {
         id: "admin-1",
         username: "superadmin",
@@ -61,6 +62,7 @@ describe("shared contracts", () => {
     };
 
     expect(session.admin.role).toBe("super_admin");
+    expect(session.sessionId).toBe("session-1");
     expect(scan.accepted).toBe(true);
   });
 
