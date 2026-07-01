@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { HotQrRowPayload } from "@control-acceso/shared";
   import DataTable from "./DataTable.svelte";
+  import LoadingButton from "./LoadingButton.svelte";
   import PaginationControls from "./PaginationControls.svelte";
   import QrPreview from "./QrPreview.svelte";
 
@@ -29,15 +30,36 @@
     total: number;
     page: number;
     pageSize: number;
-    onCreate: () => void;
-    onFilter: () => void;
+    onCreate: () => void | Promise<void>;
+    onFilter: () => void | Promise<void>;
     onPageChange: (next: { page: number; pageSize: number }) => void;
-    onRevoke: (row: HotQrRow) => void;
+    onRevoke: (row: HotQrRow) => void | Promise<void>;
   } = $props();
+
+  let createPending = $state(false);
+  let filterPending = $state(false);
+
+  async function createHotQr() {
+    createPending = true;
+    try {
+      await onCreate();
+    } finally {
+      createPending = false;
+    }
+  }
+
+  async function filterHotQr() {
+    filterPending = true;
+    try {
+      await onFilter();
+    } finally {
+      filterPending = false;
+    }
+  }
 </script>
 
-<section class="grid two">
-  <form class="panel" onsubmit={(event) => { event.preventDefault(); onCreate(); }}>
+<section class="qr-flow">
+  <form class="panel qr-form-panel" aria-busy={createPending} onsubmit={(event) => { event.preventDefault(); createHotQr(); }}>
     <h2>Hot-QR</h2>
     <label class="form-field">
       <span>Visitante</span>
@@ -58,10 +80,10 @@
         <option value={480}>8 horas</option>
       </select>
     </label>
-    <button>Generar Hot-QR</button>
+    <LoadingButton type="submit" loading={createPending} loadingLabel="Generando...">Generar Hot-QR</LoadingButton>
   </form>
-  <section class="panel">
-    <QrPreview token={generatedToken} title={generatedTitle || "Hot-QR"} subtitle="Comparte o descarga este QR solo al emitirlo." />
+  <section class="panel qr-side-panel">
+    <QrPreview token={generatedToken} title={generatedTitle || "Hot-QR"} subtitle="Comparte o descarga este QR solo al emitirlo." autoOpen />
   </section>
 </section>
 
@@ -90,14 +112,14 @@
         <option value="disabled">Deshabilitado</option>
       </select>
     </label>
-    <button onclick={onFilter}>Filtrar</button>
+    <LoadingButton loading={filterPending} loadingLabel="Filtrando..." onClick={filterHotQr}>Filtrar</LoadingButton>
   </div>
     <DataTable rows={rows} columns={[
       { key: "visitorName", label: "Visitante" },
       { key: "reason", label: "Motivo" },
       { key: "status", label: "Estado", kind: "status" },
       { key: "validUntil", label: "Expira", kind: "date" },
-    { key: "createdByAdminId", label: "Creador" }
-  ]} actions={[{ label: "Revocar", onClick: (row) => onRevoke(row as HotQrRow), tone: "ghost" }]} />
+      { key: "creator", label: "Creador" }
+  ]} actions={[{ label: "Revocar", icon: "revoke", onClick: (row) => onRevoke(row as HotQrRow), tone: "danger", confirm: "Esta accion revoca el Hot-QR seleccionado." }]} />
   <PaginationControls {page} {pageSize} {total} onChange={onPageChange} />
 </section>

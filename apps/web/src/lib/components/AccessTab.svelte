@@ -1,5 +1,6 @@
 <script lang="ts">
   import DataTable from "./DataTable.svelte";
+  import LoadingButton from "./LoadingButton.svelte";
   import PaginationControls from "./PaginationControls.svelte";
 
   type Row = Record<string, unknown>;
@@ -20,9 +21,20 @@
     page: number;
     pageSize: number;
     personTypeRows: Row[];
-    onFilter: () => void;
+    onFilter: () => void | Promise<void>;
     onPageChange: (next: { page: number; pageSize: number }) => void;
   } = $props();
+
+  let filterPending = $state(false);
+
+  async function filterRows() {
+    filterPending = true;
+    try {
+      await onFilter();
+    } finally {
+      filterPending = false;
+    }
+  }
 </script>
 
 <section class="panel">
@@ -68,26 +80,26 @@
         <option value="rejected">Rechazado</option>
       </select>
     </label>
-    <button onclick={onFilter}>Filtrar</button>
+    <LoadingButton loading={filterPending} loadingLabel="Filtrando..." onClick={filterRows}>Filtrar</LoadingButton>
   </div>
   <DataTable rows={rows} columns={[
-    { key: "matricula", label: "Matricula" },
-    { key: "nombres", label: "Nombre", kind: "name" },
-    { key: "tipoPersona", label: "Tipo" },
-    { key: "carrera", label: "Carrera" },
-    { key: "entradaAt", label: "Entrada", kind: "date" },
-    { key: "salidaAt", label: "Salida", kind: "date" },
-    { key: "salidaAutomatica", label: "Salida auto" },
-    { key: "adminEntrada", label: "Admin entrada" },
-    { key: "adminSalida", label: "Admin salida" },
-    { key: "status", label: "Estado", kind: "status" },
-    { key: "accessMode", label: "Modo" },
-    { key: "subjectType", label: "Sujeto" },
-    { key: "credentialType", label: "Credencial" },
-    { key: "credentialOrigin", label: "Origen" },
-    { key: "isExceptionAccess", label: "Excepcion" },
-    { key: "vehiclePlate", label: "Vehiculo" },
-    { key: "hashRegistro", label: "Hash" }
+    { key: "matricula", label: "Matricula", minWidth: "110px", nowrap: true },
+    { key: "nombres", label: "Nombre", kind: "name", minWidth: "160px" },
+    { key: "tipoPersona", label: "Tipo", minWidth: "105px" },
+    { key: "carrera", label: "Carrera", minWidth: "160px", truncate: true },
+    { key: "entradaAt", label: "Entrada", kind: "date", minWidth: "150px" },
+    { key: "salidaAt", label: "Salida", kind: "date", minWidth: "150px" },
+    { key: "salidaAutomatica", label: "Salida auto", kind: "boolean", compact: true, minWidth: "100px" },
+    { key: "adminEntrada", label: "Admin entrada", minWidth: "140px", truncate: true },
+    { key: "adminSalida", label: "Admin salida", minWidth: "140px", truncate: true },
+    { key: "status", label: "Estado", kind: "status", minWidth: "120px" },
+    { key: "accessMode", label: "Modo", kind: "accessMode", minWidth: "105px" },
+    { key: "subjectType", label: "Sujeto", minWidth: "105px" },
+    { key: "credentialType", label: "Credencial", kind: "credential", minWidth: "150px" },
+    { key: "credentialOrigin", label: "Origen", minWidth: "110px" },
+    { key: "isExceptionAccess", label: "Excepcion", kind: "boolean", compact: true, minWidth: "105px" },
+    { key: "vehiclePlate", label: "Vehiculo", minWidth: "110px", nowrap: true },
+    { key: "hashRegistro", label: "Hash", kind: "technical", minWidth: "130px", truncate: true, hideOnMobile: true }
   ]} />
   <PaginationControls {page} {pageSize} {total} onChange={onPageChange} />
 </section>

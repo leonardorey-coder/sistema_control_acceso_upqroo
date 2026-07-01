@@ -1,4 +1,7 @@
 <script lang="ts">
+  import IconButton from "./IconButton.svelte";
+  import { labelFor } from "$lib/ui/labels";
+
   type SessionShape =
     | {
         admin?: {
@@ -28,6 +31,7 @@
 
   const displayName = $derived(session?.admin?.displayName ?? session?.user?.fullName ?? "");
   const role = $derived(session?.admin?.role ?? session?.user?.personType ?? "");
+  const roleLabel = $derived(role ? labelFor("role", role) : "");
   const initials = $derived(
     displayName
       .split(" ")
@@ -54,10 +58,10 @@
           <div class="admin-info">
             <span class="admin-avatar" aria-hidden="true">{initials}</span>
             <span class="admin-name">{displayName}</span>
-            {#if role}<small>{role}</small>{/if}
+            {#if roleLabel}<small>{roleLabel}</small>{/if}
           </div>
           {#if onLogout}
-            <button class="logout-button" onclick={onLogout}>Salir</button>
+            <IconButton icon="exit" label="Cerrar sesion" compact onClick={onLogout} />
           {/if}
         </div>
       {/if}

@@ -22,6 +22,7 @@
   import AdminsTab from "$lib/components/AdminsTab.svelte";
   import AttendanceTab from "$lib/components/AttendanceTab.svelte";
   import ConfigTab from "$lib/components/ConfigTab.svelte";
+  import DismissibleNotice from "$lib/components/DismissibleNotice.svelte";
   import EditPersonTab from "$lib/components/EditPersonTab.svelte";
   import GeneratorTab from "$lib/components/GeneratorTab.svelte";
   import HotQrTab from "$lib/components/HotQrTab.svelte";
@@ -86,8 +87,14 @@
   let passwordNotice = $state("");
   let passwordError = $state("");
   let passwordForm = $state({ currentPassword: "", newPassword: "" });
-  let generatedToken = $state("");
-  let generatedTitle = $state("");
+  let personalGeneratedToken = $state("");
+  let personalGeneratedTitle = $state("");
+  let editGeneratedToken = $state("");
+  let editGeneratedTitle = $state("");
+  let hotQrGeneratedToken = $state("");
+  let hotQrGeneratedTitle = $state("");
+  let vehicleGeneratedToken = $state("");
+  let vehicleGeneratedTitle = $state("");
   let temporaryGeneratedToken = $state("");
   let temporaryGeneratedTitle = $state("");
   let temporaryQrError = $state("");
@@ -117,6 +124,12 @@
   let subjectTotal = $state(0);
   let scheduleRows = $state<Row[]>([]);
   let scheduleTotal = $state(0);
+  let peopleOptionsCache: Array<PersonRowPayload & Row> | null = null;
+  let vehicleOptionsCache: Array<VehicleRowPayload & Row> | null = null;
+  const peopleOptionsByQuery = new Map<string, Array<PersonRowPayload & Row>>();
+  const vehicleOptionsByQuery = new Map<string, Array<VehicleRowPayload & Row>>();
+  const peopleOptionsPromises = new Map<string, Promise<Array<PersonRowPayload & Row>>>();
+  const vehicleOptionsPromises = new Map<string, Promise<Array<VehicleRowPayload & Row>>>();
   let configForm = $state<OperationalConfigPayload>({
     retryEnabled: true,
     retryDelayMs: 1200,
@@ -363,14 +376,70 @@
     peopleRows = result.rows;
   }
 
+  function clearPeopleOptionsCache() {
+    peopleOptionsCache = null;
+    peopleOptionsByQuery.clear();
+    peopleOptionsPromises.clear();
+  }
+
+  function clearVehicleOptionsCache() {
+    vehicleOptionsCache = null;
+    vehicleOptionsByQuery.clear();
+    vehicleOptionsPromises.clear();
+  }
+
   async function searchPeopleOptions(query: string) {
-    const result = await apiRequest<PaginatedRows<PersonRowPayload & Row>>(`/api/v1/people${toQuery({ q: query, page: 1, pageSize: 10 })}`);
-    return result.rows;
+    const needle = query.trim().toLowerCase();
+    const key = needle || "__all__";
+    const cached = peopleOptionsByQuery.get(key);
+    if (cached) return cached;
+
+    if (!peopleOptionsPromises.has(key)) {
+      peopleOptionsPromises.set(key, apiRequest<PaginatedRows<PersonRowPayload & Row>>(`/api/v1/people${toQuery({ q: needle || undefined, page: 1, pageSize: 100 })}`)
+        .then((result) => result.rows)
+        .finally(() => {
+          peopleOptionsPromises.delete(key);
+        }));
+    }
+
+    const rows = await peopleOptionsPromises.get(key)!;
+    peopleOptionsByQuery.set(key, rows);
+    if (!needle) peopleOptionsCache = rows;
+    if (!needle) return rows;
+    return rows.filter((row) =>
+      [row.matricula, row.nombres, row.apellidos, row.curp, row.tipoPersonaLabel, row.tipoPersona]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(needle)
+    );
   }
 
   async function searchVehicleOptions(query: string) {
-    const result = await apiRequest<PaginatedRows<VehicleRowPayload & Row>>(`/api/v1/vehicles${toQuery({ q: query, page: 1, pageSize: 10 })}`);
-    return result.rows;
+    const needle = query.trim().toLowerCase();
+    const key = needle || "__all__";
+    const cached = vehicleOptionsByQuery.get(key);
+    if (cached) return cached;
+
+    if (!vehicleOptionsPromises.has(key)) {
+      vehicleOptionsPromises.set(key, apiRequest<PaginatedRows<VehicleRowPayload & Row>>(`/api/v1/vehicles${toQuery({ q: needle || undefined, page: 1, pageSize: 100 })}`)
+        .then((result) => result.rows)
+        .finally(() => {
+          vehicleOptionsPromises.delete(key);
+        }));
+    }
+
+    const rows = await vehicleOptionsPromises.get(key)!;
+    vehicleOptionsByQuery.set(key, rows);
+    if (!needle) vehicleOptionsCache = rows;
+    if (!needle) return rows;
+    return rows.filter((row) =>
+      [row.plate, row.make, row.model, row.color, row.status]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(needle)
+    );
   }
 
   async function refreshPersonTypes() {
@@ -568,21 +637,17 @@
       body: JSON.stringify({ personId, expiresAt })
     });
 
-    generatedToken = result.token;
-    generatedTitle = "QR personal";
+    personalGeneratedToken = result.token;
+    personalGeneratedTitle = "QR personal";
     notice = "QR generado";
+    clearPeopleOptionsCache();
     await Promise.allSettled([refreshPeople(), refreshCredentials(personId)]);
   }
 
   async function searchPerson() {
     editPerson = await apiRequest<PersonRowPayload & Row>(`/api/v1/people/by-matricula/${editMatricula}`);
-    temporaryQrForm.personId = String(editPerson.id ?? "");
-    permitForm.personId = String(editPerson.id ?? permitForm.personId);
-    vehicleForm.ownerPersonId = String(editPerson.id ?? vehicleForm.ownerPersonId);
-    const label = `${editPerson.matricula ?? ""} - ${editPerson.nombres ?? ""} ${editPerson.apellidos ?? ""}`.trim();
-    temporaryQrPersonLabel = label;
-    permitPersonLabel = label;
-    vehicleOwnerLabel = label;
+    editGeneratedToken = "";
+    editGeneratedTitle = "";
     credentialPagination.page = 1;
     await refreshCredentials(String(editPerson.id));
   }
@@ -745,8 +810,8 @@
       method: "POST",
       body: JSON.stringify({ expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString() })
     });
-    generatedToken = result.token;
-    generatedTitle = "QR personal rotado";
+    editGeneratedToken = result.token;
+    editGeneratedTitle = "QR personal rotado";
     await refreshCredentials(String(editPerson.id));
   }
 
@@ -768,13 +833,34 @@
 
   async function createTemporaryQr() {
     temporaryQrError = "";
+    if (!temporaryQrForm.personId) {
+      temporaryQrError = "Selecciona una persona de la lista antes de generar el QR temporal.";
+      return;
+    }
     const validUntil = temporaryQrForm.validUntil ? new Date(temporaryQrForm.validUntil).toISOString() : new Date(Date.now() + 1000 * 60 * 60 * 8).toISOString();
-    const result = await apiRequest<{ credential: Row; token: string }>("/api/v1/credentials/temporary-daily", {
-      method: "POST",
-      body: JSON.stringify({ ...temporaryQrForm, validUntil, maxUses: Number(temporaryQrForm.maxUses) })
-    });
-    await showTemporaryQr(result.credential, result.token);
-    await refreshTemporaryQr();
+    const payload = {
+      personId: temporaryQrForm.personId,
+      operationalDate: temporaryQrForm.operationalDate,
+      missingCredentialType: temporaryQrForm.missingCredentialType,
+      reasonCode: temporaryQrForm.reasonCode,
+      ...(temporaryQrForm.reasonText.trim() ? { reasonText: temporaryQrForm.reasonText.trim() } : {}),
+      scope: {},
+      maxUses: Number(temporaryQrForm.maxUses),
+      validUntil
+    };
+    try {
+      const result = await apiRequest<{ credential: Row; token: string }>("/api/v1/credentials/temporary-daily", {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+      await showTemporaryQr(result.credential, result.token);
+      await refreshTemporaryQr();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      temporaryQrError = message.includes("Invalid request payload")
+        ? "Revisa la persona, vigencia y usos maximos. El QR temporal necesita una persona seleccionada y datos validos."
+        : message || "No se pudo generar el QR temporal.";
+    }
   }
 
   async function showTemporaryQr(row: Row, fallbackToken = "") {
@@ -811,8 +897,8 @@
         validUntil
       })
     });
-    generatedToken = result.token;
-    generatedTitle = "Hot-QR";
+    hotQrGeneratedToken = result.token;
+    hotQrGeneratedTitle = "Hot-QR";
     hotQrForm = { visitorName: "", reason: "", minutes: 60 };
     await refreshHotQr();
   }
@@ -826,6 +912,7 @@
     await apiRequest("/api/v1/vehicles", { method: "POST", body: JSON.stringify(vehicleForm) });
     vehicleForm = { ownerPersonId: "", plate: "", make: "", model: "", color: "" };
     vehicleOwnerLabel = "";
+    clearVehicleOptionsCache();
     await refreshVehicles();
   }
 
@@ -854,14 +941,14 @@
   async function showDynamicPermitQr(row: Row, fallbackToken = "") {
     try {
       const result = await apiRequest<DynamicQrResult>(`/api/v1/vehicles/permits/${row.id}/qr/dynamic`, { method: "POST" });
-      generatedToken = result.token;
-      generatedTitle = "QR vehicular dinamico";
+      vehicleGeneratedToken = result.token;
+      vehicleGeneratedTitle = "QR vehicular dinamico";
       notice = `QR vehicular dinamico generado. Expira: ${new Date(result.expiresAt).toLocaleTimeString("es-MX")}`;
     } catch (error) {
       const code = error instanceof Error && "code" in error ? String(error.code) : "";
       if (code && code !== "SIGNED_QR_DISABLED") throw error;
-      generatedToken = fallbackToken;
-      generatedTitle = "QR vehicular";
+      vehicleGeneratedToken = fallbackToken;
+      vehicleGeneratedTitle = "QR vehicular";
       notice = "QR vehicular generado en modo compatible";
     }
   }
@@ -969,6 +1056,7 @@
     try {
       peopleImportResult = await apiRequest<ImportSummary>("/api/v1/people/import", { method: "POST", body });
       notice = "Importacion de usuarios finalizada";
+      clearPeopleOptionsCache();
       await Promise.allSettled([refreshPeople(), refreshCredentials()]);
     } catch (error) {
       peopleImportError = error instanceof Error ? error.message : "No se pudo importar usuarios";
@@ -1032,13 +1120,13 @@
     onTab={switchTab}
     onLogout={logout}
   >
-    {#if notice}<p class="notice">{notice}</p>{/if}
+    <DismissibleNotice message={notice} onDismiss={() => (notice = "")} />
     {#if session.admin.mustChangePassword}
       <form class="panel form-grid" onsubmit={(event) => { event.preventDefault(); changeAdminPassword(); }}>
         <h2>Cambiar password</h2>
         <p class="muted">Debes actualizar tu password antes de continuar con tareas sensibles.</p>
-        {#if passwordNotice}<p class="notice">{passwordNotice}</p>{/if}
-        {#if passwordError}<p class="error">{passwordError}</p>{/if}
+        <DismissibleNotice message={passwordNotice} onDismiss={() => (passwordNotice = "")} />
+        {#if passwordError}<p class="error" role="alert">{passwordError}</p>{/if}
         <label class="form-field">
           <span>Password actual</span>
           <input type="password" bind:value={passwordForm.currentPassword} placeholder="Password actual" required />
@@ -1056,8 +1144,8 @@
         {personForm}
         {personTypeRows}
         {careerRows}
-        {generatedToken}
-        {generatedTitle}
+        generatedToken={personalGeneratedToken}
+        generatedTitle={personalGeneratedTitle}
         {temporaryGeneratedToken}
         {temporaryGeneratedTitle}
         {temporaryQrError}
@@ -1092,8 +1180,8 @@
         credentialTotal={credentialTotal}
         credentialPage={credentialPagination.page}
         credentialPageSize={credentialPagination.pageSize}
-        {generatedToken}
-        {generatedTitle}
+        generatedToken={editGeneratedToken}
+        generatedTitle={editGeneratedTitle}
         onSearch={searchPerson}
         onSave={saveEditPerson}
         onDisable={disableEditPerson}
@@ -1102,6 +1190,7 @@
         onRevokeQr={revokePersonQr}
         onCredentialPageChange={changeCredentialPage}
         onPhoto={uploadPersonPhoto}
+        searchPeople={searchPeopleOptions}
       />
     {/if}
 
@@ -1153,8 +1242,8 @@
       <HotQrTab
         rows={hotQrRows}
         form={hotQrForm}
-        {generatedToken}
-        {generatedTitle}
+        generatedToken={hotQrGeneratedToken}
+        generatedTitle={hotQrGeneratedTitle}
         {filters}
         total={hotQrTotal}
         page={hotQrPagination.page}
@@ -1177,8 +1266,8 @@
         {permitVehicleLabel}
         {permitFilterPersonLabel}
         {permitFilterVehicleLabel}
-        {generatedToken}
-        {generatedTitle}
+        generatedToken={vehicleGeneratedToken}
+        generatedTitle={vehicleGeneratedTitle}
         {filters}
         vehicleTotal={vehicleTotal}
         vehiclePage={vehiclePagination.page}
@@ -1200,11 +1289,10 @@
         onCreateDynamicPermitQr={showDynamicPermitQr}
         onRevokePermit={revokePermit}
         onDisableVehicle={disableVehicle}
-        onFilter={() => {
+        onFilter={async () => {
           vehiclePagination.page = 1;
           permitPagination.page = 1;
-          refreshVehicles();
-          refreshPermits();
+          await Promise.allSettled([refreshVehicles(), refreshPermits()]);
         }}
       />
     {/if}
@@ -1216,6 +1304,12 @@
         editForm={adminEditForm}
         auditFilters={auditFilters}
         isSuperAdmin={session.admin.role === "super_admin"}
+        currentAdmin={{
+          id: session.admin.id,
+          displayName: session.admin.displayName,
+          username: session.admin.username
+        }}
+        currentSessionId={session.sessionId}
         sessionRows={adminSessionRows}
         auditRows={adminAuditRows}
         auditTotal={adminAuditTotal}

@@ -1,7 +1,9 @@
 <script lang="ts">
   import type { AttendanceRowPayload } from "@control-acceso/shared";
   import DataTable from "./DataTable.svelte";
+  import LoadingButton from "./LoadingButton.svelte";
   import PaginationControls from "./PaginationControls.svelte";
+  import SegmentedControl from "./SegmentedControl.svelte";
 
   type Row = Record<string, unknown>;
 
@@ -59,22 +61,79 @@
     scheduleFilters: { q: string; subjectId: string; weekday: string; active: string };
     importResult: ImportSummary | null;
     importError: string;
-    onFilter: () => void;
+    onFilter: () => void | Promise<void>;
     onPageChange: (next: { page: number; pageSize: number }) => void;
-    onFilterSubjects: () => void;
+    onFilterSubjects: () => void | Promise<void>;
     onSubjectPageChange: (next: { page: number; pageSize: number }) => void;
-    onFilterSchedules: () => void;
+    onFilterSchedules: () => void | Promise<void>;
     onSchedulePageChange: (next: { page: number; pageSize: number }) => void;
-    onImportSchedules: (file: File) => void;
-    onAdjustAttendance: (row: AttendanceRowPayload & Row, estado: "confirmed" | "partial" | "unverified") => void;
+    onImportSchedules: (file: File) => void | Promise<void>;
+    onAdjustAttendance: (row: AttendanceRowPayload & Row, estado: "confirmed" | "partial" | "unverified") => void | Promise<void>;
   } = $props();
 
   function asAttendanceRow(row: Row) {
     return row as AttendanceRowPayload & Row;
   }
 
+  let section = $state("attendance");
+  let filterPending = $state(false);
+  let subjectFilterPending = $state(false);
+  let scheduleFilterPending = $state(false);
+  let importPending = $state(false);
+  const sectionOptions = [
+    { value: "attendance", label: "Asistencias" },
+    { value: "import", label: "Importar" },
+    { value: "subjects", label: "Materias" },
+    { value: "schedules", label: "Horarios" }
+  ];
+
+  async function filterAttendance() {
+    filterPending = true;
+    try {
+      await onFilter();
+    } finally {
+      filterPending = false;
+    }
+  }
+
+  async function filterSubjects() {
+    subjectFilterPending = true;
+    try {
+      await onFilterSubjects();
+    } finally {
+      subjectFilterPending = false;
+    }
+  }
+
+  async function filterSchedules() {
+    scheduleFilterPending = true;
+    try {
+      await onFilterSchedules();
+    } finally {
+      scheduleFilterPending = false;
+    }
+  }
+
+  async function importSchedules(file: File) {
+    importPending = true;
+    try {
+      await onImportSchedules(file);
+    } finally {
+      importPending = false;
+    }
+  }
+
 </script>
 
+<div class="workspace-header">
+  <div>
+    <h2>Asistencias</h2>
+    <p>Consulta asistencias, importa horarios y revisa materias desde secciones separadas.</p>
+  </div>
+  <SegmentedControl bind:value={section} options={sectionOptions} label="Seccion de asistencias" />
+</div>
+
+{#if section === "attendance"}
 <section class="panel">
   <div class="tabla-header">
     <h2>Asistencias del dia</h2>
@@ -113,29 +172,30 @@
         {/each}
       </select>
     </label>
-    <button onclick={onFilter}>Filtrar</button>
+    <LoadingButton loading={filterPending} loadingLabel="Filtrando..." onClick={filterAttendance}>Filtrar</LoadingButton>
   </div>
   <DataTable rows={rows} columns={[
-    { key: "matricula", label: "Matricula" },
-    { key: "nombres", label: "Estudiante", kind: "name" },
-    { key: "subjectName", label: "Materia" },
-    { key: "aula", label: "Aula" },
-    { key: "horaInicio", label: "Inicio" },
-    { key: "horaFin", label: "Fin" },
-    { key: "minutosAsistidos", label: "Min. asistidos" },
-    { key: "minutosTotales", label: "Min. totales" },
-    { key: "porcentaje", label: "%" },
-    { key: "carrera", label: "Carrera" },
-    { key: "estado", label: "Estado", kind: "status" }
+    { key: "matricula", label: "Matricula", minWidth: "110px", nowrap: true },
+    { key: "nombres", label: "Estudiante", kind: "name", minWidth: "160px" },
+    { key: "subjectName", label: "Materia", minWidth: "180px", truncate: true },
+    { key: "aula", label: "Aula", minWidth: "90px" },
+    { key: "horaInicio", label: "Inicio", minWidth: "90px", nowrap: true },
+    { key: "horaFin", label: "Fin", minWidth: "90px", nowrap: true },
+    { key: "minutosAsistidos", label: "Min. asistidos", minWidth: "120px" },
+    { key: "minutosTotales", label: "Min. totales", minWidth: "110px" },
+    { key: "porcentaje", label: "%", minWidth: "70px" },
+    { key: "carrera", label: "Carrera", minWidth: "160px", truncate: true },
+    { key: "estado", label: "Estado", kind: "status", minWidth: "120px" }
   ]}
   actions={[
-    { label: "Confirmar", onClick: (row) => onAdjustAttendance(asAttendanceRow(row), "confirmed") },
-    { label: "Parcial", onClick: (row) => onAdjustAttendance(asAttendanceRow(row), "partial"), tone: "ghost" },
-    { label: "No verificada", onClick: (row) => onAdjustAttendance(asAttendanceRow(row), "unverified"), tone: "ghost" }
+    { label: "Confirmar", icon: "check", onClick: (row) => onAdjustAttendance(asAttendanceRow(row), "confirmed") },
+    { label: "Parcial", icon: "edit", onClick: (row) => onAdjustAttendance(asAttendanceRow(row), "partial"), tone: "ghost" },
+    { label: "No verificada", icon: "warning", onClick: (row) => onAdjustAttendance(asAttendanceRow(row), "unverified"), tone: "danger", confirm: "Esta accion marca la asistencia como no verificada." }
   ]} />
   <PaginationControls {page} {pageSize} {total} onChange={onPageChange} />
 </section>
 
+{:else if section === "import"}
 <section class="panel form-grid">
   <div class="section-header">
     <h2>Importar horarios</h2>
@@ -148,11 +208,17 @@
       accept=".csv,text/csv"
       onchange={(event) => {
         const file = event.currentTarget.files?.[0];
-        if (file) onImportSchedules(file);
+        if (file) importSchedules(file);
         event.currentTarget.value = "";
       }}
     />
   </label>
+  {#if importPending}
+    <div class="import-loading">
+      <span class="skeleton-line"></span>
+      <span class="skeleton-line short"></span>
+    </div>
+  {/if}
   {#if importError}
     <p class="error">{importError}</p>
   {/if}
@@ -173,6 +239,7 @@
   {/if}
 </section>
 
+{:else if section === "subjects"}
 <section class="panel">
   <div class="tabla-header">
     <h2>Materias registradas</h2>
@@ -191,16 +258,17 @@
         <option value="false">Inactivas</option>
       </select>
     </label>
-    <button type="button" onclick={onFilterSubjects}>Filtrar</button>
+    <LoadingButton loading={subjectFilterPending} loadingLabel="Filtrando..." onClick={filterSubjects}>Filtrar</LoadingButton>
   </div>
   <DataTable rows={subjectRows} columns={[
     { key: "clave", label: "Clave" },
     { key: "nombre", label: "Materia" },
-    { key: "active", label: "Activa" }
+    { key: "active", label: "Activa", kind: "boolean" }
   ]} />
   <PaginationControls page={subjectPage} pageSize={subjectPageSize} total={subjectTotal} onChange={onSubjectPageChange} />
 </section>
 
+{:else if section === "schedules"}
 <section class="panel">
   <div class="tabla-header">
     <h2>Horarios registrados</h2>
@@ -241,7 +309,7 @@
         <option value="false">Inactivos</option>
       </select>
     </label>
-    <button onclick={onFilterSchedules}>Filtrar</button>
+    <LoadingButton loading={scheduleFilterPending} loadingLabel="Filtrando..." onClick={filterSchedules}>Filtrar</LoadingButton>
   </div>
   <DataTable rows={scheduleRows} columns={[
     { key: "matricula", label: "Matricula" },
@@ -254,3 +322,4 @@
   ]} />
   <PaginationControls page={schedulePage} pageSize={schedulePageSize} total={scheduleTotal} onChange={onSchedulePageChange} />
 </section>
+{/if}

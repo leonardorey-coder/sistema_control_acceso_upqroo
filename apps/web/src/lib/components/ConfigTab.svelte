@@ -1,5 +1,7 @@
 <script lang="ts">
   import type { OperationalConfigPayload, SignedQrConfigPayload } from "@control-acceso/shared";
+  import LoadingButton from "./LoadingButton.svelte";
+  import Switch from "./Switch.svelte";
 
   let {
     config = $bindable(),
@@ -9,47 +11,50 @@
   }: {
     config: OperationalConfigPayload;
     signedQrConfig: SignedQrConfigPayload;
-    onSave: () => void;
-    onSaveSignedQr: () => void;
+    onSave: () => void | Promise<void>;
+    onSaveSignedQr: () => void | Promise<void>;
   } = $props();
+
+  let savePending = $state(false);
+  let signedPending = $state(false);
+
+  async function saveConfig() {
+    savePending = true;
+    try {
+      await onSave();
+    } finally {
+      savePending = false;
+    }
+  }
+
+  async function saveSignedQr() {
+    signedPending = true;
+    try {
+      await onSaveSignedQr();
+    } finally {
+      signedPending = false;
+    }
+  }
 </script>
 
 <section class="grid two">
-  <form class="panel form-grid" onsubmit={(event) => { event.preventDefault(); onSave(); }}>
+  <form class="panel form-grid" aria-busy={savePending} onsubmit={(event) => { event.preventDefault(); saveConfig(); }}>
     <h2>Configuracion del Sistema</h2>
-    <label class="switch-row">
-      <span>Auto-escaneo QR</span>
-      <input bind:checked={config.retryEnabled} type="checkbox" />
-    </label>
+    <Switch bind:checked={config.retryEnabled} label="Auto-escaneo QR" />
     <label class="form-field">
       <span>Delay entre escaneos</span>
       <input bind:value={config.retryDelayMs} type="number" min="250" step="50" />
     </label>
-    <label class="switch-row">
-      <span>Camara QR</span>
-      <input bind:checked={config.cameraEnabled} type="checkbox" />
-    </label>
-    <label class="switch-row">
-      <span>Entrada manual</span>
-      <input bind:checked={config.manualEntryEnabled} type="checkbox" />
-    </label>
-    <label class="switch-row">
-      <span>Sonidos</span>
-      <input bind:checked={config.soundsEnabled} type="checkbox" />
-    </label>
-    <label class="switch-row">
-      <span>Salidas automaticas</span>
-      <input bind:checked={config.autoExitEnabled} type="checkbox" />
-    </label>
-    <button>Aplicar</button>
+    <Switch bind:checked={config.cameraEnabled} label="Camara QR" />
+    <Switch bind:checked={config.manualEntryEnabled} label="Entrada manual" />
+    <Switch bind:checked={config.soundsEnabled} label="Sonidos" />
+    <Switch bind:checked={config.autoExitEnabled} label="Salidas automaticas" />
+    <LoadingButton type="submit" loading={savePending} loadingLabel="Aplicando...">Aplicar</LoadingButton>
   </form>
 
-  <form class="panel form-grid" onsubmit={(event) => { event.preventDefault(); onSaveSignedQr(); }}>
+  <form class="panel form-grid" aria-busy={signedPending} onsubmit={(event) => { event.preventDefault(); saveSignedQr(); }}>
     <h2>QR firmado dinamico</h2>
-    <label class="switch-row">
-      <span>Activar QR firmado</span>
-      <input bind:checked={signedQrConfig.enabled} type="checkbox" />
-    </label>
+    <Switch bind:checked={signedQrConfig.enabled} label="Activar QR firmado" />
     <label class="form-field">
       <span>Vigencia del token</span>
       <input bind:value={signedQrConfig.ttlSeconds} type="number" min="15" max="30" step="1" />
@@ -58,14 +63,8 @@
       <span>Tolerancia de reloj</span>
       <input bind:value={signedQrConfig.clockToleranceSeconds} type="number" min="0" max="30" step="1" />
     </label>
-    <label class="switch-row">
-      <span>Compatibilidad QR opaco</span>
-      <input bind:checked={signedQrConfig.compatibilityOpaqueTokens} type="checkbox" />
-    </label>
-    <label class="switch-row">
-      <span>Vinculacion de dispositivo</span>
-      <input bind:checked={signedQrConfig.requireDeviceBinding} type="checkbox" />
-    </label>
-    <button>Guardar QR firmado</button>
+    <Switch bind:checked={signedQrConfig.compatibilityOpaqueTokens} label="Compatibilidad QR opaco" />
+    <Switch bind:checked={signedQrConfig.requireDeviceBinding} label="Vinculacion de dispositivo" />
+    <LoadingButton type="submit" loading={signedPending} loadingLabel="Guardando...">Guardar QR firmado</LoadingButton>
   </form>
 </section>
