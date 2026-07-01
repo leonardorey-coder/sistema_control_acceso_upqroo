@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { page } from "$app/state";
   import type { ScannerResultPayload } from "@control-acceso/shared";
   import LegacyHeader from "$lib/components/LegacyHeader.svelte";
   import ScannerView from "$lib/components/ScannerView.svelte";
@@ -7,16 +8,19 @@
 
   type Row = Record<string, unknown>;
 
-  let result = $state<(ScannerResultPayload & Row) | null>(null);
   let apiOnline = $state(false);
   let sessionReady = $state(false);
   let authError = $state("");
+  const scannerId = $derived(page.url.searchParams.get("scannerId") ?? "");
+  const storageKey = $derived(scannerId ? `scanner:last-result:${scannerId}` : "scanner:last-result");
 
-  async function scan(payload: { token?: string; signedQr?: string; manualMatricula?: string }) {
-    result = await apiRequest<ScannerResultPayload & Row>("/api/v1/access/scan", {
+  async function scan(payload: { token?: string; signedQr?: string; manualMatricula?: string; scannerId?: string }) {
+    const result = await apiRequest<ScannerResultPayload & Row>("/api/v1/access/scan", {
       method: "POST",
       body: JSON.stringify(payload)
     });
+    sessionStorage.setItem(storageKey, JSON.stringify(result));
+    sessionStorage.setItem("scanner:last-result", JSON.stringify(result));
   }
 
   onMount(async () => {
@@ -43,7 +47,7 @@
     API {apiOnline ? "activa" : "sin conexion"}
   </div>
   {#if sessionReady}
-    <ScannerView {result} onScan={scan} />
+    <ScannerView {scannerId} onScan={scan} />
   {:else}
     <section class="panel login-card">
       <h2>Sesion requerida</h2>
