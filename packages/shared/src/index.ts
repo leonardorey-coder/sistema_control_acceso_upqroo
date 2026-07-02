@@ -213,6 +213,31 @@ export type SignedQrConfigPayload = {
   requireDeviceBinding: boolean;
 };
 
+export type ScannerDeviceStatus = "pending" | "active" | "disabled" | "revoked";
+
+export type ScannerDeviceRowPayload = {
+  id: string;
+  code: string;
+  label: string;
+  algorithm: "ES256";
+  status: ScannerDeviceStatus;
+  createdBy?: string | null;
+  requestedByAdminId?: string | null;
+  registeredByAdminId?: string | null;
+  approvedByAdminId?: string | null;
+  revokedByAdminId?: string | null;
+  lastSeenAt?: string | null;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+  registeredAt?: string | null;
+  approvedAt?: string | null;
+  revokedAt?: string | null;
+};
+
+export type ScannerDevicesConfigPayload = {
+  required: boolean;
+};
+
 export type AdminRole = "admin" | "super_admin";
 export type AdminStatus = "active" | "disabled";
 

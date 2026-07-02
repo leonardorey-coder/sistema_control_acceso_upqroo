@@ -104,6 +104,13 @@ export const userAccountStatus = pgEnum("user_account_status", [
   "disabled"
 ]);
 
+export const scannerDeviceStatus = pgEnum("scanner_device_status", [
+  "pending",
+  "active",
+  "disabled",
+  "revoked"
+]);
+
 export const personTypes = pgTable("person_types", {
   code: varchar("code", { length: 40 }).primaryKey(),
   label: varchar("label", { length: 80 }).notNull(),
@@ -241,6 +248,42 @@ export const userDeviceChallenges = pgTable("user_device_challenges", {
 }, (table) => ({
   challengeUnique: uniqueIndex("user_device_challenges_challenge_unique").on(table.challenge),
   deviceIdx: index("user_device_challenges_device_idx").on(table.deviceId, table.expiresAt)
+}));
+
+export const scannerDevices = pgTable("scanner_devices", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  code: varchar("code", { length: 120 }).notNull(),
+  label: varchar("label", { length: 160 }).notNull(),
+  publicKeyJwk: jsonb("public_key_jwk"),
+  algorithm: varchar("algorithm", { length: 20 }).notNull().default("ES256"),
+  status: scannerDeviceStatus("status").notNull().default("pending"),
+  createdByAdminId: uuid("created_by_admin_id").references(() => administradores.id),
+  requestedByAdminId: uuid("requested_by_admin_id").references(() => administradores.id),
+  registeredByAdminId: uuid("registered_by_admin_id").references(() => administradores.id),
+  approvedByAdminId: uuid("approved_by_admin_id").references(() => administradores.id),
+  revokedByAdminId: uuid("revoked_by_admin_id").references(() => administradores.id),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+  metadata: jsonb("metadata").notNull().default(sql`'{}'::jsonb`),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  registeredAt: timestamp("registered_at", { withTimezone: true }),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true })
+}, (table) => ({
+  codeUnique: uniqueIndex("scanner_devices_code_unique").on(table.code),
+  statusIdx: index("scanner_devices_status_idx").on(table.status)
+}));
+
+export const scannerDeviceChallenges = pgTable("scanner_device_challenges", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  deviceId: uuid("device_id").notNull().references(() => scannerDevices.id),
+  adminId: uuid("admin_id").notNull().references(() => administradores.id),
+  challenge: text("challenge").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+}, (table) => ({
+  challengeUnique: uniqueIndex("scanner_device_challenges_challenge_unique").on(table.challenge),
+  deviceIdx: index("scanner_device_challenges_device_idx").on(table.deviceId, table.expiresAt)
 }));
 
 export const adminSessions = pgTable("admin_sessions", {

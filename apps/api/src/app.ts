@@ -15,6 +15,7 @@ import { integrityRoutes } from "./modules/integrity/integrity.routes";
 import { peopleRoutes } from "./modules/people/people.routes";
 import { personTypesRoutes } from "./modules/person-types/person-types.routes";
 import { qrKeysRoutes } from "./modules/qr-signing/qr-signing.routes";
+import { scannerDeviceRoutes } from "./modules/scanner-devices/scanner-devices.routes";
 import { userPortalRoutes } from "./modules/user-portal/user-portal.routes";
 import { vehiclesRoutes } from "./modules/vehicles/vehicles.routes";
 import { healthRoutes } from "./http/routes/health.routes";
@@ -72,7 +73,9 @@ for (const path of [
   "/api/v1/credentials",
   "/api/v1/credentials/*",
   "/api/v1/files",
-  "/api/v1/files/*"
+  "/api/v1/files/*",
+  "/api/v1/scanner-devices",
+  "/api/v1/scanner-devices/*"
 ]) {
   app.use(path, requireAdminSession);
 }
@@ -94,3 +97,4 @@ app.route("/api/v1/integrity", integrityRoutes);
 app.route("/api/v1/admins", adminManagementRoutes);
 app.route("/api/v1/credentials", credentialsRoutes);
 app.route("/api/v1/files", filesRoutes);
+app.route("/api/v1/scanner-devices", scannerDeviceRoutes);
