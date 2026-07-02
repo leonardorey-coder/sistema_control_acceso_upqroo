@@ -21,6 +21,10 @@ const defaultSignedQrConfig = {
   compatibilityOpaqueTokens: true
 };
 
+const defaultScannerDevicesConfig = {
+  required: process.env.NODE_ENV === "production"
+};
+
 const operationalConfigSchema = z.object({
   value: z.record(z.unknown()).default(defaultScannerConfig),
   description: z.string().trim().optional()
@@ -34,6 +38,13 @@ const signedQrConfigSchema = z.object({
     compatibilityOpaqueTokens: z.boolean().default(defaultSignedQrConfig.compatibilityOpaqueTokens),
     requireDeviceBinding: z.boolean().default(false)
   }).default(defaultSignedQrConfig),
+  description: z.string().trim().optional()
+}).strict();
+
+const scannerDevicesConfigSchema = z.object({
+  value: z.object({
+    required: z.boolean().default(defaultScannerDevicesConfig.required)
+  }).default(defaultScannerDevicesConfig),
   description: z.string().trim().optional()
 }).strict();
 
@@ -87,6 +98,36 @@ configRoutes.patch("/signed-qr", async (c) => {
     metadata: { key: "signed_qr" }
   });
   broadcastEvent("config.table", { action: "signed_qr_updated", key: "signed_qr" });
+
+  return c.json({ data: row });
+});
+
+configRoutes.get("/scanner-devices", async (c) => {
+  const [row] = await getOperationalConfig("scanner_devices");
+  return c.json({
+    data: row
+      ? { ...row, value: { ...defaultScannerDevicesConfig, ...(row.value as Record<string, unknown>) } }
+      : { key: "scanner_devices", value: defaultScannerDevicesConfig }
+  });
+});
+
+configRoutes.patch("/scanner-devices", async (c) => {
+  const input = scannerDevicesConfigSchema.parse(await c.req.json());
+  const session = getAdminSession(c);
+  const row = await upsertOperationalConfig({
+    key: "scanner_devices",
+    value: input.value,
+    description: input.description ?? "Scanner device authentication settings",
+    updatedByAdminId: session.adminId
+  });
+
+  await recordAudit({
+    ...getActorMetadata(c),
+    action: "config.scanner_devices_updated",
+    entityType: "operational_config",
+    metadata: { key: "scanner_devices" }
+  });
+  broadcastEvent("config.table", { action: "scanner_devices_updated", key: "scanner_devices" });
 
   return c.json({ data: row });
 });

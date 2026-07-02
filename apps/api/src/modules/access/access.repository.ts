@@ -112,6 +112,8 @@ export type AccessScanPayload = {
   manualMatricula?: string;
   adminId?: string;
   scannerId?: string;
+  scannerDeviceId?: string;
+  scannerCode?: string;
   preVerifiedPersonId?: string;
   preVerifiedJti?: string;
   preVerifiedCredentialType?: "person_qr" | "temporary_daily_qr" | "vehicle_permit_qr";

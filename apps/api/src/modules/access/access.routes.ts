@@ -12,6 +12,8 @@ import { getPersonProfileFileUrl, listAccessToday, runAccessScan, runAutoExits }
 import { getOperationalConfig } from "../config/config.repository";
 import { db } from "../../db/client";
 import { sql } from "drizzle-orm";
+import { HttpError } from "../../shared/http-error";
+import { scannerDevicesRequired, verifyScannerDeviceProof } from "../scanner-devices/scanner-devices.service";
 
 export const accessRoutes = new Hono();
 
@@ -36,19 +38,84 @@ async function recordRejectedSignedQr(reasonCode: string, scannerId?: string) {
   `);
 }
 
+async function recordRejectedScannerDevice(reasonCode: string, metadata: Record<string, unknown>) {
+  await db.execute(sql`
+    INSERT INTO access_scan_events (
+      credential_type,
+      access_mode,
+      accepted,
+      reason_code,
+      signature_verified,
+      metadata
+    )
+    VALUES (
+      'manual_override',
+      'manual',
+      false,
+      ${reasonCode},
+      false,
+      ${JSON.stringify(metadata)}::jsonb
+    )
+  `);
+}
+
 accessRoutes.post("/scan", async (c) => {
   const body = z.object({
     token: z.string().trim().min(1).optional(),
     signedQr: z.string().trim().min(1).optional(),
     manualMatricula: z.string().trim().min(1).optional(),
-    scannerId: z.string().trim().optional()
+    scannerId: z.string().trim().optional(),
+    scannerDeviceId: z.string().uuid().optional(),
+    scannerCode: z.string().trim().min(3).max(120).optional(),
+    scannerChallengeId: z.string().uuid().optional(),
+    scannerSignature: z.string().trim().min(1).optional()
   }).strict().refine((input) => input.token || input.signedQr || input.manualMatricula, {
     message: "token, signedQr or manualMatricula is required"
   }).parse(await c.req.json().catch(() => ({})));
 
   const session = getAdminSession(c);
+  const proofSupplied = Boolean(body.scannerDeviceId || body.scannerCode || body.scannerChallengeId || body.scannerSignature);
+  const requireScannerDevice = await scannerDevicesRequired();
+  const adminCanBypassScannerDevice = session.role === "super_admin";
+  let verifiedScanner: { scannerDeviceId: string; scannerCode: string } | null = null;
+
+  if ((requireScannerDevice && !adminCanBypassScannerDevice) || proofSupplied) {
+    try {
+      verifiedScanner = await verifyScannerDeviceProof(withoutUndefined({
+        adminId: session.adminId,
+        scannerDeviceId: body.scannerDeviceId,
+        scannerCode: body.scannerCode,
+        scannerChallengeId: body.scannerChallengeId,
+        scannerSignature: body.scannerSignature,
+        payload: withoutUndefined({
+          token: body.token,
+          signedQr: body.signedQr,
+          manualMatricula: body.manualMatricula,
+          scannerCode: body.scannerCode
+        })
+      }));
+    } catch (err) {
+      const reasonCode = err instanceof HttpError ? err.code : "SCANNER_SIGNATURE_INVALID";
+      await recordRejectedScannerDevice(reasonCode, withoutUndefined({
+        scannerId: body.scannerId,
+        scannerDeviceId: body.scannerDeviceId,
+        scannerCode: body.scannerCode,
+        adminId: session.adminId
+      }));
+      return c.json({ data: { accepted: false, reasonCode, scannedAt: new Date().toISOString() } });
+    }
+  }
+
+  const effectiveScannerId = verifiedScanner?.scannerCode ?? body.scannerId;
   let scanPayload: Record<string, unknown> = {
-    ...withoutUndefined(body),
+    ...withoutUndefined({
+      token: body.token,
+      signedQr: body.signedQr,
+      manualMatricula: body.manualMatricula,
+      scannerId: effectiveScannerId,
+      scannerDeviceId: verifiedScanner?.scannerDeviceId,
+      scannerCode: verifiedScanner?.scannerCode
+    }),
     adminId: session.adminId
   } as Record<string, unknown>;
 
@@ -57,7 +124,7 @@ accessRoutes.post("/scan", async (c) => {
     const [configRow] = await getOperationalConfig("signed_qr");
     const signedQrConfig = (configRow?.value as Record<string, unknown> | undefined) ?? {};
     if (signedQrConfig.enabled !== true) {
-      await recordRejectedSignedQr("SIGNED_QR_DISABLED", body.scannerId);
+      await recordRejectedSignedQr("SIGNED_QR_DISABLED", effectiveScannerId);
       return c.json({ data: { accepted: false, reasonCode: "SIGNED_QR_DISABLED" } });
     }
     const clockTolerance = typeof signedQrConfig.clockToleranceSeconds === "number"
@@ -73,7 +140,7 @@ accessRoutes.post("/scan", async (c) => {
       else if (err instanceof Error && err.message === "SIGNED_QR_CLAIM_INVALID") reasonCode = "SIGNED_QR_CLAIM_INVALID";
       else if (err instanceof Error && err.message === "SIGNED_QR_KEY_NOT_FOUND") reasonCode = "SIGNED_QR_KEY_NOT_FOUND";
       else if (err instanceof Error && err.message === "SIGNED_QR_ALG_INVALID") reasonCode = "SIGNED_QR_ALG_INVALID";
-      await recordRejectedSignedQr(reasonCode, body.scannerId);
+      await recordRejectedSignedQr(reasonCode, effectiveScannerId);
       return c.json({ data: { accepted: false, reasonCode } });
     }
 
@@ -89,7 +156,9 @@ accessRoutes.post("/scan", async (c) => {
       sigAlg: verified.alg,
       iat: verified.iat,
       exp: verified.exp,
-      scannerId: body.scannerId,
+      scannerId: effectiveScannerId,
+      scannerDeviceId: verifiedScanner?.scannerDeviceId,
+      scannerCode: verifiedScanner?.scannerCode,
       adminId: session.adminId
     };
   }
@@ -117,7 +186,8 @@ accessRoutes.post("/scan", async (c) => {
     metadata: { result: responseResult }
   });
   broadcastEvent("access.scan", withoutUndefined({
-    scannerId: body.scannerId,
+    scannerId: effectiveScannerId,
+    scannerDeviceId: verifiedScanner?.scannerDeviceId,
     result: responseResult as Record<string, unknown>
   }));
   broadcastEvent("access.table", {});

@@ -158,6 +158,25 @@ describe("access atomic contracts", () => {
     expect(migration).toContain("WHERE hash_registro IS NOT NULL");
   });
 
+  it("ships scanner device authentication schema separately from QR signing", () => {
+    const migration = readMigration("0009_scanner_devices.sql");
+    const approvalMigration = readMigration("0010_scanner_device_approval.sql");
+    const source = readModule("scanner-devices/scanner-devices.service.ts");
+    const accessRoutes = readModule("access/access.routes.ts");
+
+    expect(migration).toContain("CREATE TABLE IF NOT EXISTS \"scanner_devices\"");
+    expect(migration).toContain("CREATE TABLE IF NOT EXISTS \"scanner_device_challenges\"");
+    expect(migration).toContain("\"public_key_jwk\" jsonb");
+    expect(migration).toContain("\"requested_by_admin_id\" uuid");
+    expect(migration).toContain("\"approved_by_admin_id\" uuid");
+    expect(approvalMigration).toContain("ADD COLUMN IF NOT EXISTS \"approved_at\"");
+    expect(migration).toContain("'scanner_devices'");
+    expect(source).toContain("control-acceso-upqroo.scanner-scan.v1");
+    expect(source).not.toContain("signDynamicQr");
+    expect(accessRoutes).toContain("const adminCanBypassScannerDevice = session.role === \"super_admin\"");
+    expect(accessRoutes).toContain("(requireScannerDevice && !adminCanBypassScannerDevice) || proofSupplied");
+  });
+
   it("ships S3-compatible storage for R2/S3 instead of local-only placeholders", () => {
     const envSource = readSource("config/env.ts");
     const storageSource = readSource("shared/storage.ts");
