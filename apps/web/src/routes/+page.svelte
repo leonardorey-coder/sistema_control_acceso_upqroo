@@ -12,6 +12,8 @@
     PersonCredentialRowPayload,
     PersonRowPayload,
     PersonTypeRowPayload,
+    ScannerDeviceRowPayload,
+    ScannerDevicesConfigPayload,
     SignedQrConfigPayload,
     TemporaryDailyQrRowPayload,
     VehiclePermitRowPayload,
@@ -120,6 +122,7 @@
   let adminSessionRows = $state<Array<AdminSessionRowPayload & Row>>([]);
   let adminAuditRows = $state<Array<AuditLogRowPayload & Row>>([]);
   let adminAuditTotal = $state(0);
+  let scannerDeviceRows = $state<Array<ScannerDeviceRowPayload & Row>>([]);
   let subjectRows = $state<Row[]>([]);
   let subjectTotal = $state(0);
   let scheduleRows = $state<Row[]>([]);
@@ -144,6 +147,9 @@
     clockToleranceSeconds: 5,
     compatibilityOpaqueTokens: true,
     requireDeviceBinding: false
+  });
+  let scannerDevicesConfigForm = $state<ScannerDevicesConfigPayload>({
+    required: false
   });
 
   let filters = $state({
@@ -515,6 +521,7 @@
   async function refreshAdmins() {
     if (session?.admin.role !== "super_admin") return;
     adminRows = (await apiRequest<{ rows: Array<AdminRowPayload & Row> }>("/api/v1/admins")).rows;
+    scannerDeviceRows = (await apiRequest<{ rows: Array<ScannerDeviceRowPayload & Row> }>("/api/v1/scanner-devices")).rows;
     const auditResult = await apiRequest<PaginatedRows<AuditLogRowPayload & Row>>(`/api/v1/admins/audit${toQuery({
       q: auditFilters.q,
       action: auditFilters.action,
@@ -531,8 +538,10 @@
   async function refreshConfig() {
     const result = await apiRequest<{ value?: Partial<OperationalConfigPayload> }>("/api/v1/config/operational");
     const signedQrResult = await apiRequest<{ value?: Partial<SignedQrConfigPayload> }>("/api/v1/config/signed-qr");
+    const scannerDevicesResult = await apiRequest<{ value?: Partial<ScannerDevicesConfigPayload> }>("/api/v1/config/scanner-devices");
     configForm = { ...configForm, ...(result.value as Partial<typeof configForm> ?? {}) };
     signedQrConfigForm = { ...signedQrConfigForm, ...(signedQrResult.value as Partial<typeof signedQrConfigForm> ?? {}) };
+    scannerDevicesConfigForm = { ...scannerDevicesConfigForm, ...(scannerDevicesResult.value as Partial<typeof scannerDevicesConfigForm> ?? {}) };
   }
 
   async function refreshSubjects() {
@@ -977,6 +986,18 @@
     await refreshAdmins();
   }
 
+  async function approveScannerDevice(row: Row) {
+    await apiRequest(`/api/v1/scanner-devices/${row.id}/approve`, { method: "POST" });
+    notice = "Dispositivo scanner aprobado";
+    await refreshAdmins();
+  }
+
+  async function revokeScannerDevice(row: Row) {
+    await apiRequest(`/api/v1/scanner-devices/${row.id}/revoke`, { method: "POST" });
+    notice = "Dispositivo scanner revocado";
+    await refreshAdmins();
+  }
+
   function selectAdminForEdit(row: AdminRowPayload & Row) {
     adminEditForm = {
       id: row.id,
@@ -1046,6 +1067,14 @@
       body: JSON.stringify({ value: signedQrConfigForm })
     });
     notice = "Configuracion de QR firmado guardada";
+  }
+
+  async function saveScannerDevicesConfig() {
+    await apiRequest("/api/v1/config/scanner-devices", {
+      method: "PATCH",
+      body: JSON.stringify({ value: scannerDevicesConfigForm })
+    });
+    notice = "Configuracion de dispositivos scanner guardada";
   }
 
   async function importPeopleCsv(file: File) {
@@ -1311,11 +1340,14 @@
         }}
         currentSessionId={session.sessionId}
         sessionRows={adminSessionRows}
+        scannerDeviceRows={scannerDeviceRows}
         auditRows={adminAuditRows}
         auditTotal={adminAuditTotal}
         auditPage={adminAuditPagination.page}
         auditPageSize={adminAuditPagination.pageSize}
         onCreate={createAdmin}
+        onApproveScannerDevice={approveScannerDevice}
+        onRevokeScannerDevice={revokeScannerDevice}
         onSelect={selectAdminForEdit}
         onUpdate={updateAdmin}
         onDisable={disableAdmin}
@@ -1329,7 +1361,14 @@
     {/if}
 
     {#if activeTab === "config"}
-      <ConfigTab bind:config={configForm} bind:signedQrConfig={signedQrConfigForm} onSave={saveConfig} onSaveSignedQr={saveSignedQrConfig} />
+      <ConfigTab
+        bind:config={configForm}
+        bind:signedQrConfig={signedQrConfigForm}
+        bind:scannerDevicesConfig={scannerDevicesConfigForm}
+        onSave={saveConfig}
+        onSaveSignedQr={saveSignedQrConfig}
+        onSaveScannerDevices={saveScannerDevicesConfig}
+      />
     {/if}
   </AdminShell>
 {/if}

@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { AdminRowPayload, AdminSessionRowPayload, AuditLogRowPayload } from "@control-acceso/shared";
+import type { AdminRowPayload, AdminSessionRowPayload, AuditLogRowPayload, ScannerDeviceRowPayload } from "@control-acceso/shared";
 import DataTable from "./DataTable.svelte";
 import LoadingButton from "./LoadingButton.svelte";
 import Modal from "./Modal.svelte";
@@ -11,6 +11,7 @@ import Switch from "./Switch.svelte";
   type AdminRow = AdminRowPayload & Row;
   type AdminSessionRow = AdminSessionRowPayload & Row;
   type AuditRow = AuditLogRowPayload & Row;
+  type ScannerDeviceRow = ScannerDeviceRowPayload & Row;
 
   let {
     rows,
@@ -19,6 +20,7 @@ import Switch from "./Switch.svelte";
     auditFilters,
     isSuperAdmin,
     sessionRows,
+    scannerDeviceRows,
     auditRows,
     auditTotal,
     auditPage,
@@ -26,6 +28,8 @@ import Switch from "./Switch.svelte";
     currentAdmin,
     currentSessionId,
     onCreate,
+    onApproveScannerDevice,
+    onRevokeScannerDevice,
     onSelect,
     onUpdate,
     onDisable,
@@ -50,7 +54,10 @@ import Switch from "./Switch.svelte";
     auditFilters: { q: string; action: string; entityType: string; from: string; to: string };
     isSuperAdmin: boolean;
     onCreate: () => void;
+    onApproveScannerDevice: (row: Row) => void;
+    onRevokeScannerDevice: (row: Row) => void;
     sessionRows: AdminSessionRow[];
+    scannerDeviceRows: ScannerDeviceRow[];
     auditRows: AuditRow[];
     auditTotal: number;
     auditPage: number;
@@ -79,6 +86,7 @@ import Switch from "./Switch.svelte";
   const sectionOptions = [
     { value: "accounts", label: "Cuentas" },
     { value: "sessions", label: "Sesiones" },
+    { value: "scanners", label: "Scanners" },
     { value: "audit", label: "Auditoria" }
   ];
 
@@ -243,6 +251,51 @@ import Switch from "./Switch.svelte";
       confirm: "Esta accion revoca la sesion administrativa.",
       disabled: (row) => String(row.id) === currentSessionId || Boolean(row.revokedAt)
     }]} />
+  </section>
+
+  {:else if section === "scanners"}
+  <section class="grid two">
+    <section class="panel selected-summary">
+      <h2>Flujo de vinculacion</h2>
+      <p class="muted">El admin abre /scanner desde su dispositivo y solicita autorizacion. El navegador genera una clave local no exportable y envia la clave publica.</p>
+      <p class="muted">El superadmin revisa la solicitud pendiente en esta tabla y la aprueba. Hasta entonces no aparece el scanner en ese dispositivo.</p>
+    </section>
+    <section class="panel selected-summary">
+      <h2>Alcance de seguridad</h2>
+      <p class="muted">La firma del dispositivo solo autentica el scanner ante el backend; no firma ni crea QR institucionales.</p>
+    </section>
+  </section>
+
+  <section class="panel">
+    <div class="section-title">
+      <h2>Dispositivos scanner</h2>
+      <span>{scannerDeviceRows.length} dispositivos</span>
+    </div>
+    <DataTable rows={scannerDeviceRows} columns={[
+      { key: "code", label: "Codigo", minWidth: "150px" },
+      { key: "label", label: "Etiqueta", minWidth: "180px" },
+      { key: "status", label: "Estado", kind: "status", minWidth: "110px" },
+      { key: "requestedByAdminId", label: "Admin solicitante", kind: "technical", minWidth: "130px", truncate: true },
+      { key: "lastSeenAt", label: "Ultimo uso", kind: "date", minWidth: "150px" },
+      { key: "approvedAt", label: "Aprobado", kind: "date", minWidth: "150px" },
+      { key: "createdAt", label: "Creado", kind: "date", minWidth: "150px" }
+    ]} actions={[
+      {
+        label: "Aprobar",
+        icon: "check",
+        onClick: onApproveScannerDevice,
+        tone: "ghost",
+        disabled: (row) => row.status !== "pending"
+      },
+      {
+        label: "Revocar",
+        icon: "revoke",
+        onClick: onRevokeScannerDevice,
+        tone: "danger",
+        confirm: "Esta accion revoca el dispositivo scanner seleccionado.",
+        disabled: (row) => row.status === "revoked"
+      }
+    ]} />
   </section>
 
   {:else if section === "audit"}

@@ -1,22 +1,27 @@
 <script lang="ts">
-  import type { OperationalConfigPayload, SignedQrConfigPayload } from "@control-acceso/shared";
+  import type { OperationalConfigPayload, ScannerDevicesConfigPayload, SignedQrConfigPayload } from "@control-acceso/shared";
   import LoadingButton from "./LoadingButton.svelte";
   import Switch from "./Switch.svelte";
 
   let {
     config = $bindable(),
     signedQrConfig = $bindable(),
+    scannerDevicesConfig = $bindable(),
     onSave,
-    onSaveSignedQr
+    onSaveSignedQr,
+    onSaveScannerDevices
   }: {
     config: OperationalConfigPayload;
     signedQrConfig: SignedQrConfigPayload;
+    scannerDevicesConfig: ScannerDevicesConfigPayload;
     onSave: () => void | Promise<void>;
     onSaveSignedQr: () => void | Promise<void>;
+    onSaveScannerDevices: () => void | Promise<void>;
   } = $props();
 
   let savePending = $state(false);
   let signedPending = $state(false);
+  let scannerDevicesPending = $state(false);
 
   async function saveConfig() {
     savePending = true;
@@ -33,6 +38,15 @@
       await onSaveSignedQr();
     } finally {
       signedPending = false;
+    }
+  }
+
+  async function saveScannerDevices() {
+    scannerDevicesPending = true;
+    try {
+      await onSaveScannerDevices();
+    } finally {
+      scannerDevicesPending = false;
     }
   }
 </script>
@@ -66,5 +80,12 @@
     <Switch bind:checked={signedQrConfig.compatibilityOpaqueTokens} label="Compatibilidad QR opaco" />
     <Switch bind:checked={signedQrConfig.requireDeviceBinding} label="Vinculacion de dispositivo" />
     <LoadingButton type="submit" loading={signedPending} loadingLabel="Guardando...">Guardar QR firmado</LoadingButton>
+  </form>
+
+  <form class="panel form-grid" aria-busy={scannerDevicesPending} onsubmit={(event) => { event.preventDefault(); saveScannerDevices(); }}>
+    <h2>Dispositivos scanner</h2>
+    <Switch bind:checked={scannerDevicesConfig.required} label="Exigir scanner autorizado" />
+    <p class="muted">Cuando esta activo, una sesion admin no basta para escanear: el dispositivo debe estar vinculado con un codigo autorizado por superadmin.</p>
+    <LoadingButton type="submit" loading={scannerDevicesPending} loadingLabel="Guardando...">Guardar scanners</LoadingButton>
   </form>
 </section>
