@@ -111,6 +111,7 @@ describe("access atomic contracts", () => {
 
     expect(source).toContain("const session = getAdminSession(c)");
     expect(source).toContain("adminId: session.adminId");
+    expect(source).toContain("vehicle_access.rejected");
     expect(source).not.toContain("adminId: body.adminId");
     expect(source).not.toContain("adminId: z.string().uuid().optional()");
   });
@@ -124,12 +125,32 @@ describe("access atomic contracts", () => {
     expect(hotQrRoutes).toContain("createdByAdminId: session.adminId");
     expect(credentialsRoutes).toContain("createdByAdminId: session.adminId");
     expect(vehiclesRoutes).toContain("createdByAdminId: session.adminId");
+    expect(vehiclesRoutes).toContain("registeredByAdminId: session.adminId");
+    expect(vehiclesRoutes).toContain("approvedByAdminId: session.adminId");
+    expect(vehiclesRoutes).toContain("rejectedByAdminId: session.adminId");
     expect(configRoutes).toContain("updatedByAdminId: session.adminId");
 
     expect(hotQrRoutes).not.toContain("createdByAdminId: z.string().uuid().optional()");
     expect(credentialsRoutes).not.toContain("createdByAdminId: z.string().uuid().optional()");
     expect(vehiclesRoutes).not.toContain("createdByAdminId: z.string().uuid().optional()");
+    expect(vehiclesRoutes).not.toContain("approvedByAdminId: z.string().uuid().optional()");
     expect(configRoutes).not.toContain("updatedByAdminId: z.string().uuid().optional()");
+  });
+
+  it("ships additive campus vehicle management schema and rejection contracts", () => {
+    const migration = readMigration("0011_vehicle_campus_management.sql");
+
+    expect(migration).toContain("CREATE TYPE \"vehicle_type\"");
+    expect(migration).toContain("CREATE TYPE \"vehicle_approval_status\"");
+    expect(migration).toContain("CREATE TYPE \"vehicle_permit_type\"");
+    expect(migration).toContain("CREATE TABLE IF NOT EXISTS \"vehicle_visitor_permits\"");
+    expect(migration).toContain("\"approval_status\" \"vehicle_approval_status\" DEFAULT 'pending'");
+    expect(migration).toContain("\"permit_type\" \"vehicle_permit_type\" DEFAULT 'standard'");
+    expect(migration).toContain("vehicle_visitor_permits_hot_qr_unique");
+    expect(migration).toContain("VEHICLE_PENDING_APPROVAL");
+    expect(migration).toContain("VEHICLE_REJECTED");
+    expect(migration).toContain("VEHICLE_BLOCKED");
+    expect(migration).toContain("VEHICLE_PERMIT_EXPIRED");
   });
 
   it("ships a durable login rate-limit table for production deployments", () => {

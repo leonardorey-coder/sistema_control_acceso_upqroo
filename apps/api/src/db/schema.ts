@@ -82,11 +82,45 @@ export const vehicleStatus = pgEnum("vehicle_status", [
   "blocked"
 ]);
 
+export const vehicleType = pgEnum("vehicle_type", [
+  "car",
+  "motorcycle",
+  "bicycle",
+  "electric_scooter",
+  "truck",
+  "official",
+  "university_transport",
+  "visitor",
+  "other"
+]);
+
+export const vehicleApprovalStatus = pgEnum("vehicle_approval_status", [
+  "pending",
+  "approved",
+  "rejected"
+]);
+
 export const vehiclePermitStatus = pgEnum("vehicle_permit_status", [
   "active",
   "expired",
   "revoked",
   "suspended"
+]);
+
+export const vehiclePermitType = pgEnum("vehicle_permit_type", [
+  "standard",
+  "temporary",
+  "official",
+  "visitor",
+  "provider",
+  "event",
+  "emergency"
+]);
+
+export const vehicleVisitorPermitStatus = pgEnum("vehicle_visitor_permit_status", [
+  "active",
+  "expired",
+  "revoked"
 ]);
 
 export const adminRole = pgEnum("admin_role", [
@@ -362,16 +396,26 @@ export const vehicles = pgTable("vehicles", {
   id: uuid("id").primaryKey().defaultRandom(),
   ownerPersonId: uuid("owner_person_id").notNull().references(() => personas.id),
   plate: varchar("plate", { length: 20 }).notNull(),
+  vehicleType: vehicleType("vehicle_type").notNull().default("car"),
   make: varchar("make", { length: 80 }),
   model: varchar("model", { length: 80 }),
   color: varchar("color", { length: 60 }),
   status: vehicleStatus("status").notNull().default("active"),
+  approvalStatus: vehicleApprovalStatus("approval_status").notNull().default("pending"),
+  registeredByAdminId: uuid("registered_by_admin_id").references(() => administradores.id),
+  approvedByAdminId: uuid("approved_by_admin_id").references(() => administradores.id),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  rejectedByAdminId: uuid("rejected_by_admin_id").references(() => administradores.id),
+  rejectedAt: timestamp("rejected_at", { withTimezone: true }),
+  rejectionReason: text("rejection_reason"),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
 }, (table) => ({
   plateUnique: uniqueIndex("vehicles_plate_unique").on(table.plate),
-  ownerStatusIdx: index("vehicles_owner_status_idx").on(table.ownerPersonId, table.status)
+  ownerStatusIdx: index("vehicles_owner_status_idx").on(table.ownerPersonId, table.status),
+  approvalTypeIdx: index("vehicles_approval_type_idx").on(table.approvalStatus, table.vehicleType)
 }));
 
 export const vehiclePermits = pgTable("vehicle_permits", {
@@ -379,6 +423,7 @@ export const vehiclePermits = pgTable("vehicle_permits", {
   personId: uuid("person_id").notNull().references(() => personas.id),
   vehicleId: uuid("vehicle_id").notNull().references(() => vehicles.id),
   status: vehiclePermitStatus("status").notNull().default("active"),
+  permitType: vehiclePermitType("permit_type").notNull().default("standard"),
   validFrom: timestamp("valid_from", { withTimezone: true }).notNull().defaultNow(),
   validUntil: timestamp("valid_until", { withTimezone: true }),
   reason: text("reason"),
@@ -406,6 +451,29 @@ export const vehiclePermitQrTokens = pgTable("vehicle_permit_qr_tokens", {
 }, (table) => ({
   hashUnique: uniqueIndex("vehicle_permit_qr_hash_unique").on(table.tokenHash),
   permitStatusIdx: index("vehicle_permit_qr_permit_status_idx").on(table.vehiclePermitId, table.status)
+}));
+
+export const vehicleVisitorPermits = pgTable("vehicle_visitor_permits", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  hotQrTokenId: uuid("hot_qr_token_id").notNull().references(() => hotQrTokens.id),
+  visitorName: varchar("visitor_name", { length: 160 }).notNull(),
+  plate: varchar("plate", { length: 20 }).notNull(),
+  vehicleType: vehicleType("vehicle_type").notNull().default("visitor"),
+  color: varchar("color", { length: 60 }),
+  reason: text("reason").notNull(),
+  status: vehicleVisitorPermitStatus("status").notNull().default("active"),
+  validFrom: timestamp("valid_from", { withTimezone: true }).notNull().defaultNow(),
+  validUntil: timestamp("valid_until", { withTimezone: true }).notNull(),
+  createdByAdminId: uuid("created_by_admin_id").references(() => administradores.id),
+  revokedByAdminId: uuid("revoked_by_admin_id").references(() => administradores.id),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  metadata: jsonb("metadata").notNull().default(sql`'{}'::jsonb`),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+}, (table) => ({
+  hotQrUnique: uniqueIndex("vehicle_visitor_permits_hot_qr_unique").on(table.hotQrTokenId),
+  plateStatusIdx: index("vehicle_visitor_permits_plate_status_idx").on(table.plate, table.status),
+  validStatusIdx: index("vehicle_visitor_permits_valid_status_idx").on(table.validUntil, table.status)
 }));
 
 export const hotQrTokens = pgTable("hot_qr_tokens", {

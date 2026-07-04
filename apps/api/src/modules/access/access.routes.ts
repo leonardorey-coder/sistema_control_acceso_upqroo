@@ -178,6 +178,25 @@ accessRoutes.post("/scan", async (c) => {
     }
   }
 
+  const reasonCode = responseObject && typeof responseObject["reasonCode"] === "string"
+    ? responseObject["reasonCode"]
+    : "";
+  const vehicleRejected = responseObject?.["accepted"] === false
+    && (
+      responseObject["accessMode"] === "vehicle"
+      || typeof responseObject["vehicleId"] === "string"
+      || reasonCode.startsWith("VEHICLE_")
+    );
+
+  if (vehicleRejected) {
+    await recordAudit({
+      ...getActorMetadata(c),
+      action: "vehicle_access.rejected",
+      entityType: "access",
+      metadata: { result: responseResult }
+    });
+  }
+
   await recordAudit({
     ...getActorMetadata(c),
     action: "access.scan",

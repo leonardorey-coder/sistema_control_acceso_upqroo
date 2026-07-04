@@ -607,6 +607,12 @@ describeIfPostgres("postgres integration", () => {
     const vehicleBody = await vehicleResponse.json();
     expect(vehicleResponse.status).toBe(201);
 
+    const approveResponse = await app.request(`/api/v1/vehicles/${vehicleBody.data.id}/approve`, {
+      method: "POST",
+      headers: jsonHeaders(cookie)
+    });
+    expect(approveResponse.status).toBe(200);
+
     const permitResponse = await app.request("/api/v1/vehicles/permits", {
       method: "POST",
       headers: jsonHeaders(cookie),
@@ -634,6 +640,74 @@ describeIfPostgres("postgres integration", () => {
     const replayScan = await scanSignedQr(cookie, dynamicBody.data.token);
     expect(replayScan.accepted).toBe(false);
     expect(replayScan.reasonCode).toBe("JTI_ALREADY_CONSUMED");
+  });
+
+  it("keeps pending vehicles from receiving vehicle permits", async () => {
+    const person = await createActivePerson("PENDVEH");
+    const vehicleResponse = await app.request("/api/v1/vehicles", {
+      method: "POST",
+      headers: jsonHeaders(cookie),
+      body: JSON.stringify({
+        ownerPersonId: person.id,
+        plate: `PN-${randomUUID().slice(0, 6)}`,
+        vehicleType: "car",
+        color: "Gris"
+      })
+    });
+    const vehicleBody = await vehicleResponse.json();
+    expect(vehicleResponse.status).toBe(201);
+    expect(vehicleBody.data.approvalStatus).toBe("pending");
+
+    const permitResponse = await app.request("/api/v1/vehicles/permits", {
+      method: "POST",
+      headers: jsonHeaders(cookie),
+      body: JSON.stringify({
+        personId: person.id,
+        vehicleId: vehicleBody.data.id
+      })
+    });
+    const permitBody = await permitResponse.json();
+
+    expect(permitResponse.status).toBe(409);
+    expect(permitBody.error.code).toBe("VEHICLE_PENDING_APPROVAL");
+  });
+
+  it("creates and revokes vehicle visitor permits without anonymous vehicles", async () => {
+    const createResponse = await app.request("/api/v1/vehicles/visitor-permits", {
+      method: "POST",
+      headers: jsonHeaders(cookie),
+      body: JSON.stringify({
+        visitorName: "Visitante Vehicular",
+        plate: `VV-${randomUUID().slice(0, 6)}`,
+        vehicleType: "visitor",
+        color: "Rojo",
+        reason: "Reunion",
+        maxUses: 1,
+        validUntil: new Date(Date.now() + 3_600_000).toISOString()
+      })
+    });
+    const createBody = await createResponse.json();
+
+    expect(createResponse.status).toBe(201);
+    expect(createBody.data.token).toBeTruthy();
+    expect(createBody.data.permit.hotQrTokenId).toBe(createBody.data.credential.id);
+    expect(createBody.data.permit.plate).toContain("VV-");
+
+    const listResponse = await app.request("/api/v1/vehicles/visitor-permits", {
+      headers: jsonHeaders(cookie)
+    });
+    const listBody = await listResponse.json();
+    expect(listResponse.status).toBe(200);
+    expect(listBody.data.rows.some((row: Record<string, unknown>) => row.id === createBody.data.permit.id)).toBe(true);
+
+    const revokeResponse = await app.request(`/api/v1/vehicles/visitor-permits/${createBody.data.permit.id}/revoke`, {
+      method: "POST",
+      headers: jsonHeaders(cookie)
+    });
+    const revokeBody = await revokeResponse.json();
+
+    expect(revokeResponse.status).toBe(200);
+    expect(revokeBody.data.status).toBe("revoked");
   });
 
   it("rejects tampered and expired signed QR tokens during scan", async () => {

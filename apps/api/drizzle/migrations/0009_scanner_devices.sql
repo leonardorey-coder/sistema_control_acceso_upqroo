@@ -1,4 +1,8 @@
-CREATE TYPE "public"."scanner_device_status" AS ENUM('pending', 'active', 'disabled', 'revoked');--> statement-breakpoint
+DO $$ BEGIN
+  CREATE TYPE "public"."scanner_device_status" AS ENUM('pending', 'active', 'disabled', 'revoked');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
 
 CREATE TABLE IF NOT EXISTS "scanner_devices" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),

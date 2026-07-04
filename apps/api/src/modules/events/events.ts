@@ -10,6 +10,7 @@ type EventTopic =
   | "temporary-daily-qr.table"
   | "vehicles.table"
   | "vehicle-permits.table"
+  | "vehicle-visitor-permits.table"
   | "admins.table"
   | "admin-sessions.table"
   | "audit.table"
