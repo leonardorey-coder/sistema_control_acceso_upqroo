@@ -17,6 +17,7 @@
     SignedQrConfigPayload,
     TemporaryDailyQrRowPayload,
     VehiclePermitRowPayload,
+    VehicleVisitorPermitRowPayload,
     VehicleRowPayload
   } from "@control-acceso/shared";
   import AdminShell from "$lib/components/AdminShell.svelte";
@@ -56,6 +57,7 @@
     | "temporary-daily-qr.table"
     | "vehicles.table"
     | "vehicle-permits.table"
+    | "vehicle-visitor-permits.table"
     | "admins.table"
     | "admin-sessions.table"
     | "audit.table"
@@ -118,6 +120,8 @@
   let vehicleTotal = $state(0);
   let permitRows = $state<Array<VehiclePermitRowPayload & Row>>([]);
   let permitTotal = $state(0);
+  let visitorPermitRows = $state<Array<VehicleVisitorPermitRowPayload & Row>>([]);
+  let visitorPermitTotal = $state(0);
   let adminRows = $state<Array<AdminRowPayload & Row>>([]);
   let adminSessionRows = $state<Array<AdminSessionRowPayload & Row>>([]);
   let adminAuditRows = $state<Array<AuditLogRowPayload & Row>>([]);
@@ -164,9 +168,13 @@
     careerId: "",
     hotQrStatus: "",
     vehicleStatus: "",
+    vehicleApprovalStatus: "",
+    vehicleType: "",
     permitStatus: "",
+    permitType: "",
     permitPersonId: "",
-    permitVehicleId: ""
+    permitVehicleId: "",
+    visitorPermitStatus: ""
   });
 
   let temporaryPagination = $state({ page: 1, pageSize: 10 });
@@ -174,6 +182,7 @@
   let attendancePagination = $state({ page: 1, pageSize: 10 });
   let vehiclePagination = $state({ page: 1, pageSize: 10 });
   let permitPagination = $state({ page: 1, pageSize: 10 });
+  let visitorPermitPagination = $state({ page: 1, pageSize: 10 });
   let hotQrPagination = $state({ page: 1, pageSize: 10 });
   let credentialPagination = $state({ page: 1, pageSize: 10 });
   let adminAuditPagination = $state({ page: 1, pageSize: 10 });
@@ -212,8 +221,9 @@
   });
   let temporaryQrPersonLabel = $state("");
   let hotQrForm = $state({ visitorName: "", reason: "", minutes: 60 });
-  let vehicleForm = $state({ ownerPersonId: "", plate: "", make: "", model: "", color: "" });
-  let permitForm = $state({ personId: "", vehicleId: "", validUntil: "" });
+  let vehicleForm = $state({ ownerPersonId: "", plate: "", vehicleType: "car", make: "", model: "", color: "" });
+  let permitForm = $state({ personId: "", vehicleId: "", permitType: "standard", validUntil: "" });
+  let visitorPermitForm = $state({ visitorName: "", plate: "", vehicleType: "visitor", color: "", reason: "", minutes: 60, maxUses: 1 });
   let vehicleOwnerLabel = $state("");
   let permitPersonLabel = $state("");
   let permitVehicleLabel = $state("");
@@ -280,6 +290,7 @@
     if (message.topic === "temporary-daily-qr.table" && activeTab === "generator") scheduleRefresh("temporary", refreshTemporaryQr);
     if (message.topic === "vehicles.table" && activeTab === "vehicles") scheduleRefresh("vehicles", refreshVehicles);
     if (message.topic === "vehicle-permits.table" && activeTab === "vehicles") scheduleRefresh("permits", refreshPermits);
+    if (message.topic === "vehicle-visitor-permits.table" && activeTab === "vehicles") scheduleRefresh("vehicle-visitor-permits", refreshVehicleVisitorPermits);
     if ((message.topic === "admins.table" || message.topic === "audit.table") && activeTab === "admins") {
       scheduleRefresh("admins", refreshAdmins);
     }
@@ -498,6 +509,8 @@
     const result = await apiRequest<PaginatedRows<VehicleRowPayload & Row>>(`/api/v1/vehicles${toQuery({
       q: filters.q,
       status: filters.vehicleStatus,
+      approvalStatus: filters.vehicleApprovalStatus,
+      vehicleType: filters.vehicleType,
       page: vehiclePagination.page,
       pageSize: vehiclePagination.pageSize
     })}`);
@@ -509,6 +522,7 @@
     const result = await apiRequest<PaginatedRows<VehiclePermitRowPayload & Row>>(`/api/v1/vehicles/permits${toQuery({
       q: filters.q,
       status: filters.permitStatus,
+      permitType: filters.permitType,
       personId: filters.permitPersonId,
       vehicleId: filters.permitVehicleId,
       page: permitPagination.page,
@@ -516,6 +530,17 @@
     })}`);
     permitRows = result.rows;
     permitTotal = result.total;
+  }
+
+  async function refreshVehicleVisitorPermits() {
+    const result = await apiRequest<PaginatedRows<VehicleVisitorPermitRowPayload & Row>>(`/api/v1/vehicles/visitor-permits${toQuery({
+      q: filters.q,
+      status: filters.visitorPermitStatus,
+      page: visitorPermitPagination.page,
+      pageSize: visitorPermitPagination.pageSize
+    })}`);
+    visitorPermitRows = result.rows;
+    visitorPermitTotal = result.total;
   }
 
   async function refreshAdmins() {
@@ -582,7 +607,7 @@
     else if (activeTab === "access") await refreshAccess();
     else if (activeTab === "attendance") await Promise.allSettled([refreshAttendance(), refreshSubjects(), refreshSchedules()]);
     else if (activeTab === "hotqr") await refreshHotQr();
-    else if (activeTab === "vehicles") await Promise.allSettled([refreshVehicles(), refreshPermits()]);
+    else if (activeTab === "vehicles") await Promise.allSettled([refreshVehicles(), refreshPermits(), refreshVehicleVisitorPermits()]);
     else if (activeTab === "admins") await refreshAdmins();
     else if (activeTab === "config") await refreshConfig();
   }
@@ -754,6 +779,11 @@
     await refreshPermits();
   }
 
+  async function changeVisitorPermitPage(next: { page: number; pageSize: number }) {
+    visitorPermitPagination = next;
+    await refreshVehicleVisitorPermits();
+  }
+
   async function changeHotQrPage(next: { page: number; pageSize: number }) {
     hotQrPagination = next;
     await refreshHotQr();
@@ -919,7 +949,7 @@
 
   async function createVehicle() {
     await apiRequest("/api/v1/vehicles", { method: "POST", body: JSON.stringify(vehicleForm) });
-    vehicleForm = { ownerPersonId: "", plate: "", make: "", model: "", color: "" };
+    vehicleForm = { ownerPersonId: "", plate: "", vehicleType: "car", make: "", model: "", color: "" };
     vehicleOwnerLabel = "";
     clearVehicleOptionsCache();
     await refreshVehicles();
@@ -931,6 +961,7 @@
       body: JSON.stringify({
         personId: permitForm.personId,
         vehicleId: permitForm.vehicleId,
+        permitType: permitForm.permitType,
         validUntil: permitForm.validUntil ? new Date(permitForm.validUntil).toISOString() : undefined
       })
     });
@@ -943,7 +974,7 @@
     await showDynamicPermitQr(permit, result.token);
     permitPersonLabel = "";
     permitVehicleLabel = "";
-    permitForm = { personId: "", vehicleId: "", validUntil: "" };
+    permitForm = { personId: "", vehicleId: "", permitType: "standard", validUntil: "" };
     await Promise.allSettled([refreshPermits(), refreshVehicles()]);
   }
 
@@ -970,6 +1001,56 @@
   async function disableVehicle(row: Row) {
     await apiRequest(`/api/v1/vehicles/${row.id}/disable`, { method: "POST" });
     await refreshVehicles();
+  }
+
+  async function approveVehicle(row: Row) {
+    await apiRequest(`/api/v1/vehicles/${row.id}/approve`, { method: "POST" });
+    await refreshVehicles();
+  }
+
+  async function rejectVehicle(row: Row) {
+    const reason = globalThis.prompt?.("Motivo de rechazo")?.trim();
+    if (!reason) return;
+    await apiRequest(`/api/v1/vehicles/${row.id}/reject`, {
+      method: "POST",
+      body: JSON.stringify({ reason })
+    });
+    await refreshVehicles();
+  }
+
+  async function blockVehicle(row: Row) {
+    await apiRequest(`/api/v1/vehicles/${row.id}/block`, { method: "POST" });
+    await refreshVehicles();
+  }
+
+  async function deleteVehicle(row: Row) {
+    await apiRequest(`/api/v1/vehicles/${row.id}/delete`, { method: "POST" });
+    await refreshVehicles();
+  }
+
+  async function createVehicleVisitorPermit() {
+    const validUntil = new Date(Date.now() + Number(visitorPermitForm.minutes) * 60_000).toISOString();
+    const result = await apiRequest<{ token: string }>("/api/v1/vehicles/visitor-permits", {
+      method: "POST",
+      body: JSON.stringify({
+        visitorName: visitorPermitForm.visitorName,
+        plate: visitorPermitForm.plate,
+        vehicleType: visitorPermitForm.vehicleType,
+        color: visitorPermitForm.color || undefined,
+        reason: visitorPermitForm.reason,
+        maxUses: Number(visitorPermitForm.maxUses),
+        validUntil
+      })
+    });
+    vehicleGeneratedToken = result.token;
+    vehicleGeneratedTitle = "Hot-QR vehicular";
+    visitorPermitForm = { visitorName: "", plate: "", vehicleType: "visitor", color: "", reason: "", minutes: 60, maxUses: 1 };
+    await Promise.allSettled([refreshVehicleVisitorPermits(), refreshHotQr()]);
+  }
+
+  async function revokeVehicleVisitorPermit(row: Row) {
+    await apiRequest(`/api/v1/vehicles/visitor-permits/${row.id}/revoke`, { method: "POST" });
+    await refreshVehicleVisitorPermits();
   }
 
   async function createAdmin() {
@@ -1288,8 +1369,10 @@
       <VehiclesTab
         rows={vehicleRows}
         permitRows={permitRows}
+        visitorPermitRows={visitorPermitRows}
         {vehicleForm}
         {permitForm}
+        {visitorPermitForm}
         {vehicleOwnerLabel}
         {permitPersonLabel}
         {permitVehicleLabel}
@@ -1304,6 +1387,9 @@
         permitTotal={permitTotal}
         permitPage={permitPagination.page}
         permitPageSize={permitPagination.pageSize}
+        visitorPermitTotal={visitorPermitTotal}
+        visitorPermitPage={visitorPermitPagination.page}
+        visitorPermitPageSize={visitorPermitPagination.pageSize}
         searchPeople={searchPeopleOptions}
         searchVehicles={searchVehicleOptions}
         onSelectVehicleOwner={selectVehicleOwner}
@@ -1313,15 +1399,23 @@
         onSelectPermitFilterVehicle={selectPermitFilterVehicle}
         onVehiclePageChange={changeVehiclePage}
         onPermitPageChange={changePermitPage}
+        onVisitorPermitPageChange={changeVisitorPermitPage}
         onCreateVehicle={createVehicle}
         onCreatePermitQr={createPermitQr}
+        onCreateVehicleVisitorPermit={createVehicleVisitorPermit}
         onCreateDynamicPermitQr={showDynamicPermitQr}
         onRevokePermit={revokePermit}
         onDisableVehicle={disableVehicle}
+        onApproveVehicle={approveVehicle}
+        onRejectVehicle={rejectVehicle}
+        onBlockVehicle={blockVehicle}
+        onDeleteVehicle={deleteVehicle}
+        onRevokeVehicleVisitorPermit={revokeVehicleVisitorPermit}
         onFilter={async () => {
           vehiclePagination.page = 1;
           permitPagination.page = 1;
-          await Promise.allSettled([refreshVehicles(), refreshPermits()]);
+          visitorPermitPagination.page = 1;
+          await Promise.allSettled([refreshVehicles(), refreshPermits(), refreshVehicleVisitorPermits()]);
         }}
       />
     {/if}

@@ -4,6 +4,8 @@ export type LabelGroup =
   | "credentialType"
   | "accessMode"
   | "reasonCode"
+  | "vehicleType"
+  | "permitType"
   | "boolean"
   | "adminAction";
 
@@ -31,6 +33,8 @@ export const statusLabels: Record<string, string> = {
   completed: "Completado",
   auto_closed: "Salida auto",
   rejected: "Rechazado",
+  pending: "Pendiente",
+  approved: "Aprobado",
   confirmed: "Confirmada",
   partial: "Parcial",
   unverified: "Sin verificar",
@@ -76,6 +80,28 @@ export const reasonCodeLabels: Record<string, string> = {
   INVALID_JSON: "JSON invalido"
 };
 
+export const vehicleTypeLabels: Record<string, string> = {
+  car: "Automovil",
+  motorcycle: "Motocicleta",
+  bicycle: "Bicicleta",
+  electric_scooter: "Scooter electrico",
+  truck: "Camioneta",
+  official: "Oficial",
+  university_transport: "Transporte universitario",
+  visitor: "Visitante",
+  other: "Otro"
+};
+
+export const permitTypeLabels: Record<string, string> = {
+  standard: "Estandar",
+  temporary: "Temporal",
+  official: "Oficial",
+  visitor: "Visitante",
+  provider: "Proveedor",
+  event: "Evento",
+  emergency: "Emergencia"
+};
+
 export const booleanLabels: Record<string, string> = {
   true: "Si",
   false: "No"
@@ -103,9 +129,18 @@ export const adminActionLabels: Record<string, string> = {
   "credential.temporary_daily_qr.created": "QR temporal creado",
   "credential.temporary_daily_qr.revoked": "QR temporal revocado",
   "vehicle.created": "Vehiculo creado",
+  "vehicle.updated": "Vehiculo actualizado",
+  "vehicle.approved": "Vehiculo aprobado",
+  "vehicle.rejected": "Vehiculo rechazado",
+  "vehicle.blocked": "Vehiculo bloqueado",
+  "vehicle.deleted": "Vehiculo eliminado",
   "vehicle.disabled": "Vehiculo desactivado",
   "vehicle_permit.created": "Permiso vehicular creado",
+  "vehicle_permit.updated": "Permiso vehicular actualizado",
   "vehicle_permit.revoked": "Permiso vehicular revocado",
+  "vehicle_visitor_permit.created": "Visitante vehicular creado",
+  "vehicle_visitor_permit.revoked": "Visitante vehicular revocado",
+  "vehicle_access.rejected": "Acceso vehicular rechazado",
   "attendance.adjusted": "Asistencia ajustada",
   "config.updated": "Configuracion actualizada"
 };
@@ -116,6 +151,8 @@ const groups: Record<LabelGroup, Record<string, string>> = {
   credentialType: credentialTypeLabels,
   accessMode: accessModeLabels,
   reasonCode: reasonCodeLabels,
+  vehicleType: vehicleTypeLabels,
+  permitType: permitTypeLabels,
   boolean: booleanLabels,
   adminAction: adminActionLabels
 };

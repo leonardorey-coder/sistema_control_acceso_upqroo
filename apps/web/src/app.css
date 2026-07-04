@@ -543,6 +543,25 @@ form.panel > .loading-button,
   justify-items: center;
 }
 
+.vehicle-form-layout,
+.vehicle-visitor-layout {
+  display: grid;
+  width: min(960px, 100%);
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
+  align-items: start;
+  gap: 16px;
+}
+
+.vehicle-visitor-layout {
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 220px);
+  margin-bottom: 14px;
+}
+
+.vehicle-visitor-layout .toolbar {
+  margin-bottom: 0;
+}
+
 .qr-form-panel {
   width: min(760px, 100%);
   margin: 0 auto;
@@ -1160,6 +1179,191 @@ th.actions-cell {
   min-height: 260px;
 }
 
+.vehicle-preview {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 12px;
+}
+
+.vehicle-preview.compact {
+  width: 100%;
+  min-width: 0;
+}
+
+.vehicle-preview.card,
+.vehicle-preview.scanner {
+  width: min(420px, 100%);
+  margin: 0 auto;
+}
+
+.vehicle-preview-stage {
+  position: relative;
+  display: grid;
+  min-height: 148px;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  place-items: center;
+  border: 1px solid rgb(0 0 0 / 0.08);
+  border-radius: 6px;
+  background: linear-gradient(180deg, #ffffff, #f8fafc);
+}
+
+.vehicle-preview.card .vehicle-preview-stage,
+.vehicle-preview.scanner .vehicle-preview-stage {
+  min-height: 240px;
+}
+
+.vehicle-preview model-viewer {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: inherit;
+  background: transparent;
+}
+
+.vehicle-plate-overlay {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  max-width: calc(100% - 20px);
+  overflow: hidden;
+  border: 1px solid rgb(0 0 0 / 0.16);
+  border-radius: 4px;
+  background: rgb(255 255 255 / 0.94);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 4px 8px;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.vehicle-preview-details {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.vehicle-preview-details > div:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.vehicle-preview-details strong {
+  color: var(--text);
+  font-size: 14px;
+}
+
+.vehicle-preview-details span {
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.vehicle-preview-badges,
+.vehicle-color-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.vehicle-color-line i {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  border: 1px solid rgb(0 0 0 / 0.18);
+  border-radius: 3px;
+  background: var(--vehicle-color, repeating-linear-gradient(45deg, #f8fafc 0 4px, #e5e7eb 4px 8px));
+}
+
+.vehicle-preview-fallback {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-height: inherit;
+  place-items: center;
+  gap: 8px;
+  padding: 10px;
+}
+
+.vehicle-shape {
+  position: relative;
+  width: min(150px, 80%);
+  height: 72px;
+}
+
+.vehicle-body,
+.vehicle-roof,
+.vehicle-wheel {
+  position: absolute;
+  display: block;
+}
+
+.vehicle-body {
+  right: 6px;
+  bottom: 18px;
+  left: 6px;
+  height: 32px;
+  border: 2px solid rgb(51 51 51 / 0.74);
+  border-radius: 7px 10px 5px 5px;
+  background: #fff8f0;
+}
+
+.vehicle-roof {
+  top: 10px;
+  left: 42px;
+  width: 58px;
+  height: 32px;
+  border: 2px solid rgb(51 51 51 / 0.74);
+  border-bottom: 0;
+  border-radius: 10px 10px 2px 2px;
+  background: #ffffff;
+}
+
+.vehicle-wheel {
+  bottom: 8px;
+  width: 22px;
+  height: 22px;
+  border: 4px solid #333333;
+  border-radius: 50%;
+  background: #ffffff;
+}
+
+.vehicle-wheel.left {
+  left: 26px;
+}
+
+.vehicle-wheel.right {
+  right: 26px;
+}
+
+.vehicle-preview-fallback .vehicle-preview-meta {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  text-align: center;
+}
+
+.vehicle-preview-fallback strong {
+  color: var(--text);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.vehicle-preview-fallback span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
 .centered-empty {
   align-content: center;
   justify-items: center;
@@ -1667,6 +1871,8 @@ th.actions-cell {
   .scanner-stack,
   .toolbar,
   .filter-bar,
+  .vehicle-form-layout,
+  .vehicle-visitor-layout,
   .qr-preview,
   .qr-focus .qr-preview,
   .workspace-header,

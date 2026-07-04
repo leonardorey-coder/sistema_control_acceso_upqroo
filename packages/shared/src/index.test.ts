@@ -58,12 +58,18 @@ describe("shared contracts", () => {
       accepted: true,
       action: "entry",
       reasonCode: "ACCESS_GRANTED",
+      vehiclePlate: "ABC-123",
+      vehicleType: "car",
+      vehicleColor: "Rojo",
+      vehicleMake: "Nissan",
+      vehicleModel: "NP300",
       timestamp: new Date(0).toISOString()
     };
 
     expect(session.admin.role).toBe("super_admin");
     expect(session.sessionId).toBe("session-1");
     expect(scan.accepted).toBe(true);
+    expect(scan.vehicleType).toBe("car");
   });
 
   it("supports attendance table rows", () => {
@@ -144,7 +150,9 @@ describe("shared contracts", () => {
       id: "vehicle-1",
       ownerPersonId: "person-1",
       plate: "ABC-123",
+      vehicleType: "car",
       status: "active",
+      approvalStatus: "approved",
       createdAt: new Date(0).toISOString(),
       updatedAt: new Date(0).toISOString()
     };
@@ -153,6 +161,7 @@ describe("shared contracts", () => {
       personId: "person-1",
       vehicleId: vehicle.id,
       status: "active",
+      permitType: "standard",
       validFrom: new Date(0).toISOString(),
       createdAt: new Date(0).toISOString(),
       updatedAt: new Date(0).toISOString()

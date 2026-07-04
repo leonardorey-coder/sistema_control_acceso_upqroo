@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { ScannerResultPayload } from "@control-acceso/shared";
   import StatusBadge from "./StatusBadge.svelte";
+  import VehiclePreview3D from "./VehiclePreview3D.svelte";
 
   type Row = Record<string, unknown>;
 
@@ -48,6 +49,19 @@
         <div><dt>Estado</dt><dd>{result.reasonCode ?? (result.accepted ? "ACEPTADO" : "RECHAZADO")}</dd></div>
         <div><dt>Fecha</dt><dd>{result.timestamp ? new Date(String(result.timestamp)).toLocaleString("es-MX") : "-"}</dd></div>
       </dl>
+      {#if result.vehiclePlate}
+        <VehiclePreview3D
+          vehicleType={String(result.vehicleType ?? "other")}
+          plate={result.vehiclePlate}
+          color={result.vehicleColor ?? ""}
+          make={result.vehicleMake ?? ""}
+          model={result.vehicleModel ?? ""}
+          status={result.accepted ? "active" : "rejected"}
+          approvalStatus=""
+          size="scanner"
+          interactive={result.accepted}
+        />
+      {/if}
     {:else}
       <div class="result-skeleton" aria-live="polite">
         <span class="skeleton-avatar"></span>

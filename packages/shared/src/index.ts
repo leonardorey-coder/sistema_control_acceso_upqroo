@@ -59,6 +59,10 @@ export type ScannerResultPayload = {
   personType?: string;
   career?: string | null;
   vehiclePlate?: string | null;
+  vehicleType?: VehicleType | string | null;
+  vehicleColor?: string | null;
+  vehicleMake?: string | null;
+  vehicleModel?: string | null;
   profilePhotoUrl?: string | null;
   credentialType?: string;
   accessMode?: string;
@@ -169,31 +173,64 @@ export type HotQrRowPayload = {
 };
 
 export type VehicleStatus = "active" | "inactive" | "blocked";
+export type VehicleType = "car" | "motorcycle" | "bicycle" | "electric_scooter" | "truck" | "official" | "university_transport" | "visitor" | "other";
+export type VehicleApprovalStatus = "pending" | "approved" | "rejected";
 
 export type VehicleRowPayload = {
   id: string;
   ownerPersonId: string;
   plate: string;
+  vehicleType: VehicleType;
   make?: string | null;
   model?: string | null;
   color?: string | null;
   status: VehicleStatus;
+  approvalStatus: VehicleApprovalStatus;
+  registeredByAdminId?: string | null;
+  approvedByAdminId?: string | null;
+  approvedAt?: string | null;
+  rejectedByAdminId?: string | null;
+  rejectedAt?: string | null;
+  rejectionReason?: string | null;
+  deletedAt?: string | null;
+  notes?: string | null;
   createdAt: string;
   updatedAt: string;
 };
 
 export type VehiclePermitStatus = "active" | "revoked" | "expired" | "suspended";
+export type VehiclePermitType = "standard" | "temporary" | "official" | "visitor" | "provider" | "event" | "emergency";
 
 export type VehiclePermitRowPayload = {
   id: string;
   personId: string;
   vehicleId: string;
   status: VehiclePermitStatus;
+  permitType: VehiclePermitType;
   validFrom: string;
   validUntil?: string | null;
   revokedAt?: string | null;
   createdAt: string;
   updatedAt: string;
+};
+
+export type VehicleVisitorPermitStatus = "active" | "expired" | "revoked";
+
+export type VehicleVisitorPermitRowPayload = {
+  id: string;
+  hotQrTokenId: string;
+  visitorName: string;
+  plate: string;
+  vehicleType: VehicleType;
+  color?: string | null;
+  reason: string;
+  status: VehicleVisitorPermitStatus;
+  validFrom: string;
+  validUntil: string;
+  revokedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  hotQrStatus?: HotQrStatus;
 };
 
 export type OperationalConfigPayload = {

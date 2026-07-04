@@ -9,7 +9,7 @@
   type Column = {
     key: string;
     label: string;
-    kind?: "status" | "date" | "name" | "role" | "credential" | "accessMode" | "reason" | "boolean" | "technical" | "adminAction";
+    kind?: "status" | "date" | "name" | "role" | "credential" | "accessMode" | "reason" | "vehicleType" | "permitType" | "boolean" | "technical" | "adminAction";
     format?: (value: unknown, row: Row) => string;
     priority?: "high" | "medium" | "low";
     compact?: boolean;
@@ -60,6 +60,8 @@
     if (kind === "credential") return "credentialType";
     if (kind === "accessMode") return "accessMode";
     if (kind === "reason") return "reasonCode";
+    if (kind === "vehicleType") return "vehicleType";
+    if (kind === "permitType") return "permitType";
     if (kind === "boolean") return "boolean";
     if (kind === "adminAction") return "adminAction";
     return null;
