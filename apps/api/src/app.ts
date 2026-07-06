@@ -25,12 +25,6 @@ export const app = new Hono();
 
 app.onError(errorHandler);
 
-app.use("*", async (c, next) => {
-  const start = performance.now();
-  await next();
-  c.header("x-response-time-ms", (performance.now() - start).toFixed(2));
-});
-
 const allowedOrigins = new Set((env.WEB_ORIGINS ?? env.WEB_ORIGIN)
   .split(",")
   .map((origin) => origin.trim())

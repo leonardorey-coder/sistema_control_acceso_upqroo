@@ -306,6 +306,8 @@ export type AdminSessionRowPayload = {
 export type AuditLogRowPayload = {
   id: string;
   actorAdminId?: string | null;
+  actorAdminDisplayName?: string | null;
+  actorAdminUsername?: string | null;
   actorAccountId?: string | null;
   action: string;
   entityType: string;

@@ -11,6 +11,12 @@ type AttemptState = {
   lockedUntil?: number;
 };
 
+export type LoginFailureState = {
+  count: number;
+  remaining: number;
+  lockedUntil?: Date;
+};
+
 const attempts = new Map<string, AttemptState>();
 
 const windowMs = 10 * 60 * 1000;
@@ -27,7 +33,10 @@ function buildKey(scope: string, identity: string, ipAddress?: string) {
 
 function throwLocked(lockedUntil: number, current: number) {
   throw new HttpError(429, "LOGIN_TEMPORARILY_LOCKED", "Too many failed login attempts. Try again later.", {
-    retryAfterMs: lockedUntil - current
+    retryAfterMs: lockedUntil - current,
+    maxAttempts,
+    remaining: 0,
+    lockedUntil: new Date(lockedUntil).toISOString()
   });
 }
 
@@ -49,13 +58,13 @@ function assertMemoryLoginNotRateLimited(key: string) {
   return key;
 }
 
-function recordMemoryLoginFailure(key: string) {
+function recordMemoryLoginFailure(key: string): LoginFailureState {
   const current = now();
   const existing = attempts.get(key);
 
   if (!existing || current - existing.firstFailedAt > windowMs) {
     attempts.set(key, { count: 1, firstFailedAt: current });
-    return;
+    return { count: 1, remaining: maxAttempts - 1 };
   }
 
   const count = existing.count + 1;
@@ -71,6 +80,12 @@ function recordMemoryLoginFailure(key: string) {
   }
 
   attempts.set(key, next);
+  const failure: LoginFailureState = {
+    count,
+    remaining: Math.max(maxAttempts - count, 0)
+  };
+  if (next.lockedUntil) failure.lockedUntil = new Date(next.lockedUntil);
+  return failure;
 }
 
 function clearMemoryLoginFailures(key: string) {
@@ -100,7 +115,7 @@ async function assertPostgresLoginNotRateLimited(key: string) {
   return key;
 }
 
-async function recordPostgresLoginFailure(key: string) {
+async function recordPostgresLoginFailure(key: string): Promise<LoginFailureState> {
   const current = new Date();
   const [existing] = await db
     .select()
@@ -121,18 +136,26 @@ async function recordPostgresLoginFailure(key: string) {
           updatedAt: current
         }
       });
-    return;
+    return { count: 1, remaining: maxAttempts - 1 };
   }
 
   const count = existing.count + 1;
+  const lockedUntil = count >= maxAttempts ? new Date(current.getTime() + lockMs) : existing.lockedUntil ?? undefined;
   await db
     .update(loginRateLimits)
     .set({
       count,
-      lockedUntil: count >= maxAttempts ? new Date(current.getTime() + lockMs) : existing.lockedUntil,
+      lockedUntil,
       updatedAt: current
     })
     .where(eq(loginRateLimits.key, key));
+
+  const failure: LoginFailureState = {
+    count,
+    remaining: Math.max(maxAttempts - count, 0)
+  };
+  if (lockedUntil) failure.lockedUntil = lockedUntil;
+  return failure;
 }
 
 async function clearPostgresLoginFailures(key: string) {
@@ -146,11 +169,11 @@ export async function assertLoginNotRateLimited(scope: string, identity: string,
     : assertMemoryLoginNotRateLimited(key);
 }
 
-export async function recordLoginFailure(key: string) {
+export async function recordLoginFailure(key: string): Promise<LoginFailureState> {
   if (env.RATE_LIMIT_DRIVER === "postgres") {
-    await recordPostgresLoginFailure(key);
+    return recordPostgresLoginFailure(key);
   } else {
-    recordMemoryLoginFailure(key);
+    return recordMemoryLoginFailure(key);
   }
 }
 

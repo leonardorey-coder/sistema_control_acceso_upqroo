@@ -133,7 +133,23 @@ export async function listAuditLog(filters: AuditLogFilters = {}, pagination?: P
   }
 
   const where = predicates.length ? and(...predicates) : undefined;
-  const rowsQuery = db.select().from(auditLog)
+  const auditColumns = {
+    id: auditLog.id,
+    actorAdminId: auditLog.actorAdminId,
+    actorAdminDisplayName: administradores.displayName,
+    actorAdminUsername: administradores.username,
+    actorAccountId: auditLog.actorAccountId,
+    action: auditLog.action,
+    entityType: auditLog.entityType,
+    entityId: auditLog.entityId,
+    ipAddress: auditLog.ipAddress,
+    userAgent: auditLog.userAgent,
+    metadata: auditLog.metadata,
+    createdAt: auditLog.createdAt
+  };
+
+  const rowsQuery = db.select(auditColumns).from(auditLog)
+    .leftJoin(administradores, eq(auditLog.actorAdminId, administradores.id))
     .where(where)
     .orderBy(desc(auditLog.createdAt));
 

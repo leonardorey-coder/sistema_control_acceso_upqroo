@@ -19,9 +19,13 @@ import {
   updateAdminPassword
 } from "./auth.repository";
 
+const loginMinimumDurationMs = 450;
+const loginDurationJitterMs = 120;
+const dummyPasswordHash = "$2b$10$CwTycUXWue0Thq9StjUM0uJ8B6qJkbqN.zZCfR8nSNu4eLTl0yT/e";
+
 const loginSchema = z.object({
-  identity: z.string().trim().min(3),
-  password: z.string().min(1)
+  identity: z.string().trim().min(3).max(160),
+  password: z.string().min(1).max(128)
 });
 
 const changePasswordSchema = z.object({
@@ -54,6 +58,20 @@ function publicSession(row: NonNullable<Awaited<ReturnType<typeof getSessionByHa
   };
 }
 
+function clientIp(c: Context) {
+  return c.req.header("x-forwarded-for")?.split(",")[0]?.trim()
+    || c.req.header("x-real-ip")
+    || undefined;
+}
+
+async function waitForLoginBuffer(startedAt: number) {
+  const target = loginMinimumDurationMs + Math.floor(Math.random() * loginDurationJitterMs);
+  const elapsed = performance.now() - startedAt;
+  if (elapsed < target) {
+    await new Promise((resolve) => setTimeout(resolve, target - elapsed));
+  }
+}
+
 async function requireCurrentSession(c: Context) {
   const token = getCookie(c, env.SESSION_COOKIE_NAME);
 
@@ -75,81 +93,99 @@ export const authRoutes = new Hono();
 
 authRoutes.post("/login", async (c) => {
   const input = loginSchema.parse(await c.req.json());
-  const ipAddress = c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? undefined;
-  const rateLimitKey = await assertLoginNotRateLimited("admin", input.identity, ipAddress);
-  const admin = await findAdminForLogin(input.identity);
+  const startedAt = performance.now();
 
-  if (!admin || admin.status !== "active") {
-    await recordLoginFailure(rateLimitKey);
-    await recordAudit({
-      action: "admin.login_failed",
-      entityType: "admin_session",
+  try {
+    const ipAddress = clientIp(c);
+    const userAgent = c.req.header("user-agent") ?? undefined;
+    let rateLimitKey: string;
+    try {
+      rateLimitKey = await assertLoginNotRateLimited("admin", input.identity, ipAddress);
+    } catch (error) {
+      await recordAudit({
+        action: "admin.login_failed",
+        entityType: "admin_session",
+        ipAddress,
+        userAgent,
+        metadata: { identity: input.identity, reason: "rate_limited" }
+      });
+      throw error;
+    }
+    const admin = await findAdminForLogin(input.identity);
+    const passwordHash = admin?.passwordHash ?? dummyPasswordHash;
+    const passwordOk = await Bun.password.verify(input.password, passwordHash);
+
+    if (!admin || admin.status !== "active" || !passwordOk) {
+      const failure = await recordLoginFailure(rateLimitKey);
+      await recordAudit({
+        actorAdminId: admin?.id,
+        action: "admin.login_failed",
+        entityType: "admin_session",
+        ipAddress,
+        userAgent,
+        metadata: {
+          identity: input.identity,
+          reason: !admin || admin.status !== "active" ? "not_found_or_disabled" : "bad_password",
+          attempts: failure.count,
+          remainingAttempts: failure.remaining,
+          lockedUntil: failure.lockedUntil?.toISOString()
+        }
+      });
+      throw new HttpError(401, "INVALID_CREDENTIALS", "Invalid credentials.", {
+        attempts: failure.count,
+        remainingAttempts: failure.remaining
+      });
+    }
+
+    await clearLoginFailures(rateLimitKey);
+
+    const token = issueSessionToken();
+    const sessionHash = hashSessionToken(token);
+    const loggedInAt = new Date();
+    const expiresAt = new Date(loggedInAt.getTime() + 1000 * 60 * 60 * 12);
+
+    const adminSession = await createAdminSession({
+      adminId: admin.id,
+      sessionHash,
       ipAddress,
-      userAgent: c.req.header("user-agent") ?? undefined,
-      metadata: { identity: input.identity, reason: "not_found_or_disabled" }
+      userAgent,
+      expiresAt
     });
-    throw new HttpError(401, "INVALID_CREDENTIALS", "Invalid credentials.");
-  }
+    if (!adminSession) {
+      throw new HttpError(500, "SESSION_CREATE_FAILED", "Could not create admin session.");
+    }
+    await updateAdminLastLogin(admin.id, loggedInAt);
 
-  const passwordOk = await Bun.password.verify(input.password, admin.passwordHash);
-
-  if (!passwordOk) {
-    await recordLoginFailure(rateLimitKey);
     await recordAudit({
       actorAdminId: admin.id,
-      action: "admin.login_failed",
+      action: "admin.login_success",
       entityType: "admin_session",
       ipAddress,
-      userAgent: c.req.header("user-agent") ?? undefined,
-      metadata: { identity: input.identity, reason: "bad_password" }
+      userAgent,
+      metadata: { username: admin.username, attemptsReset: true }
     });
-    throw new HttpError(401, "INVALID_CREDENTIALS", "Invalid credentials.");
+
+    setCookie(c, env.SESSION_COOKIE_NAME, token, sessionCookieOptions(expiresAt));
+    const response = c.json({
+      data: {
+        sessionId: adminSession.id,
+        admin: {
+          id: admin.id,
+          username: admin.username,
+          displayName: admin.displayName,
+          email: admin.email,
+          role: admin.role,
+          mustChangePassword: admin.mustChangePassword
+        },
+        expiresAt
+      }
+    });
+    await waitForLoginBuffer(startedAt);
+    return response;
+  } catch (error) {
+    await waitForLoginBuffer(startedAt);
+    throw error;
   }
-
-  await clearLoginFailures(rateLimitKey);
-
-  const token = issueSessionToken();
-  const sessionHash = hashSessionToken(token);
-  const loggedInAt = new Date();
-  const expiresAt = new Date(loggedInAt.getTime() + 1000 * 60 * 60 * 12);
-
-  const adminSession = await createAdminSession({
-    adminId: admin.id,
-    sessionHash,
-    ipAddress,
-    userAgent: c.req.header("user-agent") ?? undefined,
-    expiresAt
-  });
-  if (!adminSession) {
-    throw new HttpError(500, "SESSION_CREATE_FAILED", "Could not create admin session.");
-  }
-  await updateAdminLastLogin(admin.id, loggedInAt);
-
-  await recordAudit({
-    actorAdminId: admin.id,
-    action: "admin.login_success",
-    entityType: "admin_session",
-    ipAddress,
-    userAgent: c.req.header("user-agent") ?? undefined,
-    metadata: { username: admin.username }
-  });
-
-  setCookie(c, env.SESSION_COOKIE_NAME, token, sessionCookieOptions(expiresAt));
-
-  return c.json({
-    data: {
-      sessionId: adminSession.id,
-      admin: {
-        id: admin.id,
-        username: admin.username,
-        displayName: admin.displayName,
-        email: admin.email,
-        role: admin.role,
-        mustChangePassword: admin.mustChangePassword
-      },
-      expiresAt
-    }
-  });
 });
 
 authRoutes.post("/logout", async (c) => {
@@ -164,7 +200,7 @@ authRoutes.post("/logout", async (c) => {
       action: "admin.logout",
       entityType: "admin_session",
       entityId: session?.sessionId,
-      ipAddress: c.req.header("x-forwarded-for") ?? undefined,
+      ipAddress: clientIp(c),
       userAgent: c.req.header("user-agent") ?? undefined
     });
   }
@@ -201,7 +237,7 @@ authRoutes.post("/change-password", async (c) => {
       action: "admin.change_password_failed",
       entityType: "admin",
       entityId: admin.id,
-      ipAddress: c.req.header("x-forwarded-for") ?? undefined,
+      ipAddress: clientIp(c),
       userAgent: c.req.header("user-agent") ?? undefined,
       metadata: { reason: "bad_current_password" }
     });
@@ -220,7 +256,7 @@ authRoutes.post("/change-password", async (c) => {
     action: "admin.password_changed",
     entityType: "admin",
     entityId: admin.id,
-    ipAddress: c.req.header("x-forwarded-for") ?? undefined,
+    ipAddress: clientIp(c),
     userAgent: c.req.header("user-agent") ?? undefined
   });
 

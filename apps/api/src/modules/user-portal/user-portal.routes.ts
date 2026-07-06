@@ -40,9 +40,13 @@ import {
 } from "./user-portal.repository";
 
 const loginSchema = z.object({
-  identity: z.string().trim().email(),
-  password: z.string().min(1)
+  identity: z.string().trim().email().max(254),
+  password: z.string().min(1).max(128)
 });
+
+const loginMinimumDurationMs = 450;
+const loginDurationJitterMs = 120;
+const dummyPasswordHash = "$2b$10$CwTycUXWue0Thq9StjUM0uJ8B6qJkbqN.zZCfR8nSNu4eLTl0yT/e";
 
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1),
@@ -105,6 +109,20 @@ function publicPortalSession(row: NonNullable<Awaited<ReturnType<typeof getUserS
     },
     expiresAt: row.expiresAt
   };
+}
+
+function clientIp(c: Context) {
+  return c.req.header("x-forwarded-for")?.split(",")[0]?.trim()
+    || c.req.header("x-real-ip")
+    || undefined;
+}
+
+async function waitForLoginBuffer(startedAt: number) {
+  const target = loginMinimumDurationMs + Math.floor(Math.random() * loginDurationJitterMs);
+  const elapsed = performance.now() - startedAt;
+  if (elapsed < target) {
+    await new Promise((resolve) => setTimeout(resolve, target - elapsed));
+  }
 }
 
 async function requirePortalSession(c: Context) {
@@ -187,76 +205,96 @@ async function verifyDeviceProof(input: {
 
 userPortalRoutes.post("/auth/login", async (c) => {
   const input = loginSchema.parse(await c.req.json());
-  const ipAddress = c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? undefined;
-  const rateLimitKey = await assertLoginNotRateLimited("portal", input.identity, ipAddress);
-  const account = await findUserAccountForLogin(input.identity);
+  const startedAt = performance.now();
 
-  if (!account || account.status !== "active" || account.estado !== "activo") {
-    await recordLoginFailure(rateLimitKey);
-    await recordAudit({
-      action: "user.login_failed",
-      entityType: "user_session",
+  try {
+    const ipAddress = clientIp(c);
+    const userAgent = c.req.header("user-agent") ?? undefined;
+    let rateLimitKey: string;
+    try {
+      rateLimitKey = await assertLoginNotRateLimited("portal", input.identity, ipAddress);
+    } catch (error) {
+      await recordAudit({
+        action: "user.login_failed",
+        entityType: "user_session",
+        ipAddress,
+        userAgent,
+        metadata: { identity: input.identity, reason: "rate_limited" }
+      });
+      throw error;
+    }
+    const account = await findUserAccountForLogin(input.identity);
+    const passwordHash = account?.passwordHash ?? dummyPasswordHash;
+    const passwordOk = await Bun.password.verify(input.password, passwordHash);
+
+    if (!account || account.status !== "active" || account.estado !== "activo" || !passwordOk) {
+      const failure = await recordLoginFailure(rateLimitKey);
+      await recordAudit({
+        actorAccountId: account?.id,
+        action: "user.login_failed",
+        entityType: "user_session",
+        ipAddress,
+        userAgent,
+        metadata: {
+          identity: input.identity,
+          reason: !account || account.status !== "active" || account.estado !== "activo" ? "not_found_or_disabled" : "bad_password",
+          attempts: failure.count,
+          remainingAttempts: failure.remaining,
+          lockedUntil: failure.lockedUntil?.toISOString()
+        }
+      });
+      throw new HttpError(401, "INVALID_CREDENTIALS", "Invalid credentials.", {
+        attempts: failure.count,
+        remainingAttempts: failure.remaining
+      });
+    }
+
+    await clearLoginFailures(rateLimitKey);
+
+    const token = issueSessionToken();
+    const sessionHash = hashSessionToken(token);
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 12);
+
+    await createUserSession({
+      accountId: account.id,
+      sessionHash,
       ipAddress,
-      userAgent: c.req.header("user-agent") ?? undefined,
-      metadata: { identity: input.identity, reason: "not_found_or_disabled" }
+      userAgent,
+      expiresAt
     });
-    throw new HttpError(401, "INVALID_CREDENTIALS", "Invalid credentials.");
-  }
 
-  const passwordOk = await Bun.password.verify(input.password, account.passwordHash);
+    setCookie(c, env.USER_SESSION_COOKIE_NAME, token, userSessionCookieOptions(expiresAt));
 
-  if (!passwordOk) {
-    await recordLoginFailure(rateLimitKey);
     await recordAudit({
       actorAccountId: account.id,
-      action: "user.login_failed",
+      action: "user.login_success",
       entityType: "user_session",
       ipAddress,
-      userAgent: c.req.header("user-agent") ?? undefined,
-      metadata: { identity: input.identity, reason: "bad_password" }
+      userAgent,
+      metadata: { attemptsReset: true }
     });
-    throw new HttpError(401, "INVALID_CREDENTIALS", "Invalid credentials.");
+
+    const response = c.json({
+      data: {
+        user: {
+          accountId: account.id,
+          personId: account.personId,
+          email: account.email,
+          matricula: account.matricula,
+          fullName: `${account.nombres} ${account.apellidos}`.trim(),
+          personType: account.tipoPersona,
+          status: account.estado,
+          mustChangePassword: account.mustChangePassword
+        },
+        expiresAt
+      }
+    });
+    await waitForLoginBuffer(startedAt);
+    return response;
+  } catch (error) {
+    await waitForLoginBuffer(startedAt);
+    throw error;
   }
-
-  await clearLoginFailures(rateLimitKey);
-
-  const token = issueSessionToken();
-  const sessionHash = hashSessionToken(token);
-  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 12);
-
-  await createUserSession({
-    accountId: account.id,
-    sessionHash,
-    ipAddress,
-    userAgent: c.req.header("user-agent") ?? undefined,
-    expiresAt
-  });
-
-  setCookie(c, env.USER_SESSION_COOKIE_NAME, token, userSessionCookieOptions(expiresAt));
-
-  await recordAudit({
-    actorAccountId: account.id,
-    action: "user.login_success",
-    entityType: "user_session",
-    ipAddress,
-    userAgent: c.req.header("user-agent") ?? undefined
-  });
-
-  return c.json({
-    data: {
-      user: {
-        accountId: account.id,
-        personId: account.personId,
-        email: account.email,
-        matricula: account.matricula,
-        fullName: `${account.nombres} ${account.apellidos}`.trim(),
-        personType: account.tipoPersona,
-        status: account.estado,
-        mustChangePassword: account.mustChangePassword
-      },
-      expiresAt
-    }
-  });
 });
 
 userPortalRoutes.post("/auth/logout", async (c) => {
