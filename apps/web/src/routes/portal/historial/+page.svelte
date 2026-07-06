@@ -16,6 +16,14 @@
   let attendanceRows = $state<Row[]>([]);
   let temporaryRows = $state<Row[]>([]);
 
+  async function resetHistoryState() {
+    session = null;
+    accessRows = [];
+    attendanceRows = [];
+    temporaryRows = [];
+    await goto("/portal/login", { replaceState: true });
+  }
+
   async function load() {
     try {
       session = await apiRequest<PortalSession>("/api/v1/portal/me");
@@ -23,16 +31,23 @@
       attendanceRows = (await apiRequest<{ rows: Row[] }>("/api/v1/portal/attendance/recent")).rows;
       temporaryRows = (await apiRequest<{ rows: Row[] }>("/api/v1/portal/temporary-daily-qr/history")).rows;
     } catch {
-      await goto("/portal/login");
+      await resetHistoryState();
     }
   }
 
   async function logout() {
     await apiRequest("/api/v1/portal/auth/logout", { method: "POST" }).catch(() => null);
-    await goto("/portal/login");
+    await resetHistoryState();
   }
 
-  onMount(load);
+  onMount(() => {
+    load();
+    const expireHandler = () => {
+      resetHistoryState().catch(() => null);
+    };
+    window.addEventListener("control-acceso:session-expired", expireHandler);
+    return () => window.removeEventListener("control-acceso:session-expired", expireHandler);
+  });
 </script>
 
 <svelte:head><title>Historial - Sistema de Control</title></svelte:head>

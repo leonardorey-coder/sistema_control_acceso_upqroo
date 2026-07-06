@@ -25,6 +25,22 @@
   let countdownTimer: ReturnType<typeof setInterval> | null = null;
   let error = $state("");
 
+  async function resetQrState() {
+    if (refreshTimer) clearTimeout(refreshTimer);
+    if (countdownTimer) clearInterval(countdownTimer);
+    refreshTimer = null;
+    countdownTimer = null;
+    session = null;
+    qrToken = "";
+    qrCredential = null;
+    expiresAt = "";
+    secondsLeft = 0;
+    deviceStatus = "Preparando dispositivo...";
+    canRegenerateDevice = false;
+    error = "";
+    await goto("/portal/login", { replaceState: true });
+  }
+
   async function load() {
     try {
       session = await apiRequest<PortalSession>("/api/v1/portal/me");
@@ -96,12 +112,17 @@
 
   async function logout() {
     await apiRequest("/api/v1/portal/auth/logout", { method: "POST" }).catch(() => null);
-    await goto("/portal/login");
+    await resetQrState();
   }
 
   onMount(() => {
     load();
+    const expireHandler = () => {
+      resetQrState().catch(() => null);
+    };
+    window.addEventListener("control-acceso:session-expired", expireHandler);
     return () => {
+      window.removeEventListener("control-acceso:session-expired", expireHandler);
       if (refreshTimer) clearTimeout(refreshTimer);
       if (countdownTimer) clearInterval(countdownTimer);
     };

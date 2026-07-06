@@ -2,6 +2,7 @@
   import { goto } from "$app/navigation";
   import { onMount } from "svelte";
   import { apiRequest } from "$lib/api/client";
+  import ActionCard from "$lib/components/ActionCard.svelte";
   import DataTable from "$lib/components/DataTable.svelte";
   import LegacyHeader from "$lib/components/LegacyHeader.svelte";
   import QrPreview from "$lib/components/QrPreview.svelte";
@@ -40,6 +41,25 @@
   let accessRows = $state<Row[]>([]);
   let attendanceRows = $state<Row[]>([]);
   let error = $state("");
+
+  async function resetPortalState() {
+    session = null;
+    qrToken = "";
+    qrCredential = null;
+    temporaryToken = "";
+    temporaryCredential = null;
+    temporaryHistory = [];
+    temporaryForm = { reasonCode: "credential_unavailable", reasonText: "" };
+    deviceStatus = "Dispositivo pendiente";
+    deviceError = "";
+    devices = [];
+    passwordForm = { currentPassword: "", newPassword: "" };
+    passwordNotice = "";
+    passwordError = "";
+    accessRows = [];
+    attendanceRows = [];
+    await goto("/portal/login", { replaceState: true });
+  }
 
   async function loadDevices() {
     devices = (await apiRequest<{ rows: Row[] }>("/api/v1/portal/devices")).rows;
@@ -139,7 +159,7 @@
 
   async function logout() {
     await apiRequest("/api/v1/portal/auth/logout", { method: "POST" }).catch(() => null);
-    await goto("/portal/login");
+    await resetPortalState();
   }
 
   async function changePassword() {
@@ -163,7 +183,14 @@
     }
   }
 
-  onMount(loadPortal);
+  onMount(() => {
+    loadPortal();
+    const expireHandler = () => {
+      resetPortalState().catch(() => null);
+    };
+    window.addEventListener("control-acceso:session-expired", expireHandler);
+    return () => window.removeEventListener("control-acceso:session-expired", expireHandler);
+  });
 </script>
 
 <svelte:head>
@@ -201,11 +228,11 @@
         {#if passwordError}<p class="error">{passwordError}</p>{/if}
         <label class="form-field">
           <span>Password actual</span>
-          <input type="password" bind:value={passwordForm.currentPassword} placeholder="Password actual" required />
+          <input type="password" bind:value={passwordForm.currentPassword} placeholder="PasswordAnterior2026" required />
         </label>
         <label class="form-field">
           <span>Nuevo password</span>
-          <input type="password" bind:value={passwordForm.newPassword} placeholder="Nuevo password" minlength="8" required />
+          <input type="password" bind:value={passwordForm.newPassword} placeholder="NuevoPassword2026" minlength="8" required />
         </label>
         <button>Actualizar password</button>
       </form>
@@ -246,14 +273,23 @@
         <button type="button" onclick={resetLocalDevice}>Regenerar vinculo local</button>
       </div>
       {#if deviceError}<p class="error">{deviceError}</p>{/if}
-      <DataTable rows={devices} columns={[
-        { key: "label", label: "Dispositivo" },
-        { key: "status", label: "Estado", kind: "status" },
-        { key: "lastUsedAt", label: "Ultimo uso", kind: "date" },
-        { key: "createdAt", label: "Alta", kind: "date" }
-      ]} actions={[
-        { label: "Revocar", onClick: revokeDevice }
-      ]} />
+      <div class="action-grid">
+        {#each devices as device}
+          <ActionCard
+            title={String(device.label ?? "Dispositivo")}
+            subtitle={String(device.id ?? "")}
+            avatar="DV"
+            badges={[device.status]}
+            meta={[
+              { label: "Ultimo uso", value: device.lastUsedAt, kind: "date" },
+              { label: "Alta", value: device.createdAt, kind: "date" }
+            ]}
+            actions={[
+              { label: "Revocar", icon: "revoke", tone: "danger", confirm: "Esta accion revoca el dispositivo vinculado.", onClick: () => revokeDevice(device) }
+            ]}
+          />
+        {/each}
+      </div>
     </section>
 
     <section class="grid two">
@@ -269,7 +305,7 @@
         </label>
         <label class="form-field">
           <span>Detalle</span>
-          <textarea bind:value={temporaryForm.reasonText} placeholder="Detalle opcional"></textarea>
+          <textarea bind:value={temporaryForm.reasonText} placeholder="Olvide mi credencial en casa"></textarea>
         </label>
         <button>Solicitar QR temporal</button>
       </form>
@@ -285,12 +321,20 @@
 
     <section class="panel">
       <h2>Temporales recientes</h2>
-      <DataTable rows={temporaryHistory} columns={[
-        { key: "operationalDate", label: "Fecha" },
-        { key: "reasonCode", label: "Motivo" },
-        { key: "status", label: "Estado", kind: "status" },
-        { key: "validUntil", label: "Expira", kind: "date" }
-      ]} />
+      <div class="action-grid">
+        {#each temporaryHistory as item}
+          <ActionCard
+            title={String(item.operationalDate ?? "QR temporal")}
+            subtitle={String(item.reasonText ?? item.reasonCode ?? "")}
+            avatar="QR"
+            badges={[item.status]}
+            meta={[
+              { label: "Motivo", value: item.reasonCode },
+              { label: "Expira", value: item.validUntil, kind: "date" }
+            ]}
+          />
+        {/each}
+      </div>
     </section>
 
     <section class="panel">

@@ -126,7 +126,7 @@
         </div>
         <label class="form-field">
           <span>Token QR</span>
-          <input bind:value={token} placeholder="Token QR" autocomplete="off" />
+          <input bind:value={token} placeholder="qr_eyJhbGciOi..." autocomplete="off" />
         </label>
         <LoadingButton type="submit" loading={busy} loadingLabel="Registrando..." disabled={!token}>Registrar QR</LoadingButton>
       </form>

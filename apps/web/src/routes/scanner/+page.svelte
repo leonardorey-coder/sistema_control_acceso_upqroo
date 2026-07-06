@@ -148,7 +148,7 @@
           <form class="filter-bar" aria-busy={scannerDeviceBusy} onsubmit={(event) => { event.preventDefault(); registerDevice(); }}>
             <label class="form-field">
               <span>Tag del dispositivo</span>
-              <input bind:value={scannerDeviceLabel} placeholder="Mi celular caseta principal" />
+              <input bind:value={scannerDeviceLabel} placeholder="Caseta norte turno tarde" />
             </label>
             <button type="submit" disabled={scannerDeviceBusy}>
               {scannerDeviceBusy ? "Solicitando..." : "Solicitar autorizacion"}
