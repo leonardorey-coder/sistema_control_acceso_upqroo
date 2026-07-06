@@ -87,12 +87,17 @@
   let loginIdentity = $state("");
   let loginPassword = $state("");
   let loginError = $state("");
+  let loginSubmitting = $state(false);
+  let loginAccessGranted = $state(false);
+  let reduceMotion = $state(false);
   let notice = $state("");
   let passwordNotice = $state("");
   let passwordError = $state("");
   let passwordForm = $state({ currentPassword: "", newPassword: "" });
   let personalGeneratedToken = $state("");
   let personalGeneratedTitle = $state("");
+  let personalGeneratedName = $state("");
+  let personalGeneratedMatricula = $state("");
   let editGeneratedToken = $state("");
   let editGeneratedTitle = $state("");
   let hotQrGeneratedToken = $state("");
@@ -253,6 +258,7 @@
   ];
 
   const apiOnline = $derived(Boolean(data.health));
+  const validTabIds = new Set(tabs.map((tab) => tab.id));
   let eventsSocket: WebSocket | null = null;
   let eventsReconnectTimer: ReturnType<typeof setTimeout> | null = null;
   const refreshTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -267,6 +273,113 @@
     eventsSocket = null;
     for (const timer of refreshTimers.values()) clearTimeout(timer);
     refreshTimers.clear();
+  }
+
+  function resetAdminGuiState(message = "") {
+    closeEventsSocket();
+    session = null;
+    loginPassword = "";
+    loginSubmitting = false;
+    loginAccessGranted = false;
+    loginError = message;
+    notice = "";
+    passwordNotice = "";
+    passwordError = "";
+    passwordForm = { currentPassword: "", newPassword: "" };
+    personalGeneratedToken = "";
+    personalGeneratedTitle = "";
+    personalGeneratedName = "";
+    personalGeneratedMatricula = "";
+    editGeneratedToken = "";
+    editGeneratedTitle = "";
+    hotQrGeneratedToken = "";
+    hotQrGeneratedTitle = "";
+    vehicleGeneratedToken = "";
+    vehicleGeneratedTitle = "";
+    temporaryGeneratedToken = "";
+    temporaryGeneratedTitle = "";
+    temporaryQrError = "";
+    accessRows = [];
+    accessTotal = 0;
+    attendanceRows = [];
+    attendanceTotal = 0;
+    peopleRows = [];
+    personTypeRows = [];
+    careerRows = [];
+    credentialRows = [];
+    credentialTotal = 0;
+    temporaryQrRows = [];
+    temporaryQrTotal = 0;
+    hotQrRows = [];
+    hotQrTotal = 0;
+    vehicleRows = [];
+    vehicleTotal = 0;
+    permitRows = [];
+    permitTotal = 0;
+    visitorPermitRows = [];
+    visitorPermitTotal = 0;
+    adminRows = [];
+    adminSessionRows = [];
+    adminAuditRows = [];
+    adminAuditTotal = 0;
+    scannerDeviceRows = [];
+    subjectRows = [];
+    subjectTotal = 0;
+    scheduleRows = [];
+    scheduleTotal = 0;
+    peopleOptionsCache = null;
+    vehicleOptionsCache = null;
+    peopleOptionsByQuery.clear();
+    vehicleOptionsByQuery.clear();
+    peopleOptionsPromises.clear();
+    vehicleOptionsPromises.clear();
+    peopleImportResult = null;
+    peopleImportError = "";
+    scheduleImportResult = null;
+    scheduleImportError = "";
+    personForm = {
+      matricula: "",
+      nombres: "",
+      apellidos: "",
+      curp: "",
+      tipoPersona: "estudiante",
+      carreraId: "",
+      estado: "activo",
+      notas: "",
+      expiresAt: ""
+    };
+    editMatricula = "";
+    editPerson = null;
+    temporaryQrForm = {
+      personId: "",
+      operationalDate: operatingDateValue(),
+      missingCredentialType: "personal_qr",
+      reasonCode: "credential_unavailable",
+      reasonText: "",
+      maxUses: 10,
+      validUntil: ""
+    };
+    temporaryQrPersonLabel = "";
+    hotQrForm = { visitorName: "", reason: "", minutes: 60 };
+    vehicleForm = { ownerPersonId: "", plate: "", vehicleType: "car", make: "", model: "", color: "" };
+    permitForm = { personId: "", vehicleId: "", permitType: "standard", validUntil: "" };
+    visitorPermitForm = { visitorName: "", plate: "", vehicleType: "visitor", color: "", reason: "", minutes: 60, maxUses: 1 };
+    vehicleOwnerLabel = "";
+    permitPersonLabel = "";
+    permitVehicleLabel = "";
+    permitFilterPersonLabel = "";
+    permitFilterVehicleLabel = "";
+    adminForm = { username: "", displayName: "", email: "", role: "admin", temporaryPassword: "" };
+    adminEditForm = {
+      id: "",
+      username: "",
+      displayName: "",
+      email: "",
+      role: "admin",
+      status: "active",
+      mustChangePassword: false
+    };
+    sessionStorage.removeItem("scanner:last-result");
   }
 
   function scheduleRefresh(key: string, action: () => Promise<void>) {
@@ -330,24 +443,32 @@
   }
 
   async function login() {
+    if (loginSubmitting) return;
     loginError = "";
+    loginSubmitting = true;
+    loginAccessGranted = false;
     try {
-      session = await apiRequest<Session>("/api/v1/auth/login", {
+      const nextSession = await apiRequest<Session>("/api/v1/auth/login", {
         method: "POST",
         body: JSON.stringify({ identity: loginIdentity, password: loginPassword })
       });
       loginPassword = "";
       await refreshInitial();
+      loginAccessGranted = true;
+      if (!reduceMotion) await new Promise((resolve) => setTimeout(resolve, 80));
+      session = nextSession;
       connectEventsSocket();
     } catch (error) {
       loginError = error instanceof Error ? error.message : "No se pudo iniciar sesion";
+      loginAccessGranted = false;
+    } finally {
+      loginSubmitting = false;
     }
   }
 
   async function logout() {
     await apiRequest("/api/v1/auth/logout", { method: "POST" }).catch(() => null);
-    closeEventsSocket();
-    session = null;
+    resetAdminGuiState("");
   }
 
   async function loadSession() {
@@ -356,7 +477,7 @@
       await refreshInitial();
       connectEventsSocket();
     } catch {
-      session = null;
+      resetAdminGuiState("");
     }
   }
 
@@ -613,7 +734,11 @@
   }
 
   function switchTab(id: string) {
+    if (id === activeTab) return;
     activeTab = id;
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", id);
+    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
     if (session) refreshActiveTab().catch(() => null);
   }
 
@@ -640,6 +765,7 @@
 
   async function createPersonAndQr(mode: "register" | "generate") {
     let personId = "";
+    let generatedPerson: (PersonRowPayload & Row) | null = null;
 
     if (mode === "register") {
       const person = await apiRequest<PersonRowPayload & Row>("/api/v1/people", {
@@ -656,6 +782,7 @@
         })
       });
       personId = String(person.id);
+      generatedPerson = person;
     } else {
       if (!personForm.matricula) {
         notice = "Capture una matricula para generar QR";
@@ -663,6 +790,7 @@
       }
       const person = await apiRequest<PersonRowPayload & Row>(`/api/v1/people/by-matricula/${personForm.matricula}`);
       personId = String(person.id);
+      generatedPerson = person;
     }
 
     const expiresAt = personForm.expiresAt ? new Date(personForm.expiresAt).toISOString() : new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString();
@@ -673,6 +801,8 @@
 
     personalGeneratedToken = result.token;
     personalGeneratedTitle = "QR personal";
+    personalGeneratedMatricula = String(generatedPerson?.matricula ?? personForm.matricula ?? "");
+    personalGeneratedName = [generatedPerson?.nombres, generatedPerson?.apellidos].filter(Boolean).join(" ").trim();
     notice = "QR generado";
     clearPeopleOptionsCache();
     await Promise.allSettled([refreshPeople(), refreshCredentials(personId)]);
@@ -896,7 +1026,7 @@
       await refreshTemporaryQr();
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
-      temporaryQrError = message.includes("Invalid request payload")
+      temporaryQrError = message.includes("Revisa los datos")
         ? "Revisa la persona, vigencia y usos maximos. El QR temporal necesita una persona seleccionada y datos validos."
         : message || "No se pudo generar el QR temporal.";
     }
@@ -953,6 +1083,16 @@
     vehicleOwnerLabel = "";
     clearVehicleOptionsCache();
     await refreshVehicles();
+  }
+
+  async function updateVehicle(row: Row, input: { plate: string; vehicleType: string; make: string; model: string; color: string }) {
+    await apiRequest(`/api/v1/vehicles/${row.id}`, {
+      method: "PATCH",
+      body: JSON.stringify(input)
+    });
+    notice = "Cambios guardados con exito";
+    clearVehicleOptionsCache();
+    await Promise.allSettled([refreshVehicles(), refreshPermits()]);
   }
 
   async function createPermitQr() {
@@ -1201,7 +1341,22 @@
   }
 
   onMount(() => {
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const syncMotionPreference = () => {
+      reduceMotion = media.matches;
+    };
+
+    syncMotionPreference();
+    media.addEventListener("change", syncMotionPreference);
+    const tabFromUrl = new URL(window.location.href).searchParams.get("tab");
+    if (tabFromUrl && validTabIds.has(tabFromUrl)) activeTab = tabFromUrl;
     loadSession();
+    const expireHandler = () => resetAdminGuiState("Tu sesion expiro. Inicia sesion nuevamente.");
+    window.addEventListener("control-acceso:session-expired", expireHandler);
+    return () => {
+      media.removeEventListener("change", syncMotionPreference);
+      window.removeEventListener("control-acceso:session-expired", expireHandler);
+    };
   });
 
   onDestroy(closeEventsSocket);
@@ -1219,6 +1374,8 @@
     identityPlaceholder="Usuario o correo"
     passwordPlaceholder="Contrasena"
     error={loginError}
+    submitting={loginSubmitting}
+    accessGranted={loginAccessGranted}
     onSubmit={login}
   />
 {:else}
@@ -1230,7 +1387,11 @@
     onTab={switchTab}
     onLogout={logout}
   >
-    <DismissibleNotice message={notice} onDismiss={() => (notice = "")} />
+    <DismissibleNotice
+      message={notice}
+      detail={notice === "Cambios guardados con exito" ? "La informacion del vehiculo ha sido actualizada." : undefined}
+      onDismiss={() => (notice = "")}
+    />
     {#if session.admin.mustChangePassword}
       <form class="panel form-grid" onsubmit={(event) => { event.preventDefault(); changeAdminPassword(); }}>
         <h2>Cambiar password</h2>
@@ -1239,230 +1400,237 @@
         {#if passwordError}<p class="error" role="alert">{passwordError}</p>{/if}
         <label class="form-field">
           <span>Password actual</span>
-          <input type="password" bind:value={passwordForm.currentPassword} placeholder="Password actual" required />
+          <input type="password" bind:value={passwordForm.currentPassword} placeholder="PasswordAnterior2026" required />
         </label>
         <label class="form-field">
           <span>Nuevo password</span>
-          <input type="password" bind:value={passwordForm.newPassword} placeholder="Nuevo password" minlength="8" required />
+          <input type="password" bind:value={passwordForm.newPassword} placeholder="NuevoPassword2026" minlength="8" required />
         </label>
         <button>Actualizar password</button>
       </form>
     {/if}
 
-    {#if activeTab === "generator"}
-      <GeneratorTab
-        {personForm}
-        {personTypeRows}
-        {careerRows}
-        generatedToken={personalGeneratedToken}
-        generatedTitle={personalGeneratedTitle}
-        {temporaryGeneratedToken}
-        {temporaryGeneratedTitle}
-        {temporaryQrError}
-        {temporaryQrForm}
-        {temporaryQrPersonLabel}
-        temporaryRows={temporaryQrRows}
-        {temporaryFilters}
-        temporaryTotal={temporaryQrTotal}
-        temporaryPage={temporaryPagination.page}
-        temporaryPageSize={temporaryPagination.pageSize}
-        onTemporaryPageChange={changeTemporaryPage}
-        onFilterTemporaryQr={filterTemporaryQr}
-        searchPeople={searchPeopleOptions}
-        onSelectTemporaryPerson={selectTemporaryPerson}
-        onSubmit={createPersonAndQr}
-        importResult={peopleImportResult}
-        importError={peopleImportError}
-        onImportPeople={importPeopleCsv}
-        onCreateTemporaryQr={createTemporaryQr}
-        onShowTemporaryQr={showTemporaryQr}
-        onRevokeTemporaryQr={revokeTemporaryQr}
-      />
-    {/if}
+    {#key activeTab}
+      <div class="tab-panel-transition">
+        {#if activeTab === "generator"}
+          <GeneratorTab
+            {personForm}
+            {personTypeRows}
+            {careerRows}
+            generatedToken={personalGeneratedToken}
+            generatedTitle={personalGeneratedTitle}
+            generatedName={personalGeneratedName}
+            generatedMatricula={personalGeneratedMatricula}
+            {temporaryGeneratedToken}
+            {temporaryGeneratedTitle}
+            {temporaryQrError}
+            {temporaryQrForm}
+            {temporaryQrPersonLabel}
+            temporaryRows={temporaryQrRows}
+            {temporaryFilters}
+            temporaryTotal={temporaryQrTotal}
+            temporaryPage={temporaryPagination.page}
+            temporaryPageSize={temporaryPagination.pageSize}
+            onTemporaryPageChange={changeTemporaryPage}
+            onFilterTemporaryQr={filterTemporaryQr}
+            searchPeople={searchPeopleOptions}
+            onSelectTemporaryPerson={selectTemporaryPerson}
+            onSubmit={createPersonAndQr}
+            importResult={peopleImportResult}
+            importError={peopleImportError}
+            onImportPeople={importPeopleCsv}
+            onCreateTemporaryQr={createTemporaryQr}
+            onShowTemporaryQr={showTemporaryQr}
+            onRevokeTemporaryQr={revokeTemporaryQr}
+          />
+        {/if}
 
-    {#if activeTab === "edit"}
-      <EditPersonTab
-        bind:editMatricula
-        {editPerson}
-        {personTypeRows}
-        {careerRows}
-        credentialRows={credentialRows}
-        credentialTotal={credentialTotal}
-        credentialPage={credentialPagination.page}
-        credentialPageSize={credentialPagination.pageSize}
-        generatedToken={editGeneratedToken}
-        generatedTitle={editGeneratedTitle}
-        onSearch={searchPerson}
-        onSave={saveEditPerson}
-        onDisable={disableEditPerson}
-        onEnable={enableEditPerson}
-        onRotateQr={rotatePersonQr}
-        onRevokeQr={revokePersonQr}
-        onCredentialPageChange={changeCredentialPage}
-        onPhoto={uploadPersonPhoto}
-        searchPeople={searchPeopleOptions}
-      />
-    {/if}
+        {#if activeTab === "edit"}
+          <EditPersonTab
+            bind:editMatricula
+            {editPerson}
+            {personTypeRows}
+            {careerRows}
+            credentialRows={credentialRows}
+            credentialTotal={credentialTotal}
+            credentialPage={credentialPagination.page}
+            credentialPageSize={credentialPagination.pageSize}
+            generatedToken={editGeneratedToken}
+            generatedTitle={editGeneratedTitle}
+            onSearch={searchPerson}
+            onSave={saveEditPerson}
+            onDisable={disableEditPerson}
+            onEnable={enableEditPerson}
+            onRotateQr={rotatePersonQr}
+            onRevokeQr={revokePersonQr}
+            onCredentialPageChange={changeCredentialPage}
+            onPhoto={uploadPersonPhoto}
+            searchPeople={searchPeopleOptions}
+          />
+        {/if}
 
-    {#if activeTab === "access"}
-      <AccessTab
-        rows={accessRows}
-        total={accessTotal}
-        {filters}
-        page={accessPagination.page}
-        pageSize={accessPagination.pageSize}
-        {personTypeRows}
-        onFilter={filterAccess}
-        onPageChange={changeAccessPage}
-      />
-    {/if}
+        {#if activeTab === "access"}
+          <AccessTab
+            rows={accessRows}
+            total={accessTotal}
+            {filters}
+            page={accessPagination.page}
+            pageSize={accessPagination.pageSize}
+            {personTypeRows}
+            onFilter={filterAccess}
+            onPageChange={changeAccessPage}
+          />
+        {/if}
 
-    {#if activeTab === "attendance"}
-      <AttendanceTab
-        rows={attendanceRows}
-        total={attendanceTotal}
-        {filters}
-        page={attendancePagination.page}
-        pageSize={attendancePagination.pageSize}
-        {careerRows}
-        {subjectRows}
-        {subjectTotal}
-        subjectPage={subjectPagination.page}
-        subjectPageSize={subjectPagination.pageSize}
-        {subjectFilters}
-        {scheduleRows}
-        {scheduleTotal}
-        schedulePage={schedulePagination.page}
-        schedulePageSize={schedulePagination.pageSize}
-        {scheduleFilters}
-        importResult={scheduleImportResult}
-        importError={scheduleImportError}
-        onFilter={filterAttendance}
-        onPageChange={changeAttendancePage}
-        onFilterSubjects={filterSubjects}
-        onSubjectPageChange={changeSubjectPage}
-        onFilterSchedules={filterSchedules}
-        onSchedulePageChange={changeSchedulePage}
-        onImportSchedules={importSchedulesCsv}
-        onAdjustAttendance={adjustAttendance}
-      />
-    {/if}
+        {#if activeTab === "attendance"}
+          <AttendanceTab
+            rows={attendanceRows}
+            total={attendanceTotal}
+            {filters}
+            page={attendancePagination.page}
+            pageSize={attendancePagination.pageSize}
+            {careerRows}
+            {subjectRows}
+            {subjectTotal}
+            subjectPage={subjectPagination.page}
+            subjectPageSize={subjectPagination.pageSize}
+            {subjectFilters}
+            {scheduleRows}
+            {scheduleTotal}
+            schedulePage={schedulePagination.page}
+            schedulePageSize={schedulePagination.pageSize}
+            {scheduleFilters}
+            importResult={scheduleImportResult}
+            importError={scheduleImportError}
+            onFilter={filterAttendance}
+            onPageChange={changeAttendancePage}
+            onFilterSubjects={filterSubjects}
+            onSubjectPageChange={changeSubjectPage}
+            onFilterSchedules={filterSchedules}
+            onSchedulePageChange={changeSchedulePage}
+            onImportSchedules={importSchedulesCsv}
+            onAdjustAttendance={adjustAttendance}
+          />
+        {/if}
 
-    {#if activeTab === "hotqr"}
-      <HotQrTab
-        rows={hotQrRows}
-        form={hotQrForm}
-        generatedToken={hotQrGeneratedToken}
-        generatedTitle={hotQrGeneratedTitle}
-        {filters}
-        total={hotQrTotal}
-        page={hotQrPagination.page}
-        pageSize={hotQrPagination.pageSize}
-        onCreate={createHotQr}
-        onFilter={filterHotQr}
-        onPageChange={changeHotQrPage}
-        onRevoke={revokeHotQr}
-      />
-    {/if}
+        {#if activeTab === "hotqr"}
+          <HotQrTab
+            rows={hotQrRows}
+            form={hotQrForm}
+            generatedToken={hotQrGeneratedToken}
+            generatedTitle={hotQrGeneratedTitle}
+            {filters}
+            total={hotQrTotal}
+            page={hotQrPagination.page}
+            pageSize={hotQrPagination.pageSize}
+            onCreate={createHotQr}
+            onFilter={filterHotQr}
+            onPageChange={changeHotQrPage}
+            onRevoke={revokeHotQr}
+          />
+        {/if}
 
-    {#if activeTab === "vehicles"}
-      <VehiclesTab
-        rows={vehicleRows}
-        permitRows={permitRows}
-        visitorPermitRows={visitorPermitRows}
-        {vehicleForm}
-        {permitForm}
-        {visitorPermitForm}
-        {vehicleOwnerLabel}
-        {permitPersonLabel}
-        {permitVehicleLabel}
-        {permitFilterPersonLabel}
-        {permitFilterVehicleLabel}
-        generatedToken={vehicleGeneratedToken}
-        generatedTitle={vehicleGeneratedTitle}
-        {filters}
-        vehicleTotal={vehicleTotal}
-        vehiclePage={vehiclePagination.page}
-        vehiclePageSize={vehiclePagination.pageSize}
-        permitTotal={permitTotal}
-        permitPage={permitPagination.page}
-        permitPageSize={permitPagination.pageSize}
-        visitorPermitTotal={visitorPermitTotal}
-        visitorPermitPage={visitorPermitPagination.page}
-        visitorPermitPageSize={visitorPermitPagination.pageSize}
-        searchPeople={searchPeopleOptions}
-        searchVehicles={searchVehicleOptions}
-        onSelectVehicleOwner={selectVehicleOwner}
-        onSelectPermitPerson={selectPermitPerson}
-        onSelectPermitVehicle={selectPermitVehicle}
-        onSelectPermitFilterPerson={selectPermitFilterPerson}
-        onSelectPermitFilterVehicle={selectPermitFilterVehicle}
-        onVehiclePageChange={changeVehiclePage}
-        onPermitPageChange={changePermitPage}
-        onVisitorPermitPageChange={changeVisitorPermitPage}
-        onCreateVehicle={createVehicle}
-        onCreatePermitQr={createPermitQr}
-        onCreateVehicleVisitorPermit={createVehicleVisitorPermit}
-        onCreateDynamicPermitQr={showDynamicPermitQr}
-        onRevokePermit={revokePermit}
-        onDisableVehicle={disableVehicle}
-        onApproveVehicle={approveVehicle}
-        onRejectVehicle={rejectVehicle}
-        onBlockVehicle={blockVehicle}
-        onDeleteVehicle={deleteVehicle}
-        onRevokeVehicleVisitorPermit={revokeVehicleVisitorPermit}
-        onFilter={async () => {
-          vehiclePagination.page = 1;
-          permitPagination.page = 1;
-          visitorPermitPagination.page = 1;
-          await Promise.allSettled([refreshVehicles(), refreshPermits(), refreshVehicleVisitorPermits()]);
-        }}
-      />
-    {/if}
+        {#if activeTab === "vehicles"}
+          <VehiclesTab
+            rows={vehicleRows}
+            permitRows={permitRows}
+            visitorPermitRows={visitorPermitRows}
+            {vehicleForm}
+            {permitForm}
+            {visitorPermitForm}
+            {vehicleOwnerLabel}
+            {permitPersonLabel}
+            {permitVehicleLabel}
+            {permitFilterPersonLabel}
+            {permitFilterVehicleLabel}
+            generatedToken={vehicleGeneratedToken}
+            generatedTitle={vehicleGeneratedTitle}
+            {filters}
+            vehicleTotal={vehicleTotal}
+            vehiclePage={vehiclePagination.page}
+            vehiclePageSize={vehiclePagination.pageSize}
+            permitTotal={permitTotal}
+            permitPage={permitPagination.page}
+            permitPageSize={permitPagination.pageSize}
+            visitorPermitTotal={visitorPermitTotal}
+            visitorPermitPage={visitorPermitPagination.page}
+            visitorPermitPageSize={visitorPermitPagination.pageSize}
+            searchPeople={searchPeopleOptions}
+            searchVehicles={searchVehicleOptions}
+            onSelectVehicleOwner={selectVehicleOwner}
+            onSelectPermitPerson={selectPermitPerson}
+            onSelectPermitVehicle={selectPermitVehicle}
+            onSelectPermitFilterPerson={selectPermitFilterPerson}
+            onSelectPermitFilterVehicle={selectPermitFilterVehicle}
+            onVehiclePageChange={changeVehiclePage}
+            onPermitPageChange={changePermitPage}
+            onVisitorPermitPageChange={changeVisitorPermitPage}
+            onCreateVehicle={createVehicle}
+            onCreatePermitQr={createPermitQr}
+            onCreateVehicleVisitorPermit={createVehicleVisitorPermit}
+            onCreateDynamicPermitQr={showDynamicPermitQr}
+            onRevokePermit={revokePermit}
+            onDisableVehicle={disableVehicle}
+            onApproveVehicle={approveVehicle}
+            onRejectVehicle={rejectVehicle}
+            onBlockVehicle={blockVehicle}
+            onDeleteVehicle={deleteVehicle}
+            onUpdateVehicle={updateVehicle}
+            onRevokeVehicleVisitorPermit={revokeVehicleVisitorPermit}
+            onFilter={async () => {
+              vehiclePagination.page = 1;
+              permitPagination.page = 1;
+              visitorPermitPagination.page = 1;
+              await Promise.allSettled([refreshVehicles(), refreshPermits(), refreshVehicleVisitorPermits()]);
+            }}
+          />
+        {/if}
 
-    {#if activeTab === "admins"}
-      <AdminsTab
-        rows={adminRows}
-        form={adminForm}
-        editForm={adminEditForm}
-        auditFilters={auditFilters}
-        isSuperAdmin={session.admin.role === "super_admin"}
-        currentAdmin={{
-          id: session.admin.id,
-          displayName: session.admin.displayName,
-          username: session.admin.username
-        }}
-        currentSessionId={session.sessionId}
-        sessionRows={adminSessionRows}
-        scannerDeviceRows={scannerDeviceRows}
-        auditRows={adminAuditRows}
-        auditTotal={adminAuditTotal}
-        auditPage={adminAuditPagination.page}
-        auditPageSize={adminAuditPagination.pageSize}
-        onCreate={createAdmin}
-        onApproveScannerDevice={approveScannerDevice}
-        onRevokeScannerDevice={revokeScannerDevice}
-        onSelect={selectAdminForEdit}
-        onUpdate={updateAdmin}
-        onDisable={disableAdmin}
-        onEnable={enableAdmin}
-        onResetPassword={resetAdminPassword}
-        onLoadSessions={loadAdminSessions}
-        onRevokeSession={revokeAdminSession}
-        onFilterAudit={filterAudit}
-        onAuditPageChange={changeAuditPage}
-      />
-    {/if}
+        {#if activeTab === "admins"}
+          <AdminsTab
+            rows={adminRows}
+            form={adminForm}
+            editForm={adminEditForm}
+            auditFilters={auditFilters}
+            isSuperAdmin={session.admin.role === "super_admin"}
+            currentAdmin={{
+              id: session.admin.id,
+              displayName: session.admin.displayName,
+              username: session.admin.username
+            }}
+            currentSessionId={session.sessionId}
+            sessionRows={adminSessionRows}
+            scannerDeviceRows={scannerDeviceRows}
+            auditRows={adminAuditRows}
+            auditTotal={adminAuditTotal}
+            auditPage={adminAuditPagination.page}
+            auditPageSize={adminAuditPagination.pageSize}
+            onCreate={createAdmin}
+            onApproveScannerDevice={approveScannerDevice}
+            onRevokeScannerDevice={revokeScannerDevice}
+            onSelect={selectAdminForEdit}
+            onUpdate={updateAdmin}
+            onDisable={disableAdmin}
+            onEnable={enableAdmin}
+            onResetPassword={resetAdminPassword}
+            onLoadSessions={loadAdminSessions}
+            onRevokeSession={revokeAdminSession}
+            onFilterAudit={filterAudit}
+            onAuditPageChange={changeAuditPage}
+          />
+        {/if}
 
-    {#if activeTab === "config"}
-      <ConfigTab
-        bind:config={configForm}
-        bind:signedQrConfig={signedQrConfigForm}
-        bind:scannerDevicesConfig={scannerDevicesConfigForm}
-        onSave={saveConfig}
-        onSaveSignedQr={saveSignedQrConfig}
-        onSaveScannerDevices={saveScannerDevicesConfig}
-      />
-    {/if}
+        {#if activeTab === "config"}
+          <ConfigTab
+            bind:config={configForm}
+            bind:signedQrConfig={signedQrConfigForm}
+            bind:scannerDevicesConfig={scannerDevicesConfigForm}
+            onSave={saveConfig}
+            onSaveSignedQr={saveSignedQrConfig}
+            onSaveScannerDevices={saveScannerDevicesConfig}
+          />
+        {/if}
+      </div>
+    {/key}
   </AdminShell>
 {/if}

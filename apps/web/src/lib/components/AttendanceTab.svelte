@@ -142,7 +142,7 @@
   <div class="toolbar">
     <label class="form-field">
       <span>Busqueda</span>
-      <input bind:value={filters.q} placeholder="Buscar alumno o materia" />
+      <input bind:value={filters.q} placeholder="Ana Lopez o Algebra" />
     </label>
     <label class="form-field">
       <span>Fecha</span>
@@ -150,7 +150,7 @@
     </label>
     <label class="form-field">
       <span>Materia</span>
-      <input bind:value={filters.subject} placeholder="Materia" />
+      <input bind:value={filters.subject} placeholder="Algebra Lineal" />
     </label>
     <label class="form-field">
       <span>Estado</span>
@@ -248,7 +248,7 @@
   <div class="toolbar">
     <label class="form-field">
       <span>Materia</span>
-      <input bind:value={subjectFilters.q} placeholder="Filtrar materia" />
+      <input bind:value={subjectFilters.q} placeholder="Algebra Lineal" />
     </label>
     <label class="form-field">
       <span>Estado</span>
@@ -277,7 +277,7 @@
   <div class="toolbar">
     <label class="form-field">
       <span>Busqueda</span>
-      <input bind:value={scheduleFilters.q} placeholder="Buscar alumno, materia o aula" />
+      <input bind:value={scheduleFilters.q} placeholder="Ana Lopez, Algebra o A-12" />
     </label>
     <label class="form-field">
       <span>Materia</span>

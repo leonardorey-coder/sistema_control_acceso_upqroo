@@ -1,5 +1,7 @@
 <script lang="ts">
-  import DataTable from "./DataTable.svelte";
+  import { labelAny, labelFor } from "$lib/ui/labels";
+  import ActivityTimeline, { type ActivityItem, type ActivityTone } from "./ActivityTimeline.svelte";
+  import type { IconName } from "./Icon.svelte";
   import LoadingButton from "./LoadingButton.svelte";
   import PaginationControls from "./PaginationControls.svelte";
 
@@ -26,6 +28,7 @@
   } = $props();
 
   let filterPending = $state(false);
+  const activityItems = $derived(rows.map(accessActivity));
 
   async function filterRows() {
     filterPending = true;
@@ -34,6 +37,72 @@
     } finally {
       filterPending = false;
     }
+  }
+
+  function fullName(row: Row) {
+    return String(row.nombres ?? row.nombreCompleto ?? row.matricula ?? row.vehiclePlate ?? "Registro de acceso");
+  }
+
+  function accessTime(row: Row) {
+    return row.salidaAt || row.entradaAt;
+  }
+
+  function accessTone(row: Row): ActivityTone {
+    const status = String(row.status ?? "");
+    if (status === "rejected") return "danger";
+    if (status === "completed") return "success";
+    if (status === "auto_closed") return "warning";
+    if (String(row.accessMode ?? "") === "vehicle") return "info";
+    return "primary";
+  }
+
+  function accessIcon(row: Row): IconName {
+    const mode = String(row.accessMode ?? "");
+    const status = String(row.status ?? "");
+    if (status === "rejected") return "reject";
+    if (mode === "vehicle" || row.vehiclePlate) return "vehicle";
+    if (mode === "visitor") return "users";
+    if (String(row.credentialType ?? "").includes("qr")) return "qr";
+    return "user";
+  }
+
+  function accessTitle(row: Row) {
+    const mode = labelFor("accessMode", row.accessMode) || "Acceso";
+    const status = String(row.status ?? "");
+    if (status === "rejected") return `${mode} rechazado`;
+    if (status === "completed") return `${mode} completado`;
+    if (status === "auto_closed") return "Salida automatica";
+    if (row.salidaAt) return `${mode} con salida`;
+    return `${mode} registrado`;
+  }
+
+  function accessDescription(row: Row) {
+    const pieces = [
+      row.matricula ? `Matricula ${row.matricula}` : "",
+      row.carrera ? String(row.carrera) : "",
+      row.adminEntrada ? `Entrada por ${row.adminEntrada}` : "",
+      row.adminSalida ? `Salida por ${row.adminSalida}` : ""
+    ].filter(Boolean);
+    return pieces.join(" · ");
+  }
+
+  function accessActivity(row: Row): ActivityItem {
+    return {
+      id: String(row.id ?? row.hashRegistro ?? `${row.matricula ?? ""}-${accessTime(row) ?? ""}`),
+      title: accessTitle(row),
+      subject: fullName(row),
+      description: accessDescription(row),
+      time: accessTime(row),
+      icon: accessIcon(row),
+      tone: accessTone(row),
+      chips: [
+        { label: labelAny(row.tipoPersona) || "Persona", icon: "users", tone: "primary" },
+        { label: labelFor("status", row.status) || "Estado", icon: row.status === "rejected" ? "warning" : "check", tone: accessTone(row) },
+        { label: labelFor("credentialType", row.credentialType), icon: "qr", tone: "info" },
+        { label: row.vehiclePlate ? `Vehiculo ${row.vehiclePlate}` : "", icon: "vehicle", tone: "info" },
+        { label: row.isExceptionAccess ? "Excepcion" : "", icon: "shield", tone: "warning" }
+      ]
+    };
   }
 </script>
 
@@ -45,7 +114,7 @@
   <div class="toolbar">
     <label class="form-field">
       <span>Busqueda</span>
-      <input bind:value={filters.q} placeholder="Buscar matricula, nombre, placa" />
+      <input bind:value={filters.q} placeholder="21A00000, Ana Lopez o ABC-123-A" />
     </label>
     <label class="form-field">
       <span>Fecha</span>
@@ -82,24 +151,10 @@
     </label>
     <LoadingButton loading={filterPending} loadingLabel="Filtrando..." onClick={filterRows}>Filtrar</LoadingButton>
   </div>
-  <DataTable rows={rows} columns={[
-    { key: "matricula", label: "Matricula", minWidth: "110px", nowrap: true },
-    { key: "nombres", label: "Nombre", kind: "name", minWidth: "160px" },
-    { key: "tipoPersona", label: "Tipo", minWidth: "105px" },
-    { key: "carrera", label: "Carrera", minWidth: "160px", truncate: true },
-    { key: "entradaAt", label: "Entrada", kind: "date", minWidth: "150px" },
-    { key: "salidaAt", label: "Salida", kind: "date", minWidth: "150px" },
-    { key: "salidaAutomatica", label: "Salida auto", kind: "boolean", compact: true, minWidth: "100px" },
-    { key: "adminEntrada", label: "Admin entrada", minWidth: "140px", truncate: true },
-    { key: "adminSalida", label: "Admin salida", minWidth: "140px", truncate: true },
-    { key: "status", label: "Estado", kind: "status", minWidth: "120px" },
-    { key: "accessMode", label: "Modo", kind: "accessMode", minWidth: "105px" },
-    { key: "subjectType", label: "Sujeto", minWidth: "105px" },
-    { key: "credentialType", label: "Credencial", kind: "credential", minWidth: "150px" },
-    { key: "credentialOrigin", label: "Origen", minWidth: "110px" },
-    { key: "isExceptionAccess", label: "Excepcion", kind: "boolean", compact: true, minWidth: "105px" },
-    { key: "vehiclePlate", label: "Vehiculo", minWidth: "110px", nowrap: true },
-    { key: "hashRegistro", label: "Hash", kind: "technical", minWidth: "130px", truncate: true, hideOnMobile: true }
-  ]} />
+  <ActivityTimeline
+    items={activityItems}
+    emptyTitle="Sin registros"
+    emptyDescription="No hay accesos con los filtros actuales."
+  />
   <PaginationControls {page} {pageSize} {total} onChange={onPageChange} />
 </section>

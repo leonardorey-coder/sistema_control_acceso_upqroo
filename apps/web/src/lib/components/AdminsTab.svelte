@@ -1,6 +1,11 @@
 <script lang="ts">
 import type { AdminRowPayload, AdminSessionRowPayload, AuditLogRowPayload, ScannerDeviceRowPayload } from "@control-acceso/shared";
+import { labelFor } from "$lib/ui/labels";
+import ActivityTimeline, { type ActivityItem, type ActivityTone } from "./ActivityTimeline.svelte";
+import AdminUserCard from "./AdminUserCard.svelte";
+import ActionCard from "./ActionCard.svelte";
 import DataTable from "./DataTable.svelte";
+import type { IconName } from "./Icon.svelte";
 import LoadingButton from "./LoadingButton.svelte";
 import Modal from "./Modal.svelte";
 import PaginationControls from "./PaginationControls.svelte";
@@ -76,12 +81,14 @@ import Switch from "./Switch.svelte";
   } = $props();
 
   let selectedAudit = $state<AuditRow | null>(null);
+  let createOpen = $state(false);
   let editOpen = $state(false);
   let section = $state("accounts");
   let sessionsAdminId = $state("");
   let sessionsTitle = $state("Mis sesiones");
   let createPending = $state(false);
   let auditPending = $state(false);
+  const auditActivityItems = $derived(auditRows.map((row, index) => auditActivity(row, index)));
   let editPending = $state(false);
   const sectionOptions = [
     { value: "accounts", label: "Cuentas" },
@@ -98,6 +105,10 @@ import Switch from "./Switch.svelte";
   function selectForModal(row: AdminRow) {
     onSelect(row);
     editOpen = true;
+  }
+
+  function openCreateModal() {
+    createOpen = true;
   }
 
   function loadSessions(row: Row) {
@@ -117,6 +128,7 @@ import Switch from "./Switch.svelte";
     createPending = true;
     try {
       await onCreate();
+      createOpen = false;
     } finally {
       createPending = false;
     }
@@ -150,7 +162,120 @@ import Switch from "./Switch.svelte";
   function shortUserAgent(value: unknown) {
     const text = String(value ?? "");
     if (!text) return "";
-    return text.length > 64 ? `${text.slice(0, 61)}...` : text;
+    return text.length > 64 ? `${text.slice(0, 61)}…` : text;
+  }
+
+  function auditTone(row: AuditRow): ActivityTone {
+    const action = String(row.action ?? "");
+    if (action.includes("failed") || action.includes("rejected") || action.includes("revoked") || action.includes("disabled")) return "danger";
+    if (action.includes("created") || action.includes("enabled") || action.includes("approved") || action.includes("login_success")) return "success";
+    if (action.includes("updated") || action.includes("rotated") || action.includes("reset") || action.includes("config")) return "warning";
+    if (String(row.entityType ?? "").includes("vehicle")) return "info";
+    return "primary";
+  }
+
+  function auditIcon(row: AuditRow): IconName {
+    const action = String(row.action ?? "");
+    const entity = String(row.entityType ?? "");
+    if (action.includes("login") || action.includes("session") || action.includes("password")) return "key";
+    if (action.includes("failed") || action.includes("rejected") || action.includes("revoked") || action.includes("disabled")) return "shield";
+    if (entity.includes("vehicle")) return "vehicle";
+    if (entity.includes("credential") || action.includes("qr")) return "qr";
+    if (entity.includes("admin") || entity.includes("user")) return "user";
+    if (action.includes("config")) return "settings";
+    return "file";
+  }
+
+  function titleize(value: unknown) {
+    return String(value ?? "evento")
+      .replace(/[._-]+/g, " ")
+      .trim()
+      .replace(/\s+/g, " ")
+      .replace(/\b\w/g, (letter) => letter.toUpperCase());
+  }
+
+  function auditEntityLabel(row: AuditRow) {
+    const entity = String(row.entityType ?? "");
+    const labels: Record<string, string> = {
+      admin: "Administrador",
+      admin_session: "Sesion administrativa",
+      scanner_device: "Dispositivo scanner",
+      person: "Persona",
+      personas: "Personas",
+      credential: "Credencial",
+      credentials: "Credenciales",
+      qr_token: "Credencial QR",
+      vehicle: "Vehiculo",
+      vehicles: "Vehiculos",
+      vehicle_permit: "Permiso vehicular",
+      vehicle_permit_qr: "QR de permiso vehicular",
+      vehicle_visitor_permit: "Permiso de visitante vehicular",
+      config: "Configuracion",
+      attendance: "Asistencia",
+      access: "Acceso",
+      subject: "Materia",
+      schedule: "Horario",
+      user: "Usuario",
+      user_device: "Dispositivo de usuario"
+    };
+    return labels[entity] ?? titleize(entity || "evento");
+  }
+
+  function auditActorName(row: AuditRow) {
+    const name = String(row.actorAdminDisplayName ?? row.actorAdminUsername ?? "").trim();
+    if (name) return name;
+    return row.actorAdminId ? "Admin no disponible" : "Sistema";
+  }
+
+  function auditFolio(row: AuditRow, index: number) {
+    const date = row.createdAt ? new Date(String(row.createdAt)) : null;
+    const stamp = date && !Number.isNaN(date.getTime())
+      ? `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}${String(date.getDate()).padStart(2, "0")}`
+      : "SFECHA";
+    return `AUD-${stamp}-${String(index + 1).padStart(2, "0")}`;
+  }
+
+  function auditSubject(row: AuditRow, index: number) {
+    return `${auditEntityLabel(row)} · ${auditFolio(row, index)}`;
+  }
+
+  function auditDescription(row: AuditRow) {
+    const parts = [
+      row.actorAdminId ? `Ejecutado por ${auditActorName(row)}` : "Evento del sistema",
+      row.userAgent ? "Navegador registrado" : "",
+      row.ipAddress ? "Origen de red guardado" : ""
+    ].filter(Boolean);
+    return parts.join(" · ");
+  }
+
+  function auditActivity(row: AuditRow, index: number): ActivityItem {
+    return {
+      id: String(row.id ?? `${row.action ?? ""}-${row.createdAt ?? ""}`),
+      title: labelFor("adminAction", row.action) || "Evento de auditoria",
+      subject: auditSubject(row, index),
+      description: auditDescription(row),
+      time: row.createdAt,
+      icon: auditIcon(row),
+      tone: auditTone(row),
+      detailLabel: "Detalle",
+      onDetail: () => { selectedAudit = row; },
+      chips: [
+        { label: auditEntityLabel(row), icon: "file", tone: "primary" },
+        { label: auditActorName(row), icon: "shield", tone: "info" },
+        { label: auditFolio(row, index), icon: "settings", tone: "muted" }
+      ]
+    };
+  }
+
+  function initials(value: unknown) {
+    const text = String(value ?? "").trim();
+    if (!text) return "AD";
+    return text
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((part) => part[0])
+      .join("")
+      .toUpperCase();
   }
 
   $effect(() => {
@@ -170,63 +295,35 @@ import Switch from "./Switch.svelte";
   </div>
 
   {#if section === "accounts"}
-  <section class="grid two">
-    <form class="panel" aria-busy={createPending} onsubmit={(event) => { event.preventDefault(); createAdmin(); }}>
-      <h2>Crear administrador</h2>
-      <label class="form-field">
-        <span>Usuario</span>
-        <input bind:value={form.username} placeholder="Usuario" required />
-      </label>
-      <label class="form-field">
-        <span>Nombre</span>
-        <input bind:value={form.displayName} placeholder="Nombre" required />
-      </label>
-      <label class="form-field">
-        <span>Correo</span>
-        <input bind:value={form.email} placeholder="Correo" />
-      </label>
-      <label class="form-field">
-        <span>Rol</span>
-        <select bind:value={form.role}>
-          <option value="admin">Admin</option>
-          <option value="super_admin">Super admin</option>
-        </select>
-      </label>
-      <label class="form-field">
-        <span>Password temporal</span>
-        <input bind:value={form.temporaryPassword} placeholder="Password temporal opcional" />
-      </label>
-      <LoadingButton type="submit" loading={createPending} loadingLabel="Creando...">Crear admin</LoadingButton>
-    </form>
-    <section class="panel selected-summary centered-empty">
-      <h2>Edicion en modal</h2>
-      <p class="muted">Usa Editar en la tabla para abrir el formulario sin perder el contexto.</p>
-      {#if editForm.id}
-        <button type="button" class="ghost" onclick={() => (editOpen = true)}>Reabrir edicion</button>
-      {/if}
-    </section>
-  </section>
-
   <section class="panel">
     <div class="section-title">
       <h2>Administradores</h2>
-      <span>{rows.length} cuentas</span>
+      <div class="button-row">
+        <span>{rows.length} cuentas</span>
+        <button type="button" onclick={openCreateModal}>Nuevo admin</button>
+      </div>
     </div>
-    <DataTable rows={rows} columns={[
-      { key: "username", label: "Usuario" },
-      { key: "displayName", label: "Nombre" },
-      { key: "email", label: "Correo" },
-      { key: "role", label: "Rol", kind: "role" },
-      { key: "status", label: "Estado", kind: "status" },
-      { key: "mustChangePassword", label: "Cambio pass", kind: "boolean" },
-      { key: "lastLoginAt", label: "Ultimo login", kind: "date" }
-    ]} actions={[
-      { label: "Editar", icon: "edit", onClick: (row) => selectForModal(row as AdminRow), tone: "ghost" },
-      { label: "Sesiones", icon: "user", onClick: loadSessions, tone: "ghost" },
-      { label: "Reset", icon: "refresh", onClick: onResetPassword, tone: "danger", confirm: "Se generara un password temporal para este administrador." },
-      { label: "Activar", icon: "check", onClick: onEnable, tone: "ghost" },
-      { label: "Desactivar", icon: "revoke", onClick: onDisable, tone: "danger", confirm: "Esta accion deshabilita el administrador seleccionado." }
-    ]} />
+    <div class="action-grid admin-user-grid">
+      {#each rows as row}
+        <AdminUserCard
+          name={String(row.displayName ?? row.username ?? "Administrador")}
+          username={String(row.username ?? "")}
+          email={row.email}
+          role={row.role}
+          status={row.status}
+          initials={initials(row.displayName ?? row.username)}
+          lastLoginAt={row.lastLoginAt}
+          mustChangePassword={Boolean(row.mustChangePassword)}
+          actions={[
+            { label: "Editar", icon: "edit", onClick: () => selectForModal(row), tone: "primary" },
+            { label: "Sesiones", icon: "user", onClick: () => loadSessions(row), tone: "ghost" },
+            { label: "Reset", icon: "refresh", onClick: () => onResetPassword(row), tone: "danger", confirm: "Se generara un password temporal para este administrador." },
+            { label: "Activar", icon: "check", onClick: () => onEnable(row), tone: "ghost", disabled: row.status === "active" },
+            { label: "Desactivar", icon: "revoke", onClick: () => onDisable(row), tone: "danger", confirm: "Esta accion deshabilita el administrador seleccionado.", disabled: row.status === "disabled" }
+          ]}
+        />
+      {/each}
+    </div>
   </section>
 
   {:else if section === "sessions"}
@@ -271,31 +368,25 @@ import Switch from "./Switch.svelte";
       <h2>Dispositivos scanner</h2>
       <span>{scannerDeviceRows.length} dispositivos</span>
     </div>
-    <DataTable rows={scannerDeviceRows} columns={[
-      { key: "code", label: "Codigo", minWidth: "150px" },
-      { key: "label", label: "Etiqueta", minWidth: "180px" },
-      { key: "status", label: "Estado", kind: "status", minWidth: "110px" },
-      { key: "requestedByAdminId", label: "Admin solicitante", kind: "technical", minWidth: "130px", truncate: true },
-      { key: "lastSeenAt", label: "Ultimo uso", kind: "date", minWidth: "150px" },
-      { key: "approvedAt", label: "Aprobado", kind: "date", minWidth: "150px" },
-      { key: "createdAt", label: "Creado", kind: "date", minWidth: "150px" }
-    ]} actions={[
-      {
-        label: "Aprobar",
-        icon: "check",
-        onClick: onApproveScannerDevice,
-        tone: "ghost",
-        disabled: (row) => row.status !== "pending"
-      },
-      {
-        label: "Revocar",
-        icon: "revoke",
-        onClick: onRevokeScannerDevice,
-        tone: "danger",
-        confirm: "Esta accion revoca el dispositivo scanner seleccionado.",
-        disabled: (row) => row.status === "revoked"
-      }
-    ]} />
+    <div class="action-grid">
+      {#each scannerDeviceRows as row}
+        <ActionCard
+          title={String(row.label ?? row.code ?? "Scanner")}
+          subtitle={String(row.code ?? "")}
+          avatar="SC"
+          badges={[row.status]}
+          meta={[
+            { label: "Solicitante", value: row.requestedByAdminId },
+            { label: "Ultimo uso", value: row.lastSeenAt, kind: "date" },
+            { label: "Creado", value: row.createdAt, kind: "date" }
+          ]}
+          actions={[
+            { label: "Aprobar", icon: "check", onClick: () => onApproveScannerDevice(row), tone: "primary", disabled: row.status !== "pending" },
+            { label: "Revocar", icon: "revoke", onClick: () => onRevokeScannerDevice(row), tone: "danger", confirm: "Esta accion revoca el dispositivo scanner seleccionado.", disabled: row.status === "revoked" }
+          ]}
+        />
+      {/each}
+    </div>
   </section>
 
   {:else if section === "audit"}
@@ -303,15 +394,15 @@ import Switch from "./Switch.svelte";
     <form class="filter-bar" aria-busy={auditPending} onsubmit={(event) => { event.preventDefault(); filterAudit(); }}>
       <label class="form-field">
         <span>Busqueda</span>
-        <input bind:value={auditFilters.q} placeholder="Buscar auditoria" />
+        <input bind:value={auditFilters.q} placeholder="login o credencial" />
       </label>
       <label class="form-field">
         <span>Accion</span>
-        <input bind:value={auditFilters.action} placeholder="Accion" />
+        <input bind:value={auditFilters.action} placeholder="admin.login" />
       </label>
       <label class="form-field">
         <span>Entidad</span>
-        <input bind:value={auditFilters.entityType} placeholder="Entidad" />
+        <input bind:value={auditFilters.entityType} placeholder="person" />
       </label>
       <label class="form-field">
         <span>Desde</span>
@@ -323,18 +414,15 @@ import Switch from "./Switch.svelte";
       </label>
       <LoadingButton type="submit" loading={auditPending} loadingLabel="Filtrando...">Filtrar</LoadingButton>
     </form>
-    <h2>Auditoria</h2>
-    <DataTable rows={auditRows} columns={[
-      { key: "action", label: "Accion", kind: "adminAction", minWidth: "190px" },
-      { key: "entityType", label: "Entidad", minWidth: "120px" },
-      { key: "entityId", label: "ID", kind: "technical", minWidth: "130px", truncate: true, hideOnMobile: true },
-      { key: "ipAddress", label: "IP", minWidth: "112px", nowrap: true },
-      { key: "userAgent", label: "User-Agent", format: shortUserAgent, minWidth: "180px", truncate: true, hideOnMobile: true },
-      { key: "actorAdminId", label: "Actor admin", kind: "technical", minWidth: "130px", truncate: true, hideOnMobile: true },
-      { key: "createdAt", label: "Fecha", kind: "date", minWidth: "150px" }
-    ]} actions={[
-      { label: "Detalle", icon: "search", onClick: (row) => { selectedAudit = row as AuditRow; }, tone: "ghost" }
-    ]} />
+    <div class="section-title">
+      <h2>Auditoria</h2>
+      <span>{auditTotal} eventos</span>
+    </div>
+    <ActivityTimeline
+      items={auditActivityItems}
+      emptyTitle="Sin auditoria"
+      emptyDescription="No hay eventos administrativos con los filtros actuales."
+    />
     <PaginationControls
       page={auditPage}
       pageSize={auditPageSize}
@@ -360,8 +448,8 @@ import Switch from "./Switch.svelte";
           <dd>{selectedAudit.entityId ?? "N/A"}</dd>
         </div>
         <div>
-          <dt>Actor admin</dt>
-          <dd>{selectedAudit.actorAdminId ?? "N/A"}</dd>
+          <dt>Admin responsable</dt>
+          <dd>{auditActorName(selectedAudit)}</dd>
         </div>
         <div>
           <dt>Actor usuario</dt>
@@ -380,31 +468,62 @@ import Switch from "./Switch.svelte";
       <pre class="metadata-pre">{auditMetadata(selectedAudit)}</pre>
     {/if}
   </Modal>
+  <Modal open={createOpen} title="Crear administrador" size="lg" onClose={() => (createOpen = false)}>
+    <form class="form-grid" aria-busy={createPending} onsubmit={(event) => { event.preventDefault(); createAdmin(); }}>
+      <label class="form-field">
+        <span>Usuario</span>
+        <input name="username" bind:value={form.username} placeholder="adminCaseta" autocomplete="username" required />
+      </label>
+      <label class="form-field">
+        <span>Nombre</span>
+        <input name="displayName" bind:value={form.displayName} placeholder="Ana Lopez" autocomplete="name" required />
+      </label>
+      <label class="form-field">
+        <span>Correo</span>
+        <input name="email" bind:value={form.email} placeholder="ana.lopez@upqroo.edu.mx" type="email" autocomplete="email" />
+      </label>
+      <label class="form-field">
+        <span>Rol</span>
+        <select name="role" bind:value={form.role}>
+          <option value="admin">Admin</option>
+          <option value="super_admin">Super admin</option>
+        </select>
+      </label>
+      <label class="form-field">
+        <span>Password temporal</span>
+        <input name="temporaryPassword" bind:value={form.temporaryPassword} placeholder="TempAcceso2026" autocomplete="new-password" />
+      </label>
+      <div class="modal-actions">
+        <LoadingButton type="submit" loading={createPending} loadingLabel="Creando...">Crear admin</LoadingButton>
+        <button type="button" class="ghost" onclick={() => (createOpen = false)}>Cancelar</button>
+      </div>
+    </form>
+  </Modal>
   <Modal open={editOpen} title="Editar administrador" size="lg" onClose={() => (editOpen = false)}>
     {#if editForm.id}
       <form class="form-grid" aria-busy={editPending} onsubmit={(event) => { event.preventDefault(); updateAdmin(); }}>
         <label class="form-field">
           <span>Usuario</span>
-          <input bind:value={editForm.username} placeholder="Usuario" required />
+          <input name="editUsername" bind:value={editForm.username} placeholder="adminCaseta" autocomplete="username" required />
         </label>
         <label class="form-field">
           <span>Nombre</span>
-          <input bind:value={editForm.displayName} placeholder="Nombre" required />
+          <input name="editDisplayName" bind:value={editForm.displayName} placeholder="Ana Lopez" autocomplete="name" required />
         </label>
         <label class="form-field">
           <span>Correo</span>
-          <input bind:value={editForm.email} placeholder="Correo" />
+          <input name="editEmail" bind:value={editForm.email} placeholder="ana.lopez@upqroo.edu.mx" type="email" autocomplete="email" />
         </label>
         <label class="form-field">
           <span>Rol</span>
-          <select bind:value={editForm.role}>
+          <select name="editRole" bind:value={editForm.role}>
             <option value="admin">Admin</option>
             <option value="super_admin">Super Admin</option>
           </select>
         </label>
         <label class="form-field">
           <span>Estado</span>
-          <select bind:value={editForm.status}>
+          <select name="editStatus" bind:value={editForm.status}>
             <option value="active">Activo</option>
             <option value="disabled">Deshabilitado</option>
           </select>

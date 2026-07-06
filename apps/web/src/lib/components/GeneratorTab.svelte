@@ -2,6 +2,7 @@
   import type { CareerRowPayload, PersonTypeRowPayload, TemporaryDailyQrRowPayload } from "@control-acceso/shared";
   import DataTable from "./DataTable.svelte";
   import EntitySearchSelect from "./EntitySearchSelect.svelte";
+  import FormFlow from "./FormFlow.svelte";
   import LoadingButton from "./LoadingButton.svelte";
   import PaginationControls from "./PaginationControls.svelte";
   import QrPreview from "./QrPreview.svelte";
@@ -25,6 +26,8 @@
     careerRows,
     generatedToken,
     generatedTitle,
+    generatedName,
+    generatedMatricula,
     temporaryGeneratedToken,
     temporaryGeneratedTitle,
     temporaryQrError,
@@ -62,6 +65,8 @@
     careerRows: CareerRow[];
     generatedToken: string;
     generatedTitle: string;
+    generatedName: string;
+    generatedMatricula: string;
     temporaryGeneratedToken: string;
     temporaryGeneratedTitle: string;
     temporaryQrError: string;
@@ -101,10 +106,10 @@
   let temporaryPending = $state(false);
   let filterPending = $state(false);
   const sections = [
-    { value: "personal", label: "Credencial personal" },
-    { value: "import", label: "Importar CSV" },
+    { value: "personal", label: "Personal" },
     { value: "temporary", label: "QR temporal diario" },
-    { value: "recent", label: "Temporales recientes" }
+    { value: "import", label: "Importar CSV" },
+    { value: "recent", label: "Revision" }
   ];
 
   const selectedType = $derived(personTypeRows.find((row) => row.code === personForm.tipoPersona));
@@ -156,13 +161,12 @@
   }
 </script>
 
-<section class="workspace-header">
-  <div>
-    <h2>Generador de Codigo QR</h2>
-    <p class="muted">Crea credenciales personales, importa usuarios o emite QR temporales desde tareas separadas.</p>
-  </div>
-  <SegmentedControl bind:value={section} options={sections} label="Acciones de generacion" />
-</section>
+<FormFlow
+  title="Emitir credencial"
+  description="Elige el tipo de emision, completa solo los datos necesarios y revisa el QR en el mismo flujo."
+  bind:value={section}
+  options={sections}
+>
 
 {#if section === "personal"}
   <section class="qr-flow">
@@ -184,7 +188,7 @@
           label="Matricula"
           value={personForm.matricula}
           displayValue={personalPersonLabel || personForm.matricula}
-          placeholder="Matricula, nombre o correo"
+          placeholder="21A00000 o Ana Lopez"
           search={searchPeople}
           displayResult={displayPerson}
           onSelect={selectPersonalPerson}
@@ -196,21 +200,21 @@
       {:else}
         <label class="form-field">
           <span>Matricula</span>
-          <input bind:value={personForm.matricula} placeholder="Matricula" required />
+          <input bind:value={personForm.matricula} placeholder="21A00000" required />
         </label>
       {/if}
       {#if mode === "register"}
         <label class="form-field">
           <span>Nombres</span>
-          <input bind:value={personForm.nombres} placeholder="Nombres" />
+          <input bind:value={personForm.nombres} placeholder="Ana Maria" />
         </label>
         <label class="form-field">
           <span>Apellidos</span>
-          <input bind:value={personForm.apellidos} placeholder="Apellidos" />
+          <input bind:value={personForm.apellidos} placeholder="Lopez Perez" />
         </label>
         <label class="form-field">
           <span>CURP</span>
-          <input bind:value={personForm.curp} placeholder="CURP" oninput={() => (personForm.curp = personForm.curp.toUpperCase())} />
+          <input bind:value={personForm.curp} placeholder="LOPA010203HQRPRNA1" oninput={() => (personForm.curp = personForm.curp.toUpperCase())} />
         </label>
         <label class="form-field">
           <span>Tipo de persona</span>
@@ -239,14 +243,11 @@
       {#if mode === "register"}
         <label class="form-field">
           <span>Notas</span>
-          <textarea bind:value={personForm.notas} placeholder="Notas"></textarea>
+          <textarea bind:value={personForm.notas} placeholder="Reingreso autorizado por control escolar"></textarea>
         </label>
       {/if}
       <LoadingButton type="submit" loading={personalPending} loadingLabel="Generando...">{mode === "register" ? "Registrar y Generar" : "Solo Generar"}</LoadingButton>
     </form>
-    <section class="panel qr-side-panel">
-      <QrPreview token={generatedToken} title={generatedTitle || "QR"} subtitle="El token visible se muestra solo en esta respuesta" autoOpen />
-    </section>
   </section>
 {/if}
 
@@ -306,7 +307,7 @@
       label="Persona"
       value={temporaryQrForm.personId}
       displayValue={temporaryQrPersonLabel}
-      placeholder="Matricula, nombre o correo"
+      placeholder="21A00000 o Ana Lopez"
       search={searchPeople}
       displayResult={displayPerson}
       onSelect={onSelectTemporaryPerson}
@@ -342,19 +343,10 @@
     </label>
     <label class="form-field">
       <span>Detalle</span>
-      <textarea bind:value={temporaryQrForm.reasonText} placeholder="Detalle"></textarea>
+      <textarea bind:value={temporaryQrForm.reasonText} placeholder="Olvido su credencial fisica en casa"></textarea>
     </label>
     <LoadingButton type="submit" loading={temporaryPending} loadingLabel="Generando...">Generar QR temporal</LoadingButton>
   </form>
-  <section class="panel qr-side-panel">
-    <QrPreview
-      token={temporaryGeneratedToken}
-      title={temporaryGeneratedTitle || "QR temporal diario"}
-      subtitle="QR temporal listo para mostrar, descargar o compartir."
-      showToken={false}
-      autoOpen
-    />
-  </section>
   </section>
 {/if}
 
@@ -364,7 +356,7 @@
   <div class="toolbar">
     <label class="form-field">
       <span>Busqueda</span>
-      <input bind:value={temporaryFilters.q} placeholder="Buscar persona o motivo" />
+      <input bind:value={temporaryFilters.q} placeholder="Ana Lopez o credencial perdida" />
     </label>
     <label class="form-field">
       <span>Fecha operativa</span>
@@ -418,3 +410,35 @@
   />
 </section>
 {/if}
+
+  {#snippet aside()}
+    <section class="panel qr-side-panel">
+      {#if section === "temporary"}
+        <QrPreview
+          token={temporaryGeneratedToken}
+          title={temporaryGeneratedTitle || "QR temporal diario"}
+          subtitle="QR temporal listo para mostrar, descargar o compartir."
+          showToken={false}
+          autoOpen
+        />
+      {:else}
+        <QrPreview
+          token={generatedToken}
+          title={generatedTitle || "QR"}
+          subtitle="El token visible se muestra solo en esta respuesta"
+          subjectName={generatedName}
+          subjectId={generatedMatricula}
+          autoOpen
+        />
+      {/if}
+    </section>
+    <section class="flow-card">
+      <h3>Orden del flujo</h3>
+      <dl class="flow-summary">
+        <div><dt>1</dt><dd>{section === "personal" ? "Busca o registra la persona" : section === "temporary" ? "Selecciona la persona" : section === "import" ? "Elige el CSV" : "Filtra registros"}</dd></div>
+        <div><dt>2</dt><dd>{section === "temporary" ? "Define motivo, usos y vigencia" : section === "import" ? "Revisa el resultado de importacion" : "Completa datos minimos"}</dd></div>
+        <div><dt>3</dt><dd>{section === "recent" ? "Muestra o revoca QR temporales" : "Genera y comparte el QR"}</dd></div>
+      </dl>
+    </section>
+  {/snippet}
+</FormFlow>
