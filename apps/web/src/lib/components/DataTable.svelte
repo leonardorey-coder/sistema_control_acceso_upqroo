@@ -82,10 +82,16 @@
   function actionIcon(action: Action): IconName {
     if (action.icon) return action.icon;
     const label = action.label.toLowerCase();
+    if (label.includes("ver") || label.includes("detalle")) return "eye";
     if (label.includes("editar")) return "edit";
     if (label.includes("qr")) return "qr";
-    if (label.includes("revocar") || label.includes("desactivar") || label.includes("reset")) return "revoke";
-    if (label.includes("activar") || label.includes("confirmar")) return "check";
+    if (label.includes("eliminar") || label.includes("borrar")) return "trash";
+    if (label.includes("bloquear")) return "lock";
+    if (label.includes("desactivar")) return "power";
+    if (label.includes("rechazar")) return "reject";
+    if (label.includes("revocar")) return "revoke";
+    if (label.includes("reset")) return "refresh";
+    if (label.includes("activar") || label.includes("aprobar") || label.includes("confirmar")) return "check";
     if (label.includes("filtrar")) return "filter";
     return "settings";
   }

@@ -1,7 +1,7 @@
 <script lang="ts">
   let {
     loading = false,
-    loadingLabel = "Procesando...",
+    loadingLabel = "Procesando…",
     type = "button",
     disabled = false,
     tone = "primary",
