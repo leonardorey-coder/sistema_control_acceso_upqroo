@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
   import type {
+    AdminClientRowPayload,
+    AdminClientsConfigPayload,
     AdminRowPayload,
     AdminSessionPayload,
     AdminSessionRowPayload,
@@ -31,6 +33,7 @@
   import HotQrTab from "$lib/components/HotQrTab.svelte";
   import LoginCard from "$lib/components/LoginCard.svelte";
   import VehiclesTab from "$lib/components/VehiclesTab.svelte";
+  import { authorizeCurrentAdminBrowser, buildAdminClientLoginProof, listAdminClients, revokeAdminClient } from "$lib/admin-client";
   import { apiBaseUrl, apiRequest, toQuery, type PaginatedRows } from "$lib/api/client";
   import type { PageData } from "./$types";
 
@@ -132,6 +135,7 @@
   let adminAuditRows = $state<Array<AuditLogRowPayload & Row>>([]);
   let adminAuditTotal = $state(0);
   let scannerDeviceRows = $state<Array<ScannerDeviceRowPayload & Row>>([]);
+  let adminClientRows = $state<Array<AdminClientRowPayload & Row>>([]);
   let subjectRows = $state<Row[]>([]);
   let subjectTotal = $state(0);
   let scheduleRows = $state<Row[]>([]);
@@ -158,6 +162,9 @@
     requireDeviceBinding: false
   });
   let scannerDevicesConfigForm = $state<ScannerDevicesConfigPayload>({
+    required: false
+  });
+  let adminClientsConfigForm = $state<AdminClientsConfigPayload>({
     required: false
   });
 
@@ -323,6 +330,7 @@
     adminAuditRows = [];
     adminAuditTotal = 0;
     scannerDeviceRows = [];
+    adminClientRows = [];
     subjectRows = [];
     subjectTotal = 0;
     scheduleRows = [];
@@ -448,9 +456,10 @@
     loginSubmitting = true;
     loginAccessGranted = false;
     try {
+      const adminClientProof = await buildAdminClientLoginProof();
       const nextSession = await apiRequest<Session>("/api/v1/auth/login", {
         method: "POST",
-        body: JSON.stringify({ identity: loginIdentity, password: loginPassword })
+        body: JSON.stringify({ identity: loginIdentity, password: loginPassword, ...adminClientProof })
       });
       loginPassword = "";
       await refreshInitial();
@@ -685,9 +694,14 @@
     const result = await apiRequest<{ value?: Partial<OperationalConfigPayload> }>("/api/v1/config/operational");
     const signedQrResult = await apiRequest<{ value?: Partial<SignedQrConfigPayload> }>("/api/v1/config/signed-qr");
     const scannerDevicesResult = await apiRequest<{ value?: Partial<ScannerDevicesConfigPayload> }>("/api/v1/config/scanner-devices");
+    const adminClientsResult = await apiRequest<{ value?: Partial<AdminClientsConfigPayload> }>("/api/v1/config/admin-clients");
     configForm = { ...configForm, ...(result.value as Partial<typeof configForm> ?? {}) };
     signedQrConfigForm = { ...signedQrConfigForm, ...(signedQrResult.value as Partial<typeof signedQrConfigForm> ?? {}) };
     scannerDevicesConfigForm = { ...scannerDevicesConfigForm, ...(scannerDevicesResult.value as Partial<typeof scannerDevicesConfigForm> ?? {}) };
+    adminClientsConfigForm = { ...adminClientsConfigForm, ...(adminClientsResult.value as Partial<typeof adminClientsConfigForm> ?? {}) };
+    if (session?.admin.role === "super_admin") {
+      adminClientRows = (await listAdminClients()).rows as Array<AdminClientRowPayload & Row>;
+    }
   }
 
   async function refreshSubjects() {
@@ -1298,6 +1312,27 @@
     notice = "Configuracion de dispositivos scanner guardada";
   }
 
+  async function saveAdminClientsConfig() {
+    await apiRequest("/api/v1/config/admin-clients", {
+      method: "PATCH",
+      body: JSON.stringify({ value: adminClientsConfigForm })
+    });
+    notice = "Configuracion de navegadores autorizados guardada";
+  }
+
+  async function authorizeAdminBrowser() {
+    await authorizeCurrentAdminBrowser("Panel administrativo");
+    adminClientRows = (await listAdminClients()).rows as Array<AdminClientRowPayload & Row>;
+    notice = "Este navegador quedo autorizado";
+  }
+
+  async function revokeAdminBrowser(row: Row) {
+    if (!row.id) return;
+    await revokeAdminClient(String(row.id));
+    adminClientRows = (await listAdminClients()).rows as Array<AdminClientRowPayload & Row>;
+    notice = "Navegador autorizado revocado";
+  }
+
   async function importPeopleCsv(file: File) {
     peopleImportError = "";
     const body = new FormData();
@@ -1625,9 +1660,15 @@
             bind:config={configForm}
             bind:signedQrConfig={signedQrConfigForm}
             bind:scannerDevicesConfig={scannerDevicesConfigForm}
+            bind:adminClientsConfig={adminClientsConfigForm}
+            adminClientRows={adminClientRows}
+            isSuperAdmin={session.admin.role === "super_admin"}
             onSave={saveConfig}
             onSaveSignedQr={saveSignedQrConfig}
             onSaveScannerDevices={saveScannerDevicesConfig}
+            onSaveAdminClients={saveAdminClientsConfig}
+            onAuthorizeAdminBrowser={authorizeAdminBrowser}
+            onRevokeAdminBrowser={revokeAdminBrowser}
           />
         {/if}
       </div>

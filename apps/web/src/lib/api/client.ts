@@ -24,6 +24,10 @@ const apiMessages: Record<string, string> = {
   USER_SESSION_REQUIRED: "Tu sesion expiro. Inicia sesion nuevamente.",
   USER_SESSION_INVALID: "Tu sesion expiro. Inicia sesion nuevamente.",
   SUPER_ADMIN_REQUIRED: "Esta accion requiere una sesion de super administrador.",
+  ADMIN_CLIENT_REQUIRED: "Este navegador no esta autorizado para iniciar sesion administrativa.",
+  ADMIN_CLIENT_NOT_FOUND: "Este navegador no esta autorizado o fue revocado.",
+  ADMIN_CLIENT_CHALLENGE_INVALID: "La autorizacion de este navegador expiro. Intenta de nuevo.",
+  ADMIN_CLIENT_SIGNATURE_INVALID: "La firma de este navegador no es valida.",
   INTERNAL_ERROR: "Ocurrio un error inesperado en el servidor."
 };
 

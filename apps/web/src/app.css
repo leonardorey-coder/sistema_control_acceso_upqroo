@@ -3217,6 +3217,44 @@ th.actions-cell {
   }
 }
 
+.browser-list {
+  display: grid;
+  gap: 10px;
+}
+
+.browser-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--border-gray);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--white);
+}
+
+.browser-row div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.browser-row span,
+.browser-row small {
+  color: var(--medium-gray);
+}
+
+.danger-outline {
+  border: 1px solid #b42318;
+  background: #fff;
+  color: #b42318;
+  padding: 8px 12px;
+}
+
+.danger-outline:hover:not(:disabled) {
+  background: #fff1f0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

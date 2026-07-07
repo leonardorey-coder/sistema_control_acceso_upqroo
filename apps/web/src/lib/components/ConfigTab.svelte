@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { OperationalConfigPayload, ScannerDevicesConfigPayload, SignedQrConfigPayload } from "@control-acceso/shared";
+  import type { AdminClientRowPayload, AdminClientsConfigPayload, OperationalConfigPayload, ScannerDevicesConfigPayload, SignedQrConfigPayload } from "@control-acceso/shared";
   import FormFlow from "./FormFlow.svelte";
   import LoadingButton from "./LoadingButton.svelte";
   import Switch from "./Switch.svelte";
@@ -8,35 +8,66 @@
     config = $bindable(),
     signedQrConfig = $bindable(),
     scannerDevicesConfig = $bindable(),
+    adminClientsConfig = $bindable(),
+    adminClientRows = [],
+    isSuperAdmin = false,
     onSave,
     onSaveSignedQr,
-    onSaveScannerDevices
+    onSaveScannerDevices,
+    onSaveAdminClients,
+    onAuthorizeAdminBrowser,
+    onRevokeAdminBrowser
   }: {
     config: OperationalConfigPayload;
     signedQrConfig: SignedQrConfigPayload;
     scannerDevicesConfig: ScannerDevicesConfigPayload;
+    adminClientsConfig: AdminClientsConfigPayload;
+    adminClientRows?: Array<AdminClientRowPayload & Record<string, unknown>>;
+    isSuperAdmin?: boolean;
     onSave: () => void | Promise<void>;
     onSaveSignedQr: () => void | Promise<void>;
     onSaveScannerDevices: () => void | Promise<void>;
+    onSaveAdminClients: () => void | Promise<void>;
+    onAuthorizeAdminBrowser: () => void | Promise<void>;
+    onRevokeAdminBrowser: (row: AdminClientRowPayload & Record<string, unknown>) => void | Promise<void>;
   } = $props();
 
   let activeSection = $state("scan");
   let savePending = $state(false);
+  let browserPending = $state(false);
   const sectionOptions = [
     { value: "scan", label: "Escaneo" },
     { value: "signed", label: "QR firmado" },
-    { value: "scanners", label: "Scanners" }
+    { value: "scanners", label: "Scanners" },
+    { value: "browsers", label: "Navegadores" }
   ];
 
   async function saveAll() {
     savePending = true;
     try {
       await onSave();
-      await onSaveSignedQr();
-      await onSaveScannerDevices();
+      if (isSuperAdmin) {
+        await onSaveSignedQr();
+        await onSaveScannerDevices();
+        await onSaveAdminClients();
+      }
     } finally {
       savePending = false;
     }
+  }
+
+  async function authorizeBrowser() {
+    browserPending = true;
+    try {
+      await onAuthorizeAdminBrowser();
+    } finally {
+      browserPending = false;
+    }
+  }
+
+  function formatDate(value: unknown) {
+    if (!value) return "Sin registro";
+    return new Intl.DateTimeFormat("es-MX", { dateStyle: "short", timeStyle: "short" }).format(new Date(String(value)));
   }
 </script>
 
@@ -77,13 +108,39 @@
       </label>
       <Switch bind:checked={signedQrConfig.compatibilityOpaqueTokens} label="Compatibilidad QR opaco" />
       <Switch bind:checked={signedQrConfig.requireDeviceBinding} label="Vinculacion de dispositivo" />
-    {:else}
+    {:else if activeSection === "scanners"}
       <div class="section-header">
         <h2>Dispositivos scanner</h2>
         <p>Controla si una sesion admin necesita estar en un dispositivo scanner autorizado.</p>
       </div>
-      <Switch bind:checked={scannerDevicesConfig.required} label="Exigir scanner autorizado" />
+      <Switch bind:checked={scannerDevicesConfig.required} label="Exigir scanner autorizado" disabled={!isSuperAdmin} />
       <p class="notice">Cuando esta activo, una sesion admin no basta para escanear: el dispositivo debe estar vinculado con un codigo autorizado por superadmin.</p>
+    {:else}
+      <div class="section-header">
+        <h2>Navegadores administrativos</h2>
+        <p>Exige una llave local autorizada para iniciar sesion desde clientes admin no-superadmin.</p>
+      </div>
+      <Switch bind:checked={adminClientsConfig.required} label="Exigir navegador autorizado para login admin" disabled={!isSuperAdmin} />
+      <p class="notice">El superadmin y ADMIN_CLIENT_AUTH_BYPASS=true quedan como modo de rescate. Los navegadores privados o clientes API sin llave local no pasan este control.</p>
+      <LoadingButton type="button" loading={browserPending} loadingLabel="Autorizando..." disabled={!isSuperAdmin} onClick={authorizeBrowser}>
+        Autorizar este navegador
+      </LoadingButton>
+      <div class="browser-list">
+        {#if adminClientRows.length === 0}
+          <p class="muted">No hay navegadores administrativos autorizados.</p>
+        {:else}
+          {#each adminClientRows as row}
+            <div class="browser-row">
+              <div>
+                <strong>{row.label || "Navegador administrativo"}</strong>
+                <span>{row.displayName} · {row.status}</span>
+                <small>Alta: {formatDate(row.createdAt)} · Ultimo uso: {formatDate(row.lastUsedAt)}</small>
+              </div>
+              <button type="button" class="danger-outline" disabled={!isSuperAdmin || row.status === "revoked"} onclick={() => onRevokeAdminBrowser(row)}>Revocar</button>
+            </div>
+          {/each}
+        {/if}
+      </div>
     {/if}
 
     <div class="flow-card">
@@ -92,6 +149,7 @@
         <div><dt>Auto-escaneo</dt><dd>{config.retryEnabled ? "Activo" : "Inactivo"}</dd></div>
         <div><dt>QR firmado</dt><dd>{signedQrConfig.enabled ? `${signedQrConfig.ttlSeconds}s` : "Inactivo"}</dd></div>
         <div><dt>Scanner autorizado</dt><dd>{scannerDevicesConfig.required ? "Requerido" : "No requerido"}</dd></div>
+        <div><dt>Navegador admin</dt><dd>{adminClientsConfig.required ? "Requerido" : "No requerido"}</dd></div>
       </dl>
     </div>
 
