@@ -1,4 +1,5 @@
 import { importJWK, type JWK } from "jose";
+import { env } from "../../config/env";
 import { HttpError } from "../../shared/http-error";
 import { getOperationalConfig } from "../config/config.repository";
 import {
@@ -39,6 +40,8 @@ function toBase64Url(bytes: ArrayBuffer) {
 }
 
 export async function scannerDevicesRequired() {
+  if (env.SCANNER_DEVICE_AUTH_BYPASS) return false;
+
   const [row] = await getOperationalConfig("scanner_devices");
   const value = row?.value as Record<string, unknown> | undefined;
 

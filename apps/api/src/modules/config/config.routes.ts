@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { getActorMetadata, getAdminSession } from "../../http/middleware/session";
 import { recordAudit } from "../../shared/audit";
+import { HttpError } from "../../shared/http-error";
 import { broadcastEvent } from "../events/events";
 import { getOperationalConfig, upsertOperationalConfig } from "./config.repository";
 
@@ -23,6 +24,10 @@ const defaultSignedQrConfig = {
 
 const defaultScannerDevicesConfig = {
   required: process.env.NODE_ENV === "production"
+};
+
+const defaultAdminClientsConfig = {
+  required: false
 };
 
 const operationalConfigSchema = z.object({
@@ -47,6 +52,21 @@ const scannerDevicesConfigSchema = z.object({
   }).default(defaultScannerDevicesConfig),
   description: z.string().trim().optional()
 }).strict();
+
+const adminClientsConfigSchema = z.object({
+  value: z.object({
+    required: z.boolean().default(defaultAdminClientsConfig.required)
+  }).default(defaultAdminClientsConfig),
+  description: z.string().trim().optional()
+}).strict();
+
+function requireSuperAdminConfig(c: Parameters<typeof getAdminSession>[0]) {
+  const session = getAdminSession(c);
+  if (session.role !== "super_admin") {
+    throw new HttpError(403, "SUPER_ADMIN_REQUIRED", "A super administrator session is required.");
+  }
+  return session;
+}
 
 export const configRoutes = new Hono();
 
@@ -83,7 +103,7 @@ configRoutes.get("/signed-qr", async (c) => {
 
 configRoutes.patch("/signed-qr", async (c) => {
   const input = signedQrConfigSchema.parse(await c.req.json());
-  const session = getAdminSession(c);
+  const session = requireSuperAdminConfig(c);
   const row = await upsertOperationalConfig({
     key: "signed_qr",
     value: input.value,
@@ -113,7 +133,7 @@ configRoutes.get("/scanner-devices", async (c) => {
 
 configRoutes.patch("/scanner-devices", async (c) => {
   const input = scannerDevicesConfigSchema.parse(await c.req.json());
-  const session = getAdminSession(c);
+  const session = requireSuperAdminConfig(c);
   const row = await upsertOperationalConfig({
     key: "scanner_devices",
     value: input.value,
@@ -128,6 +148,36 @@ configRoutes.patch("/scanner-devices", async (c) => {
     metadata: { key: "scanner_devices" }
   });
   broadcastEvent("config.table", { action: "scanner_devices_updated", key: "scanner_devices" });
+
+  return c.json({ data: row });
+});
+
+configRoutes.get("/admin-clients", async (c) => {
+  const [row] = await getOperationalConfig("admin_clients");
+  return c.json({
+    data: row
+      ? { ...row, value: { ...defaultAdminClientsConfig, ...(row.value as Record<string, unknown>) } }
+      : { key: "admin_clients", value: defaultAdminClientsConfig }
+  });
+});
+
+configRoutes.patch("/admin-clients", async (c) => {
+  const input = adminClientsConfigSchema.parse(await c.req.json());
+  const session = requireSuperAdminConfig(c);
+  const row = await upsertOperationalConfig({
+    key: "admin_clients",
+    value: input.value,
+    description: input.description ?? "Authorized administrative browser settings",
+    updatedByAdminId: session.adminId
+  });
+
+  await recordAudit({
+    ...getActorMetadata(c),
+    action: "config.admin_clients_updated",
+    entityType: "operational_config",
+    metadata: { key: "admin_clients" }
+  });
+  broadcastEvent("config.table", { action: "admin_clients_updated", key: "admin_clients" });
 
   return c.json({ data: row });
 });

@@ -1,23 +1,30 @@
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { Hono } from "hono";
+import { randomUUID } from "node:crypto";
 import type { Context } from "hono";
 import { z } from "zod";
 import { env } from "../../config/env";
 import { recordAudit } from "../../shared/audit";
 import { HttpError } from "../../shared/http-error";
+import { withoutUndefined } from "../../shared/object";
 import { assertLoginNotRateLimited, clearLoginFailures, recordLoginFailure } from "../../shared/rate-limit";
 import { hashSessionToken, issueSessionToken } from "../../shared/security";
 import {
+  createAdminClient,
+  createAdminClientChallenge,
   createAdminSession,
   findAdminForLogin,
   getAdminCredentialsById,
   getSessionByHash,
+  listAdminClients,
+  revokeAdminClient,
   revokeOtherAdminSessions,
   revokeSession,
   touchSession,
   updateAdminLastLogin,
   updateAdminPassword
 } from "./auth.repository";
+import { adminClientAuthRequired, buildAdminClientLoginMessage, verifyAdminClientProof } from "./admin-clients.service";
 
 const loginMinimumDurationMs = 450;
 const loginDurationJitterMs = 120;
@@ -25,13 +32,34 @@ const dummyPasswordHash = "$2b$10$CwTycUXWue0Thq9StjUM0uJ8B6qJkbqN.zZCfR8nSNu4eL
 
 const loginSchema = z.object({
   identity: z.string().trim().min(3).max(160),
-  password: z.string().min(1).max(128)
+  password: z.string().min(1).max(128),
+  adminClientId: z.string().uuid().optional(),
+  adminClientChallengeId: z.string().uuid().optional(),
+  adminClientSignature: z.string().trim().min(1).optional()
 });
 
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1),
   newPassword: z.string().min(8).max(128)
 });
+
+const publicJwkSchema = z.object({
+  kty: z.literal("EC"),
+  crv: z.literal("P-256"),
+  x: z.string().min(1),
+  y: z.string().min(1),
+  ext: z.boolean().optional(),
+  key_ops: z.array(z.string()).optional()
+}).passthrough();
+
+const adminClientRegisterSchema = z.object({
+  publicKeyJwk: publicJwkSchema,
+  label: z.string().trim().min(1).max(160).optional()
+}).strict();
+
+const adminClientChallengeSchema = z.object({
+  adminClientId: z.string().uuid()
+}).strict();
 
 function sessionCookieOptions(expires: Date) {
   return {
@@ -89,7 +117,110 @@ async function requireCurrentSession(c: Context) {
   return { token, sessionHash, session };
 }
 
+async function requireCurrentSuperAdminSession(c: Context) {
+  const current = await requireCurrentSession(c);
+  if (current.session.role !== "super_admin") {
+    throw new HttpError(403, "SUPER_ADMIN_REQUIRED", "A super administrator session is required.");
+  }
+  return current;
+}
+
 export const authRoutes = new Hono();
+
+authRoutes.post("/admin-clients/challenge", async (c) => {
+  const input = adminClientChallengeSchema.parse(await c.req.json().catch(() => ({})));
+  const challenge = randomUUID();
+  const expiresAt = new Date(Date.now() + 1000 * 60);
+  const row = await createAdminClientChallenge({
+    clientId: input.adminClientId,
+    challenge,
+    expiresAt
+  });
+
+  if (!row) {
+    throw new HttpError(404, "ADMIN_CLIENT_NOT_FOUND", "The administrative browser is not authorized.");
+  }
+
+  return c.json({
+    data: {
+      id: row.id,
+      challenge: row.challenge,
+      expiresAt: row.expiresAt,
+      message: buildAdminClientLoginMessage({
+        adminId: row.adminId,
+        adminClientId: input.adminClientId,
+        challenge: row.challenge
+      })
+    }
+  }, 201);
+});
+
+authRoutes.get("/admin-clients", async (c) => {
+  await requireCurrentSuperAdminSession(c);
+  const rows = await listAdminClients();
+  return c.json({ data: { rows } });
+});
+
+authRoutes.post("/admin-clients", async (c) => {
+  const { session } = await requireCurrentSuperAdminSession(c);
+  const input = adminClientRegisterSchema.parse(await c.req.json().catch(() => ({})));
+  const row = await createAdminClient({
+    adminId: session.adminId,
+    publicKeyJwk: input.publicKeyJwk,
+    algorithm: "ES256",
+    label: input.label
+  });
+
+  if (!row) {
+    throw new HttpError(500, "ADMIN_CLIENT_CREATE_FAILED", "Could not authorize administrative browser.");
+  }
+
+  await recordAudit({
+    actorAdminId: session.adminId,
+    action: "admin_client.authorized",
+    entityType: "admin_client",
+    entityId: row.id,
+    ipAddress: clientIp(c),
+    userAgent: c.req.header("user-agent") ?? undefined,
+    metadata: { label: row.label, algorithm: row.algorithm }
+  });
+
+  return c.json({
+    data: {
+      client: {
+        id: row.id,
+        adminId: row.adminId,
+        label: row.label,
+        algorithm: row.algorithm,
+        status: row.status,
+        lastUsedAt: row.lastUsedAt,
+        createdAt: row.createdAt
+      }
+    }
+  }, 201);
+});
+
+authRoutes.delete("/admin-clients/:id", async (c) => {
+  const { session } = await requireCurrentSuperAdminSession(c);
+  const id = z.string().uuid().parse(c.req.param("id"));
+  const row = await revokeAdminClient(id);
+
+  if (!row) {
+    throw new HttpError(404, "ADMIN_CLIENT_NOT_FOUND", "The administrative browser was not found.");
+  }
+
+  await recordAudit({
+    actorAdminId: session.adminId,
+    action: "admin_client.revoked",
+    entityType: "admin_client",
+    entityId: row.id,
+    ipAddress: clientIp(c),
+    userAgent: c.req.header("user-agent") ?? undefined,
+    metadata: { adminId: row.adminId, status: row.status }
+  });
+
+  return c.json({ data: { ok: true } });
+});
 
 authRoutes.post("/login", async (c) => {
   const input = loginSchema.parse(await c.req.json());
@@ -135,6 +266,37 @@ authRoutes.post("/login", async (c) => {
         attempts: failure.count,
         remainingAttempts: failure.remaining
       });
+    }
+
+    if (await adminClientAuthRequired(admin.role)) {
+      try {
+        await verifyAdminClientProof({
+          adminId: admin.id,
+          role: admin.role,
+          ...withoutUndefined({
+            adminClientId: input.adminClientId,
+            adminClientChallengeId: input.adminClientChallengeId,
+            adminClientSignature: input.adminClientSignature
+          })
+        });
+      } catch (error) {
+        const failure = await recordLoginFailure(rateLimitKey);
+        await recordAudit({
+          actorAdminId: admin.id,
+          action: "admin.login_failed",
+          entityType: "admin_session",
+          ipAddress,
+          userAgent,
+          metadata: {
+            identity: input.identity,
+            reason: error instanceof HttpError ? error.code : "ADMIN_CLIENT_INVALID",
+            attempts: failure.count,
+            remainingAttempts: failure.remaining,
+            lockedUntil: failure.lockedUntil?.toISOString()
+          }
+        });
+        throw error;
+      }
     }
 
     await clearLoginFailures(rateLimitKey);

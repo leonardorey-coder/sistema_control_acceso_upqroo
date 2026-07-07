@@ -320,6 +320,33 @@ export const scannerDeviceChallenges = pgTable("scanner_device_challenges", {
   deviceIdx: index("scanner_device_challenges_device_idx").on(table.deviceId, table.expiresAt)
 }));
 
+export const adminClientKeys = pgTable("admin_client_keys", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  adminId: uuid("admin_id").notNull().references(() => administradores.id),
+  publicKeyJwk: jsonb("public_key_jwk").notNull(),
+  algorithm: varchar("algorithm", { length: 20 }).notNull().default("ES256"),
+  label: varchar("label", { length: 160 }),
+  status: varchar("status", { length: 20 }).notNull().default("active"),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+}, (table) => ({
+  adminStatusIdx: index("admin_client_keys_admin_status_idx").on(table.adminId, table.status)
+}));
+
+export const adminClientChallenges = pgTable("admin_client_challenges", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  clientId: uuid("client_id").notNull().references(() => adminClientKeys.id),
+  adminId: uuid("admin_id").notNull().references(() => administradores.id),
+  challenge: text("challenge").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+}, (table) => ({
+  challengeUnique: uniqueIndex("admin_client_challenges_challenge_unique").on(table.challenge),
+  clientIdx: index("admin_client_challenges_client_idx").on(table.clientId, table.expiresAt)
+}));
+
 export const adminSessions = pgTable("admin_sessions", {
   id: uuid("id").primaryKey().defaultRandom(),
   adminId: uuid("admin_id").notNull().references(() => administradores.id),

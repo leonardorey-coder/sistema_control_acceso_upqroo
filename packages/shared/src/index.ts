@@ -275,6 +275,23 @@ export type ScannerDevicesConfigPayload = {
   required: boolean;
 };
 
+export type AdminClientsConfigPayload = {
+  required: boolean;
+};
+
+export type AdminClientRowPayload = {
+  id: string;
+  adminId: string;
+  username: string;
+  displayName: string;
+  label?: string | null;
+  algorithm: "ES256";
+  status: "active" | "disabled" | "revoked";
+  lastUsedAt?: string | null;
+  revokedAt?: string | null;
+  createdAt: string;
+};
+
 export type AdminRole = "admin" | "super_admin";
 export type AdminStatus = "active" | "disabled";
 

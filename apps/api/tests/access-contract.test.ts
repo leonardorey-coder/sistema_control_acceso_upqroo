@@ -193,9 +193,33 @@ describe("access atomic contracts", () => {
     expect(approvalMigration).toContain("ADD COLUMN IF NOT EXISTS \"approved_at\"");
     expect(migration).toContain("'scanner_devices'");
     expect(source).toContain("control-acceso-upqroo.scanner-scan.v1");
+    expect(source).toContain("env.SCANNER_DEVICE_AUTH_BYPASS");
     expect(source).not.toContain("signDynamicQr");
     expect(accessRoutes).toContain("const adminCanBypassScannerDevice = session.role === \"super_admin\"");
     expect(accessRoutes).toContain("(requireScannerDevice && !adminCanBypassScannerDevice) || proofSupplied");
+  });
+
+  it("ships admin browser authorization separately from scanner devices", () => {
+    const migration = readMigration("0012_admin_client_keys.sql");
+    const schema = readSource("db/schema.ts");
+    const service = readModule("auth/admin-clients.service.ts");
+    const authRoutes = readModule("auth/auth.routes.ts");
+    const configRoutes = readModule("config/config.routes.ts");
+    const envSource = readSource("config/env.ts");
+
+    expect(migration).toContain("CREATE TABLE IF NOT EXISTS \"admin_client_keys\"");
+    expect(migration).toContain("CREATE TABLE IF NOT EXISTS \"admin_client_challenges\"");
+    expect(migration).toContain("'admin_clients'");
+    expect(schema).toContain("export const adminClientKeys");
+    expect(schema).toContain("export const adminClientChallenges");
+    expect(service).toContain("control-acceso-upqroo.admin-client-login.v1");
+    expect(service).toContain("env.ADMIN_CLIENT_AUTH_BYPASS");
+    expect(service).toContain("role === \"super_admin\"");
+    expect(service).not.toContain("scanner_devices");
+    expect(authRoutes).toContain("verifyAdminClientProof");
+    expect(authRoutes).toContain("/admin-clients/challenge");
+    expect(configRoutes).toContain("config.admin_clients_updated");
+    expect(envSource).toContain("ADMIN_CLIENT_AUTH_BYPASS");
   });
 
   it("ships S3-compatible storage for R2/S3 instead of local-only placeholders", () => {

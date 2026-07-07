@@ -1,6 +1,6 @@
-import { and, eq, gt, isNull, ne, or } from "drizzle-orm";
+import { and, eq, gt, isNull, ne, or, sql } from "drizzle-orm";
 import { db } from "../../db/client";
-import { administradores, adminSessions } from "../../db/schema";
+import { administradores, adminClientChallenges, adminClientKeys, adminSessions } from "../../db/schema";
 
 export function findAdminForLogin(identity: string) {
   return db.query.administradores.findFirst({
@@ -99,6 +99,109 @@ export async function revokeSession(sessionHash: string) {
     .update(adminSessions)
     .set({ revokedAt: new Date() })
     .where(eq(adminSessions.sessionHash, sessionHash))
+    .returning();
+
+  return row;
+}
+
+export async function listAdminClients(adminId?: string) {
+  return db
+    .select({
+      id: adminClientKeys.id,
+      adminId: adminClientKeys.adminId,
+      username: administradores.username,
+      displayName: administradores.displayName,
+      label: adminClientKeys.label,
+      algorithm: adminClientKeys.algorithm,
+      status: adminClientKeys.status,
+      lastUsedAt: adminClientKeys.lastUsedAt,
+      revokedAt: adminClientKeys.revokedAt,
+      createdAt: adminClientKeys.createdAt
+    })
+    .from(adminClientKeys)
+    .innerJoin(administradores, eq(adminClientKeys.adminId, administradores.id))
+    .where(adminId ? eq(adminClientKeys.adminId, adminId) : undefined);
+}
+
+export async function createAdminClient(input: typeof adminClientKeys.$inferInsert) {
+  const [row] = await db.insert(adminClientKeys).values(input).returning();
+  return row;
+}
+
+export async function revokeAdminClient(id: string) {
+  const [row] = await db
+    .update(adminClientKeys)
+    .set({ status: "revoked", revokedAt: new Date() })
+    .where(eq(adminClientKeys.id, id))
+    .returning();
+
+  return row;
+}
+
+export async function createAdminClientChallenge(input: {
+  clientId: string;
+  challenge: string;
+  expiresAt: Date;
+}) {
+  const [row] = await db.execute<{
+    id: string;
+    challenge: string;
+    expires_at: Date;
+    admin_id: string;
+  }>(sql`
+    INSERT INTO admin_client_challenges (client_id, admin_id, challenge, expires_at)
+    SELECT ${input.clientId}, admin_id, ${input.challenge}, ${input.expiresAt.toISOString()}::timestamptz
+    FROM admin_client_keys
+    WHERE id = ${input.clientId}
+      AND status = 'active'
+    RETURNING id, challenge, expires_at, admin_id
+  `);
+
+  if (!row) return null;
+
+  return {
+    id: row.id,
+    challenge: row.challenge,
+    expiresAt: row.expires_at,
+    adminId: row.admin_id
+  };
+}
+
+export async function consumeAdminClientChallenge(input: {
+  clientId: string;
+  challengeId: string;
+}) {
+  const [row] = await db.execute<{
+    challenge_id: string;
+    challenge: string;
+    admin_id: string;
+    public_key_jwk: Record<string, unknown>;
+    algorithm: string;
+  }>(sql`
+    WITH consumed AS (
+      UPDATE admin_client_challenges c
+      SET used_at = now()
+      FROM admin_client_keys k
+      WHERE c.id = ${input.challengeId}
+        AND c.client_id = ${input.clientId}
+        AND c.used_at IS NULL
+        AND c.expires_at > now()
+        AND k.id = c.client_id
+        AND k.status = 'active'
+      RETURNING c.id, c.challenge, c.admin_id, k.public_key_jwk, k.algorithm
+    )
+    SELECT id as challenge_id, challenge, admin_id, public_key_jwk, algorithm
+    FROM consumed
+  `);
+
+  return row ?? null;
+}
+
+export async function markAdminClientUsed(clientId: string) {
+  const [row] = await db
+    .update(adminClientKeys)
+    .set({ lastUsedAt: new Date() })
+    .where(eq(adminClientKeys.id, clientId))
     .returning();
 
   return row;
