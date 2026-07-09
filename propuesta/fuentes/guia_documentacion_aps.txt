@@ -1,0 +1,332 @@
+UNIVERSIDAD POLITECTICA DE QUINTANA ROO
+Administración de Proyectos de Software
+Guía para LA ADMINISTRACION DE PROYECTOS DE SOFTWARE
+Objetivo
+El presente documento tiene como finalidad establecer los lineamientos para la
+elaboración de la documentación para la administración de Proyectos de Software,
+mediante la aplicación de los conocimientos adquiridos en las Unidades I y II de la
+asignatura Administración de Proyectos de Software.
+La propuesta permitirá evaluar la viabilidad del proyecto, su correcta planeación y la
+capacidad del equipo para administrar los recursos necesarios antes de iniciar el
+desarrollo.
+Especificaciones del Documento
+El documento deberá cumplir obligatoriamente con las siguientes características de
+formato:
+
+Característica                   Especificación
+
+Tamaño de hoja                   Carta
+
+Fuente                           Arial
+
+Tamaño de letra                  12 puntos
+
+Interlineado                     1.5
+
+Alineación                       Justificado
+
+Márgenes                         Normal (2.54 cm)
+
+Numeración de páginas            Obligatoria
+
+Color de texto                   Negro
+
+Formato de entrega               PDF
+
+
+
+
+                                                                                         1
+Consideraciones Generales
+   •   El documento deberá redactarse utilizando un lenguaje formal y técnico.
+   •   No se aceptarán documentos incompletos.
+   •   Todas las imágenes, tablas, diagramas y figuras deberán estar numeradas y contar
+       con un título descriptivo.
+   •   El documento deberá mantener una estructura uniforme en títulos, subtítulos y
+       numeración.
+   •   Se recomienda utilizar estilos de Word para facilitar la generación automática de
+       índices.
+Estructura del Documento
+1. Portada
+La portada deberá contener:
+   •   Nombre de la Universidad
+   •   Carrera
+   •   Materia
+   •   Nombre del Proyecto
+   •   Nombre del Docente
+   •   Integrantes
+   •   Grupo
+   •   Cuatrimestre
+   •   Fecha de entrega
+1.1 Índice
+    Agregar índice de paginas
+2. Integrantes y Roles
+Cada integrante deberá presentarse mediante una ficha individual.
+La ficha deberá incluir:
+   •   Fotografía reciente.
+   •   Nombre completo.
+   •   Rol asignado.
+   •   Responsabilidades dentro del proyecto.
+
+                                                                                           2
+En caso de desempeñar varios roles, deberán especificarse todos.
+Ejemplo:
+Nombre: Juan Pérez López
+Rol:
+   •   Líder del Proyecto
+   •   Analista de Requerimientos
+Responsabilidades
+   •   Coordinar al equipo.
+   •   Supervisar el cronograma.
+   •   Gestionar reuniones.
+   •   Dar seguimiento a entregables.
+3. Descripción General del Proyecto
+Explicar claramente:
+   •   Nombre del proyecto.
+   •   Tipo de sistema.
+   •   Problema que resolverá.
+   •   Usuarios a quienes va dirigido.
+   •   Objetivo principal.
+4. Planteamiento del Problema
+Describir detalladamente:
+   •   Situación actual.
+   •   Problemática existente.
+   •   Consecuencias.
+   •   Necesidad de implementar una solución informática.
+5. Objetivos
+Objetivo General
+Redactar un objetivo claro, medible y alcanzable.
+Objetivos Específicos
+Redactar mínimo tres objetivos específicos.
+                                                                   3
+6. Antecedentes
+Describir cómo se realiza actualmente el proceso y cuáles son las principales
+problemáticas detectadas.
+7. Estado del Arte
+Investigar como mínimo tres soluciones existentes.
+Para cada una incluir:
+   •   Nombre.
+   •   Empresa desarrolladora.
+   •   Funciones principales.
+   •   Ventajas.
+   •   Desventajas.
+Al finalizar realizar un análisis comparativo indicando qué aportará el nuevo proyecto
+respecto a las soluciones existentes.
+8. Justificación
+Explicar:
+   •   Importancia del proyecto.
+   •   Beneficios.
+   •   Impacto.
+   •   Usuarios beneficiados.
+   •   Razones por las cuales el proyecto debe desarrollarse.
+9. Variables del Proyecto
+Identificar las variables principales del sistema.
+Se recomienda presentarlas mediante una tabla.
+
+Variable           Descripción Tipo
+
+
+
+10. Delimitación del Proyecto
+Definir claramente:
+Qué desarrollará el proyecto.
+Qué quedará fuera del proyecto.
+
+                                                                                         4
+11. Alcances
+Describir todas las funcionalidades que sí desarrollará el sistema.
+12. Limitaciones
+Describir las restricciones del proyecto.
+Por ejemplo:
+   •   Presupuesto
+   •   Tiempo
+   •   Recursos humanos
+   •   Tecnología
+   •   Infraestructura
+13. Planeación Inicial
+El equipo deberá presentar una planificación preliminar del proyecto que permita
+visualizar las actividades necesarias para su desarrollo.
+La planeación podrá presentarse mediante una tabla o cronograma que incluya, como
+mínimo, la siguiente información:
+
+Actividad Responsable Duración Estimada Fecha de Inicio Fecha de Fin
+
+Se recomienda incluir actividades como:
+   •   Investigación
+   •   Levantamiento de requerimientos
+   •   Análisis
+   •   Diseño
+   •   Desarrollo
+   •   Pruebas
+   •   Documentación
+   •   Entrega del proyecto
+Objetivo del apartado
+Demostrar que el equipo ha organizado adecuadamente las actividades del proyecto antes
+de iniciar su desarrollo.
+
+
+
+
+                                                                                     5
+14. Planeación Económica y Estimación de Costos
+Todo proyecto de software requiere recursos para su desarrollo. En este apartado, el
+equipo deberá elaborar una estimación económica que refleje el costo aproximado del
+proyecto y justifique cada uno de los recursos necesarios.
+El presupuesto deberá elaborarse considerando un escenario profesional,
+independientemente de que el proyecto sea académico.
+14.1 Presupuesto General
+Presentar una tabla con el costo estimado de todos los recursos necesarios para el
+proyecto.
+Ejemplo
+
+Concepto               Cantidad Costo Unitario Costo Total
+
+Equipo de cómputo 2                $15,000     $30,000
+
+Dominio web            1           $500        $500
+
+Hosting                1           $1,500      $1,500
+
+Licencias de software 2            $2,000      $4,000
+
+Horas de desarrollo 250 hrs $180/hr            $45,000
+
+Costo Total Estimado                           $81,000
+
+
+14.2 Justificación de los Costos
+Explicar brevemente el motivo por el cual cada recurso fue incluido dentro del
+presupuesto.
+Responder preguntas como:
+   •   ¿Por qué seleccionaron esas herramientas?
+   •   ¿Los precios fueron obtenidos de proveedores reales?
+   •   ¿Qué recurso representa la mayor inversión?
+   •   ¿Qué recursos podrían sustituirse por alternativas gratuitas?
+
+
+
+
+                                                                                       6
+14.3 Recursos Gratuitos y Recursos de Pago
+Clasificar los recursos que utilizará el proyecto.
+
+Recursos Gratuitos            Recursos de Pago
+
+Visual Studio Code            Hosting
+
+GitHub                        Dominio
+
+MySQL Community               Licencias
+
+Figma Free                    Servidor VPS
+
+
+14.4 Estimación del Costo del Desarrollo
+Además de los recursos materiales, deberán estimar el costo del trabajo realizado por el
+equipo.
+Para ello deberán indicar:
+   •   Número estimado de horas del proyecto.
+   •   Costo estimado por hora de trabajo.
+   •   Costo total de desarrollo.
+Ejemplo
+   •   Horas estimadas del proyecto: 320 horas
+   •   Costo por hora: $180 MXN
+   •   Costo estimado del desarrollo: $57,600 MXN
+14.5 Análisis Económico
+Responder de manera argumentada las siguientes preguntas:
+   •   ¿Cuál es el costo total estimado del proyecto?
+   •   ¿Cuál es el recurso más costoso y por qué?
+   •   ¿Consideran que el costo está justificado respecto a los beneficios del sistema?
+   •   Si el presupuesto se redujera en un 20 %, ¿qué cambios realizarían sin
+       comprometer el éxito del proyecto?
+Objetivo del apartado
+El propósito de esta sección es que el estudiante desarrolle una visión administrativa y
+financiera del proyecto, comprendiendo que el éxito de un sistema no depende
+
+                                                                                           7
+únicamente de su desarrollo técnico, sino también de una adecuada planeación de los
+recursos económicos.
+15. Factibilidad Técnica
+Analizar:
+   •   Hardware requerido.
+   •   Software requerido.
+   •   Recursos tecnológicos.
+   •   Infraestructura disponible.
+   •   Herramientas de desarrollo.
+   •   Conocimientos técnicos necesarios para desarrollar el proyecto.
+16. Factibilidad Operativa
+Analizar:
+   •   Usuarios finales.
+   •   Adaptación del personal.
+   •   Capacitación requerida.
+   •   Beneficios operativos.
+   •   Viabilidad del proyecto dentro de la organización.
+17. Recursos del Proyecto
+Recursos Humanos
+Identificar a los integrantes del equipo y las funciones que desempeñarán durante el
+proyecto.
+Recursos Tecnológicos
+Describir el hardware, software, plataformas, licencias, servicios y demás recursos
+tecnológicos que serán utilizados.
+18. Riesgos Iniciales
+Identificar al menos cinco riesgos que puedan afectar el desarrollo del proyecto.
+Se recomienda presentarlos en la siguiente tabla:
+
+Riesgo Probabilidad Impacto Estrategia de Mitigación
+
+
+
+
+                                                                                       8
+19. Anexos
+Este apartado deberá contener toda la evidencia documental que, por su extensión, no sea
+conveniente incluir dentro del cuerpo principal del documento.
+Ejemplos:
+    •   Diagramas UML.
+    •   Wireframes.
+    •   Mockups.
+    •   Entrevistas.
+    •   Encuestas.
+    •   Fotografías.
+    •   Diagramas de flujo.
+    •   Cronogramas completos.
+    •   Evidencias de investigación.
+    •   Cotizaciones utilizadas para la elaboración del presupuesto.
+Los anexos deberán identificarse como:
+    •   Anexo A
+    •   Anexo B
+    •   Anexo C
+20. Conclusión
+El equipo deberá redactar una reflexión donde explique:
+    •   La importancia de una adecuada administración de proyectos de software.
+    •   Los principales retos encontrados durante la elaboración de la propuesta.
+    •   La viabilidad del proyecto desde los puntos de vista técnico, operativo y
+        económico.
+    •   Los aprendizajes obtenidos durante el desarrollo de las Unidades I y II.
+21. Índice de Figuras e Imágenes
+El documento deberá incluir un índice automático donde aparezcan todas las figuras,
+tablas e imágenes utilizadas.
+Ejemplo:
+Figura 1. Arquitectura General del Sistema ............. 15
+                                                                                      9
+Tabla 2. Cronograma Inicial .................................. 18
+22. Bibliografía
+Todas las fuentes deberán citarse bajo el estándar IEEE.
+Se recomienda utilizar fuentes académicas y técnicas, tales como:
+    •    Libros especializados.
+    •    Artículos científicos.
+    •    Documentación oficial.
+    •    Normas internacionales.
+    •    Sitios oficiales de organismos reconocidos.
+No se recomienda utilizar blogs, páginas sin autor identificado o contenido generado por
+inteligencia artificial como fuente principal de consulta.
+Criterios de Entrega
+    •    Documento completo en formato PDF.
+    •    Todos los integrantes deberán participar en la elaboración del documento.
+    •    El incumplimiento de los lineamientos de formato podrá afectar la calificación.
+
+
+
+
+                                                                                           10
+

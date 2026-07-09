@@ -14,3 +14,7 @@ coverage
 .vscode
 docs/performance/*samples*.json
 docs/performance/raw-*.json
+propuesta/__pycache__/
+propuesta/qa/rendered/
+propuesta/qa/rendered_design/
+propuesta/qa/rendered_v2/

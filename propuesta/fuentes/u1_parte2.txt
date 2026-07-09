@@ -1,0 +1,149 @@
+ ADMINISTRACION
+ DE PROYECTOS DE
+
+SOFTWARE
+    UNIDAD 1 PARTE 2
+
+
+
+                       ING. MEJIA GUZMAN JUAN CARLOS
+UNIDAD I. Fundamentos de administración
+de proyectos de software.
+QUE VEREMOS EN ESTA UNIDAD
+
+
+
+
+    2. Planteamiento, alcances y planeación del proyecto
+
+
+     01 Antecedentes del proyecto
+     02 Estado del arte
+     03 Justificación del proyecto
+     04 Variables del proyecto
+     05 Selección de variables
+     06 Delimitación del proyecto
+     07 Alcances y limitaciones
+     08 Planeación inicial
+     09 Factibilidad operativa
+     10 Factibilidad técnica
+1. Antecedentes del proyecto
+Los antecedentes son la información previa
+relacionada con el problema o necesidad que
+busca resolver el proyecto.
+Ayudan a entender:
+   Cómo surgió el problema
+   Qué se ha hecho anteriormente
+   Situación actual
+
+Ejemplo
+Una empresa lleva el control de ventas en hojas de
+papel, lo que genera errores y pérdida de información.
+      2. Estado del arte
+Es la investigación de sistemas, tecnologías
+o soluciones similares que ya existen.
+Permite:
+   Conocer la competencia
+   Analizar ventajas y desventajas
+   Detectar oportunidades de mejora
+
+
+Ejemplo
+Investigar aplicaciones como Uber Eats
+o sistemas POS para restaurantes.
+3. Justificación del proyecto
+Explica por qué el proyecto es importante y qué
+beneficios aportará.
+Debe responder:
+   ¿Por qué se realizará?
+   ¿Qué problema resolverá?
+   ¿Quiénes se beneficiarán?
+
+Ejemplo
+El sistema permitirá reducir errores y mejorar el
+control de ventas del negocio.
+ 4. Variables del proyecto
+Son los elementos o factores importantes
+que intervienen en el sistema.
+Ejemplos
+
+ 01    Usuarios
+
+ 02    Productos
+
+ 03    Ventas
+
+ 04    Inventario
+
+ 05    Pagos
+5. Selección de variables
+Consiste en elegir las variables
+más importantes para el desarrollo
+del proyecto.
+Objetivo:
+Enfocarse solo en la información necesaria.
+
+
+       Ejemplo
+       En un sistema escolar:
+           Alumnos
+           Materias
+           Calificaciones
+6. Delimitación del proyecto
+Define hasta dónde llegará el proyecto
+y qué funciones tendrá.
+
+Ayuda a evitar:
+   Exceso de trabajo
+   Cambios innecesarios
+   Confusión
+
+Ejemplo:
+El sistema solo controlará ventas y clientes, no manejará nómina.
+                       7. Alcances & limitaciones
+
+              Alcances                              Limitaciones
+
+Son las funciones y objetivos que    Son las funciones o restricciones
+sí realizará el sistema.             que el proyecto no cubrirá.
+Ejemplo                               Ejemplo
+   Registro de usuarios                  No tendrá aplicación móvil
+   Control de ventas                     No manejará facturación SAT
+   Reportes básicos                      Solo funcionará en red local
+8. Planeación inicial
+Es la organización básica del proyecto
+antes de comenzar el desarrollo.
+
+Incluye:
+    Objetivos
+    Actividades
+    Recursos
+    Tiempo
+    Responsables
+
+Objetivo
+Tener una guía para desarrollar el proyecto
+correctamente.
+9. Factibilidad operativa
+Analiza si el sistema podrá utilizarse
+correctamente dentro de la organización.
+
+  Evalúa:
+     Facilidad de uso
+     Adaptación de usuarios
+     Procesos de trabajo
+
+  Ejemplo:
+  Verificar si los empleados podrán utilizar
+  el sistema sin problemas.
+10. Factibilidad técnica
+Analiza si existen los recursos y tecnología necesarios para desarrollar el proyecto.
+Evalúa:                                      Ejemplo:
+   Hardware                                  Comprobar si se cuenta con computadoras,
+   Software
+                                             internet y programadores para crear el
+   Conocimientos técnicos
+                                             sistema.
+   Herramientas disponibles
+GRACIAS
+

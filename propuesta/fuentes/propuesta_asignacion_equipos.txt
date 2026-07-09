@@ -1,0 +1,50 @@
+Propuesta de Asignación de Equipos
+Día                           Horario                  Equipo
+Lunes                         1 hora                   Equipo 1
+Martes                        1 hora                   Equipo 2
+Miércoles                     Primera hora             Equipo 3
+Miércoles                     Segunda hora             Equipo 4
+Jueves                        1 hora                   Equipo 5
+
+Cada equipo tendrá siempre el mismo día. Al menos que el profesor reagende la reunión.
+
+
+Dinámica de la asesoría (1 hora)
+No dedicaría la hora completa solo a escuchar. La estructuraría así:
+
+                           Actividad                               Tiempo
+Revisión de avances de la semana anterior                         10 min
+Presentación del nuevo avance                                     20 min
+Retroalimentación y correcciones                                  20 min
+Definición de tareas para la siguiente semana                     10 min
+
+Total: 60 minutos.
+
+
+Calendario de Asesorías
+Semana                               Actividad principal
+Semana 1     Presentación del proyecto y revisión de la propuesta inicial.
+Semana 2     Corrección de objetivos, antecedentes y estado del arte.
+Semana 3     Variables, delimitación, alcances y limitaciones.
+Semana 4     Planeación inicial y planeación económica.
+Semana 5     Factibilidad técnica y operativa.
+Semana 6     Recursos del proyecto y riesgos iniciales.
+Semana 7     Integración del documento completo y revisión general.
+Semana 8     Presentación final y entrega del proyecto.
+
+
+
+Bitácora de Seguimiento
+Semana      Avance esperado               Cumplió      Observaciones         Firma del equipo
+1           Idea del proyecto             ☐
+2           Problema y objetivos          ☐
+3           Estado del arte               ☐
+4           Variables y alcances          ☐
+5           Planeación y costos           ☐
+6           Factibilidades                ☐
+7           Documento completo            ☐
+8           Presentación final            ☐
+
+
+El seguimiento y documentación deberá ser presentado por el representante RR.HH. del equipo
+

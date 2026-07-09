@@ -1,0 +1,286 @@
+ADMINISTRACION
+DE PROYECTOS DE
+   SOFTWARE
+    UNIDAD 2
+
+
+
+               ING. MEJIA GUZMAN JUAN CARLOS
+UNIDAD 2 –
+ADMINISTRACIÓN DE
+RECURSOS DEL PROYECTO
+QUE VEREMOS EN ESTA UNIDAD
+
+
+1. Interrelaciones del Proyecto
+2. Dirección de Proyectos
+3. Modelo PDCA (Ciclo de Deming)
+4. Administración de Recursos
+Humanos
+5. Gestión de Conflictos
+6. Gestión del Tiempo
+7. Gestión de Costos
+
+                                   Objetivo de la Unidad
+                                   identificar, organizar y administrar los recursos involucrados
+                                   en un proyecto de software, considerando tiempo, personal,
+                                   costos, comunicación y control del proyecto.
+            INTERRELACIONES
+            DEL PROYECTO
+      Tema 1.
+
+
+
+
+¿Qué es un Proyecto?
+                                  Características:
+Un proyecto es un esfuerzo
+                                     Tiene objetivos específicos.     Ejemplo:
+temporal que tiene un inicio y
+                                     Cuenta con recursos limitados.   Desarrollar un sistema de control escolar para una universidad.
+un fin definidos, cuyo objetivo
+                                     Tiene fechas de inicio y fin.
+es crear un producto, servicio
+                                     Busca resolver una necesidad.
+o resultado único.
+      INTERRELACIONES
+      DEL PROYECTO
+Tema 1.
+
+
+
+
+                        ¿Qué es un Programa?
+                                                       Ejemplo:
+                        Un programa es un conjunto
+                                                       Programa de Transformación Digital:
+                        de proyectos relacionados
+                                                          Proyecto de Control Escolar.
+                        que se administran de manera
+                                                          Proyecto de Recursos Humanos.
+                        coordinada para obtener
+                                                          Proyecto de Biblioteca Digital.
+                        beneficios mayores.
+                                                       Todos pertenecen al mismo programa.
+      INTERRELACIONES
+      DEL PROYECTO
+Tema 1.
+
+
+
+
+                        ¿Qué es un Portafolio?
+                        Un portafolio es el conjunto   Ejemplo:
+                        de proyectos y programas que   Portafolio Tecnológico de una Universidad:
+                        una organización administra        Programa de Modernización Académica.
+                        para alcanzar sus objetivos        Programa de Infraestructura Tecnológica.
+                        estratégicos.                      Proyecto de Seguridad Informática.
+Proyecto            Programa             Portafolio          Relación entre ellos
+   Esfuerzo único      Conjunto de          Conjunto de
+   Objetivo            proyectos            programas y           Portafolio
+   específico          Beneficio            proyectos                 ↓
+   Menor alcance       conjunto             Objetivos             Programa
+                                            estratégicos              ↓
+                       Alcance medio
+                                            Alcance               Proyecto
+                                            organizacional
+
+
+
+
+                         DIFERENCIAS
+                      Los proyectos forman programas y los
+                          programas forman portafolios.
+                 Tema 2.
+
+       DIRECCIÓN DE
+        PROYECTOS
+   ¿Qué es la Dirección de Proyectos?
+
+   Es la aplicación de conocimientos,
+habilidades y herramientas para planificar,
+     ejecutar y controlar un proyecto.
+FUNCIONES DEL DIRECTOR
+DE PROYECTO
+Planificar
+Definir actividades y objetivos.
+Organizar
+Asignar recursos y responsabilidades.
+Dirigir
+Coordinar al equipo de trabajo.
+Controlar
+Verificar avances y corregir desviaciones.
+
+Liderazgo
+El líder del proyecto debe:
+     Motivar al equipo.
+     Resolver conflictos.
+     Tomar decisiones.
+     Mantener la comunicación.
+
+Toma de Decisiones
+Las decisiones impactan:
+    Tiempo        Alcance
+    Costos        Calidad
+Por ello deben tomarse con información
+suficiente.
+             (CICLO DE DEMING)
+             MODELO PDCA         1   PLAN          2   DO
+                                     (Planear)         (Hacer)
+       Tema 3.
+
+
+
+
+                                     CHECK             ACT
+¿Qué es PDCA?                    3   (Verificar)
+                                                   4   (Actuar)
+Es una metodología de
+mejora continua
+utilizada para optimizar
+procesos y proyectos.
+                   Planear
+   PLAN         Se identifican
+(PLANEAR)   objetivos, actividades
+                 y recursos.
+
+                 Ejemplo:
+            Definir requisitos de
+                un sistema.
+  DO
+  (HACER)
+          Hacer
+Se ejecutan las actividades
+       planificadas.
+
+        Ejemplo:
+  Desarrollar el sistema.
+CHECK
+(VERIFICAR)
+Verificar
+Se evalúan resultados y
+se identifican errores.
+
+Ejemplo:
+Realizar pruebas.
+          ACT
+        (ACTUAR)
+              Actuar
+Se implementan mejoras para corregir
+            problemas.
+
+              Ejemplo:
+    Corregir errores detectados.
+Beneficios
+  Mejora continua.
+  Reducción de errores.
+  Mayor calidad.
+  Mejor control del proyecto.
+                            IMPORTANCIA
+                    Las personas son el recurso más
+                    importante de un proyecto.
+                    Sin personal capacitado no es posible
+                    alcanzar los objetivos.
+      Tema 4.       Roles Comunes
+                        Director de Proyecto
+ADMINISTRACIÓN DE
+RECURSOS HUMANOS    Coordina el trabajo.
+                        Analista
+                    Recopila requisitos.
+                        Programador
+                    Desarrolla el software.
+                        Tester
+                    Realiza pruebas.
+                        Diseñador
+                    Diseña interfaces.
+                    Trabajo en Equipo
+                    Beneficios:
+                        Compartir conocimientos.
+                        Resolver problemas más rápido.
+                        Mejor productividad.
+                    Comunicación
+                    Una comunicación efectiva permite:
+                        Evitar errores.
+                        Coordinar actividades.
+                        Resolver conflictos.
+Tema 5.
+
+GESTIÓN DE
+CONFLICTOS
+ ¿Qué es un Conflicto?
+Es una situación en la que existen
+    diferencias de opiniones,
+ intereses o necesidades entre
+       personas o grupos.
+Causas Comunes
+   Mala comunicación.
+   Diferencia de objetivos.
+   Falta de recursos.
+   Problemas de liderazgo.
+
+Consecuencias
+   Retrasos.
+   Baja productividad.
+   Desmotivación.
+   Errores en el proyecto.
+
+Solución de Conflictos
+   Escuchar a las partes.
+   Negociar.
+   Buscar acuerdos.
+   Mantener respeto profesional.
+   DEL TIEMPO
+                QUÉBEC
+   GESTIÓN
+Tema 6.
+
+
+
+
+                         IMPORTANCIA
+                         EL TIEMPO ES UNO DE LOS RECURSOS MÁS
+                         IMPORTANTES EN CUALQUIER PROYECTO.
+ACTIVIDADES                   Ejemplo:        CRONOGRAMABeneficios:                        SEGUIMIENTO
+Y TAREAS                         Análisis     Es una herramienta que       Organización.   Permite comparar:
+Un proyecto se divide en         Diseño       muestra cuándo debe          Seguimiento.       Lo planeado.
+actividades para facilitar su    Desarrollo   realizarse cada actividad.   Cumplimiento       Lo ejecutado.
+control.                         Pruebas                                   de fechas.
+       Tema 7.
+                 ¿Qué son los Costos?
+GESTIÓN DE       Son los recursos económicos necesarios
+   COSTOS        para desarrollar un proyecto.
+Presupuesto
+Es la estimación de los gastos del
+proyecto.
+Ejemplo:
+    Equipos
+    Licencias
+    Internet
+    Personal
+
+Control de Costos
+Consiste en supervisar los gastos para
+evitar exceder el presupuesto.
+
+Importancia
+Una mala gestión de costos puede
+provocar:
+    Retrasos.
+    Falta de recursos.
+    Cancelación del proyecto.
+          CONCLUSIÓN
+         DE LA UNIDAD 2
+  La administración de recursos permite que un proyecto de
+                 software utilice adecuadamente:
+  Personas
+  Tiempo
+  Dinero
+  Tecnología
+Con ello se incrementan las probabilidades de éxito y se reducen
+            riesgos durante el desarrollo del proyecto.
+
+
+
+
+                                                                   FIN
+
