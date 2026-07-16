@@ -18,3 +18,10 @@ propuesta/__pycache__/
 propuesta/qa/rendered/
 propuesta/qa/rendered_design/
 propuesta/qa/rendered_v2/
+propuesta/qa/*
+!propuesta/qa/rendered_design_final/
+!propuesta/qa/rendered_design_final/**
+!propuesta/qa/planeacion_revision_integral_final/
+!propuesta/qa/planeacion_revision_integral_final/**
+!propuesta/qa/adquisicion_revision_integral_final/
+!propuesta/qa/adquisicion_revision_integral_final/**
