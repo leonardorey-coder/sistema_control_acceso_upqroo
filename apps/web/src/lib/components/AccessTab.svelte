@@ -14,15 +14,17 @@
     page,
     pageSize,
     personTypeRows,
+    gateRows,
     onFilter,
     onPageChange
   }: {
     rows: Row[];
     total: number;
-    filters: { q: string; date: string; page: number; pageSize: number; personType: string; accessMode: string; status: string };
+    filters: { q: string; date: string; page: number; pageSize: number; personType: string; accessMode: string; status: string; gateId: string };
     page: number;
     pageSize: number;
     personTypeRows: Row[];
+    gateRows: Row[];
     onFilter: () => void | Promise<void>;
     onPageChange: (next: { page: number; pageSize: number }) => void;
   } = $props();
@@ -81,7 +83,10 @@
       row.matricula ? `Matricula ${row.matricula}` : "",
       row.carrera ? String(row.carrera) : "",
       row.adminEntrada ? `Entrada por ${row.adminEntrada}` : "",
-      row.adminSalida ? `Salida por ${row.adminSalida}` : ""
+      row.adminSalida ? `Salida por ${row.adminSalida}` : "",
+      row.gateName ? `Puerta ${row.gateName}` : "",
+      row.exitGateName ? `Salida ${row.exitGateName}` : "",
+      row.scannerId ? `Scanner ${row.scannerId}` : ""
     ].filter(Boolean);
     return pieces.join(" · ");
   }
@@ -100,6 +105,7 @@
         { label: labelFor("status", row.status) || "Estado", icon: row.status === "rejected" ? "warning" : "check", tone: accessTone(row) },
         { label: labelFor("credentialType", row.credentialType), icon: "qr", tone: "info" },
         { label: row.vehiclePlate ? `Vehiculo ${row.vehiclePlate}` : "", icon: "vehicle", tone: "info" },
+        { label: row.gateName ? `Puerta ${row.gateName}` : "", icon: "shield", tone: "primary" },
         { label: row.isExceptionAccess ? "Excepcion" : "", icon: "shield", tone: "warning" }
       ]
     };
@@ -137,6 +143,13 @@
         <option value="vehicle">Vehicular</option>
         <option value="visitor">Visitante</option>
         <option value="manual">Manual</option>
+      </select>
+    </label>
+    <label class="form-field">
+      <span>Puerta</span>
+      <select bind:value={filters.gateId}>
+        <option value="">Todas las puertas</option>
+        {#each gateRows as gate}<option value={String(gate.id)}>{gate.name}</option>{/each}
       </select>
     </label>
     <label class="form-field">

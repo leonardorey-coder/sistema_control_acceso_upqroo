@@ -11,6 +11,7 @@ type EventTopic =
   | "vehicles.table"
   | "vehicle-permits.table"
   | "vehicle-visitor-permits.table"
+  | "gates.table"
   | "admins.table"
   | "admin-sessions.table"
   | "audit.table"

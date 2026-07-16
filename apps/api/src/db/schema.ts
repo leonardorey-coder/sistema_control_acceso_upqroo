@@ -145,6 +145,33 @@ export const scannerDeviceStatus = pgEnum("scanner_device_status", [
   "revoked"
 ]);
 
+export const gateType = pgEnum("gate_type", [
+  "pedestrian",
+  "vehicle",
+  "mixed",
+  "visitors",
+  "staff",
+  "providers",
+  "emergency",
+  "events"
+]);
+
+export const gateStatus = pgEnum("gate_status", [
+  "active",
+  "inactive",
+  "maintenance",
+  "entry_only",
+  "exit_only",
+  "blocked",
+  "emergency"
+]);
+
+export const gateScannerStatus = pgEnum("gate_scanner_status", [
+  "active",
+  "inactive",
+  "revoked"
+]);
+
 export const personTypes = pgTable("person_types", {
   code: varchar("code", { length: 40 }).primaryKey(),
   label: varchar("label", { length: 80 }).notNull(),
@@ -305,6 +332,42 @@ export const scannerDevices = pgTable("scanner_devices", {
 }, (table) => ({
   codeUnique: uniqueIndex("scanner_devices_code_unique").on(table.code),
   statusIdx: index("scanner_devices_status_idx").on(table.status)
+}));
+
+export const gates = pgTable("gates", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  code: varchar("code", { length: 80 }).notNull(),
+  name: varchar("name", { length: 160 }).notNull(),
+  type: gateType("type").notNull().default("mixed"),
+  location: varchar("location", { length: 240 }),
+  status: gateStatus("status").notNull().default("active"),
+  schedule: jsonb("schedule").notNull().default(sql`'{}'::jsonb`),
+  rules: jsonb("rules").notNull().default(sql`'{}'::jsonb`),
+  notes: text("notes"),
+  createdByAdminId: uuid("created_by_admin_id").references(() => administradores.id),
+  updatedByAdminId: uuid("updated_by_admin_id").references(() => administradores.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+}, (table) => ({
+  codeUnique: uniqueIndex("gates_code_unique").on(table.code),
+  statusTypeIdx: index("gates_status_type_idx").on(table.status, table.type)
+}));
+
+export const gateScanners = pgTable("gate_scanners", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  gateId: uuid("gate_id").notNull().references(() => gates.id, { onDelete: "cascade" }),
+  scannerDeviceId: uuid("scanner_device_id").references(() => scannerDevices.id),
+  scannerId: varchar("scanner_id", { length: 120 }).notNull(),
+  label: varchar("label", { length: 160 }).notNull(),
+  status: gateScannerStatus("status").notNull().default("active"),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+  metadata: jsonb("metadata").notNull().default(sql`'{}'::jsonb`),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+}, (table) => ({
+  scannerIdUnique: uniqueIndex("gate_scanners_scanner_id_unique").on(table.scannerId),
+  scannerDeviceUnique: uniqueIndex("gate_scanners_scanner_device_unique").on(table.scannerDeviceId),
+  gateStatusIdx: index("gate_scanners_gate_status_idx").on(table.gateId, table.status)
 }));
 
 export const scannerDeviceChallenges = pgTable("scanner_device_challenges", {
@@ -556,6 +619,8 @@ export const registrosAcceso = pgTable("registros_acceso", {
   vehicleId: uuid("vehicle_id").references(() => vehicles.id),
   vehiclePermitId: uuid("vehicle_permit_id").references(() => vehiclePermits.id),
   hotQrTokenId: uuid("hot_qr_token_id").references(() => hotQrTokens.id),
+  gateId: uuid("gate_id").references(() => gates.id),
+  exitGateId: uuid("exit_gate_id").references(() => gates.id),
   matriculaLegacy: varchar("matricula_legacy", { length: 50 }),
   visitorName: varchar("visitor_name", { length: 160 }),
   entradaAt: timestamp("entrada_at", { withTimezone: true }).notNull().defaultNow(),
@@ -581,6 +646,8 @@ export const registrosAcceso = pgTable("registros_acceso", {
   vehicleEntradaIdx: index("registros_acceso_vehicle_entrada_idx").on(table.vehicleId, table.entradaAt),
   statusEntradaIdx: index("registros_acceso_status_entrada_idx").on(table.status, table.entradaAt),
   modeEntradaIdx: index("registros_acceso_mode_entrada_idx").on(table.accessMode, table.entradaAt),
+  gateEntradaIdx: index("registros_acceso_gate_entrada_idx").on(table.gateId, table.entradaAt),
+  exitGateSalidaIdx: index("registros_acceso_exit_gate_salida_idx").on(table.exitGateId, table.salidaAt),
   openByPersonUnique: uniqueIndex("registros_acceso_open_person_unique")
     .on(table.personId)
     .where(sql`${table.salidaAt} is null and ${table.personId} is not null`),
@@ -594,6 +661,7 @@ export const accessScanEvents = pgTable("access_scan_events", {
   registroAccesoId: uuid("registro_acceso_id").references(() => registrosAcceso.id),
   personId: uuid("person_id").references(() => personas.id),
   vehicleId: uuid("vehicle_id").references(() => vehicles.id),
+  gateId: uuid("gate_id").references(() => gates.id),
   credentialType: credentialType("credential_type").notNull(),
   accessMode: accessMode("access_mode").notNull().default("pedestrian"),
   accepted: boolean("accepted").notNull(),
@@ -609,6 +677,7 @@ export const accessScanEvents = pgTable("access_scan_events", {
   scannedAtIdx: index("access_scan_events_scanned_at_idx").on(table.scannedAt),
   personScannedIdx: index("access_scan_events_person_scanned_idx").on(table.personId, table.scannedAt),
   vehicleScannedIdx: index("access_scan_events_vehicle_scanned_idx").on(table.vehicleId, table.scannedAt),
+  gateScannedIdx: index("access_scan_events_gate_scanned_idx").on(table.gateId, table.scannedAt),
   jtiIdx: index("access_scan_events_jti_idx").on(table.jti)
 }));
 
@@ -677,6 +746,7 @@ export const qrJtiConsumptions = pgTable("qr_jti_consumptions", {
   vehiclePermitId: uuid("vehicle_permit_id").references(() => vehiclePermits.id),
   hotQrId: uuid("hot_qr_id").references(() => hotQrTokens.id),
   temporaryDailyQrId: uuid("temporary_daily_qr_id").references(() => temporaryDailyQrTokens.id),
+  gateId: uuid("gate_id").references(() => gates.id),
   scannerId: varchar("scanner_id", { length: 120 }),
   accessRecordId: uuid("access_record_id").references(() => registrosAcceso.id),
   issuedAt: timestamp("issued_at", { withTimezone: true }).notNull(),

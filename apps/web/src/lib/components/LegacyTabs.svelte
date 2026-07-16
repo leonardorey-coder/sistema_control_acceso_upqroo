@@ -17,7 +17,13 @@
 <div class="tabs-container">
   <nav class="tabs" aria-label="Modulos administrativos">
     {#each visibleTabs as tab}
-      <button class="tab-button" class:active={activeTab === tab.id} onclick={() => onTab(tab.id)}>
+      <button
+        type="button"
+        class="tab-button"
+        class:active={activeTab === tab.id}
+        aria-current={activeTab === tab.id ? "page" : undefined}
+        onclick={() => onTab(tab.id)}
+      >
         <span class="tab-icon" aria-hidden="true">
           {#if tab.id === "generator"}
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -56,6 +62,12 @@
               <circle cx="7.5" cy="17" r="1.5" />
               <circle cx="16.5" cy="17" r="1.5" />
               <path d="M8 10l1-4h6l1 4" />
+            </svg>
+          {:else if tab.id === "gates"}
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16" />
+              <path d="M14 21V9a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v12" />
+              <path d="M9 12h.01M9 17h.01" />
             </svg>
           {:else if tab.id === "admins"}
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

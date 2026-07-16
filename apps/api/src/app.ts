@@ -11,6 +11,7 @@ import { configRoutes } from "./modules/config/config.routes";
 import { credentialsRoutes } from "./modules/credentials/credentials.routes";
 import { filesRoutes } from "./modules/files/files.routes";
 import { hotQrRoutes } from "./modules/hot-qr/hot-qr.routes";
+import { gatesRoutes } from "./modules/gates/gates.routes";
 import { integrityRoutes } from "./modules/integrity/integrity.routes";
 import { peopleRoutes } from "./modules/people/people.routes";
 import { personTypesRoutes } from "./modules/person-types/person-types.routes";
@@ -58,6 +59,8 @@ for (const path of [
   "/api/v1/schedules/*",
   "/api/v1/hot-qr",
   "/api/v1/hot-qr/*",
+  "/api/v1/gates",
+  "/api/v1/gates/*",
   "/api/v1/vehicles",
   "/api/v1/vehicles/*",
   "/api/v1/config",
@@ -85,6 +88,7 @@ app.route("/api/v1/attendance", attendanceRoutes);
 app.route("/api/v1/subjects", subjectsRoutes);
 app.route("/api/v1/schedules", schedulesRoutes);
 app.route("/api/v1/hot-qr", hotQrRoutes);
+app.route("/api/v1/gates", gatesRoutes);
 app.route("/api/v1/vehicles", vehiclesRoutes);
 app.route("/api/v1/config", configRoutes);
 app.route("/api/v1/integrity", integrityRoutes);

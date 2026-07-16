@@ -4,6 +4,7 @@ import { db } from "../../db/client";
 import {
   administradores,
   carreras,
+  gates,
   personas,
   registrosAcceso,
   storedFiles,
@@ -13,12 +14,15 @@ import type { Pagination } from "../../shared/pagination";
 
 const adminEntrada = alias(administradores, "admin_entrada");
 const adminSalida = alias(administradores, "admin_salida");
+const entryGate = alias(gates, "entry_gate");
+const exitGate = alias(gates, "exit_gate");
 
 export type AccessTodayFilters = {
   q?: string;
   personType?: string;
   accessMode?: "pedestrian" | "vehicle" | "visitor" | "manual";
   status?: "in_progress" | "completed" | "auto_closed" | "rejected";
+  gateId?: string;
   from: Date;
   to: Date;
 };
@@ -53,6 +57,10 @@ function buildAccessWhere(filters: AccessTodayFilters) {
     where.push(eq(registrosAcceso.status, filters.status));
   }
 
+  if (filters.gateId) {
+    where.push(or(eq(registrosAcceso.gateId, filters.gateId), eq(registrosAcceso.exitGateId, filters.gateId))!);
+  }
+
   return and(...where);
 }
 
@@ -81,6 +89,13 @@ export async function listAccessToday(filters: AccessTodayFilters, pagination: P
       isExceptionAccess: registrosAcceso.isExceptionAccess,
       vehiclePlate: vehicles.plate,
       visitorName: registrosAcceso.visitorName,
+      gateId: registrosAcceso.gateId,
+      gateCode: entryGate.code,
+      gateName: entryGate.name,
+      exitGateId: registrosAcceso.exitGateId,
+      exitGateCode: exitGate.code,
+      exitGateName: exitGate.name,
+      scannerId: sql<string | null>`${registrosAcceso.metadata}->>'scannerId'`,
       hashRegistro: registrosAcceso.hashRegistro,
       hashAnterior: registrosAcceso.hashAnterior
     })
@@ -88,6 +103,8 @@ export async function listAccessToday(filters: AccessTodayFilters, pagination: P
       .leftJoin(personas, eq(registrosAcceso.personId, personas.id))
       .leftJoin(carreras, eq(personas.carreraId, carreras.id))
       .leftJoin(vehicles, eq(registrosAcceso.vehicleId, vehicles.id))
+      .leftJoin(entryGate, eq(registrosAcceso.gateId, entryGate.id))
+      .leftJoin(exitGate, eq(registrosAcceso.exitGateId, exitGate.id))
       .leftJoin(adminEntrada, eq(registrosAcceso.adminEntradaId, adminEntrada.id))
       .leftJoin(adminSalida, eq(registrosAcceso.adminSalidaId, adminSalida.id))
       .where(where)
@@ -114,6 +131,7 @@ export type AccessScanPayload = {
   scannerId?: string;
   scannerDeviceId?: string;
   scannerCode?: string;
+  gateId?: string;
   preVerifiedPersonId?: string;
   preVerifiedJti?: string;
   preVerifiedCredentialType?: "person_qr" | "temporary_daily_qr" | "vehicle_permit_qr";
@@ -128,7 +146,7 @@ export type AccessScanPayload = {
 
 export async function runAccessScan(payload: AccessScanPayload) {
   const [row] = await db.execute<{ result: unknown }>(
-    sql`select access_scan_v1(${JSON.stringify(payload)}::jsonb) as result`
+    sql`select access_scan_gate_v1(${JSON.stringify(payload)}::jsonb) as result`
   );
 
   return row?.result;

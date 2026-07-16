@@ -14,10 +14,11 @@ import { db } from "../../db/client";
 import { sql } from "drizzle-orm";
 import { HttpError } from "../../shared/http-error";
 import { scannerDevicesRequired, verifyScannerDeviceProof } from "../scanner-devices/scanner-devices.service";
+import { findGateByScannerId, summarizeGates } from "../gates/gates.repository";
 
 export const accessRoutes = new Hono();
 
-async function recordRejectedSignedQr(reasonCode: string, scannerId?: string) {
+async function recordRejectedSignedQr(reasonCode: string, scannerId?: string, gateId?: string) {
   await db.execute(sql`
     INSERT INTO access_scan_events (
       credential_type,
@@ -25,6 +26,7 @@ async function recordRejectedSignedQr(reasonCode: string, scannerId?: string) {
       accepted,
       reason_code,
       signature_verified,
+      gate_id,
       metadata
     )
     VALUES (
@@ -33,7 +35,8 @@ async function recordRejectedSignedQr(reasonCode: string, scannerId?: string) {
       false,
       ${reasonCode},
       false,
-      ${JSON.stringify(withoutUndefined({ scannerId }))}::jsonb
+      ${gateId ?? null}::uuid,
+      ${JSON.stringify(withoutUndefined({ scannerId, gateId }))}::jsonb
     )
   `);
 }
@@ -107,6 +110,7 @@ accessRoutes.post("/scan", async (c) => {
   }
 
   const effectiveScannerId = verifiedScanner?.scannerCode ?? body.scannerId;
+  const gateContext = effectiveScannerId ? await findGateByScannerId(effectiveScannerId) : null;
   let scanPayload: Record<string, unknown> = {
     ...withoutUndefined({
       token: body.token,
@@ -114,17 +118,26 @@ accessRoutes.post("/scan", async (c) => {
       manualMatricula: body.manualMatricula,
       scannerId: effectiveScannerId,
       scannerDeviceId: verifiedScanner?.scannerDeviceId,
-      scannerCode: verifiedScanner?.scannerCode
+      scannerCode: verifiedScanner?.scannerCode,
+      gateId: gateContext?.gateId
     }),
     adminId: session.adminId
   } as Record<string, unknown>;
 
   // Signed QR path: verify JWT here in Bun, then inject pre-verified fields for SQL
   if (body.signedQr) {
+    if (!gateContext) {
+      const gateResult = await runAccessScan(withoutUndefined({
+        scannerId: effectiveScannerId,
+        scannerCode: verifiedScanner?.scannerCode,
+        adminId: session.adminId
+      }));
+      return c.json({ data: gateResult });
+    }
     const [configRow] = await getOperationalConfig("signed_qr");
     const signedQrConfig = (configRow?.value as Record<string, unknown> | undefined) ?? {};
     if (signedQrConfig.enabled !== true) {
-      await recordRejectedSignedQr("SIGNED_QR_DISABLED", effectiveScannerId);
+      await recordRejectedSignedQr("SIGNED_QR_DISABLED", effectiveScannerId, gateContext.gateId);
       return c.json({ data: { accepted: false, reasonCode: "SIGNED_QR_DISABLED" } });
     }
     const clockTolerance = typeof signedQrConfig.clockToleranceSeconds === "number"
@@ -140,7 +153,7 @@ accessRoutes.post("/scan", async (c) => {
       else if (err instanceof Error && err.message === "SIGNED_QR_CLAIM_INVALID") reasonCode = "SIGNED_QR_CLAIM_INVALID";
       else if (err instanceof Error && err.message === "SIGNED_QR_KEY_NOT_FOUND") reasonCode = "SIGNED_QR_KEY_NOT_FOUND";
       else if (err instanceof Error && err.message === "SIGNED_QR_ALG_INVALID") reasonCode = "SIGNED_QR_ALG_INVALID";
-      await recordRejectedSignedQr(reasonCode, effectiveScannerId);
+      await recordRejectedSignedQr(reasonCode, effectiveScannerId, gateContext.gateId);
       return c.json({ data: { accepted: false, reasonCode } });
     }
 
@@ -159,6 +172,7 @@ accessRoutes.post("/scan", async (c) => {
       scannerId: effectiveScannerId,
       scannerDeviceId: verifiedScanner?.scannerDeviceId,
       scannerCode: verifiedScanner?.scannerCode,
+      gateId: gateContext.gateId,
       adminId: session.adminId
     };
   }
@@ -220,6 +234,7 @@ const accessTodayQuerySchema = z.object({
   personType: z.string().trim().min(1).optional(),
   accessMode: z.enum(["pedestrian", "vehicle", "visitor", "manual"]).optional(),
   status: z.enum(["in_progress", "completed", "auto_closed", "rejected"]).optional(),
+  gateId: z.string().uuid().optional(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
 });
 
@@ -232,9 +247,17 @@ accessRoutes.get("/today", async (c) => {
   return c.json({
     data: paginated(result.rows, result.total, pagination, {
       date: range.date,
-      filtered: Boolean(query.q || query.personType || query.accessMode || query.status)
+      filtered: Boolean(query.q || query.personType || query.accessMode || query.status || query.gateId)
     })
   });
+});
+
+accessRoutes.get("/gates/summary", async (c) => {
+  const query = z.object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
+  }).parse(c.req.query());
+  const range = toOperationalDateRange(query.date);
+  return c.json({ data: { date: range.date, rows: await summarizeGates(range.from, range.to) } });
 });
 
 accessRoutes.post("/auto-exits", async (c) => {

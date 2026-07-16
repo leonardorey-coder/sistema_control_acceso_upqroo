@@ -63,6 +63,10 @@ export type ScannerResultPayload = {
   vehicleColor?: string | null;
   vehicleMake?: string | null;
   vehicleModel?: string | null;
+  gateId?: string | null;
+  gateCode?: string | null;
+  gateName?: string | null;
+  scannerId?: string | null;
   profilePhotoUrl?: string | null;
   credentialType?: string;
   accessMode?: string;
@@ -273,6 +277,63 @@ export type ScannerDeviceRowPayload = {
 
 export type ScannerDevicesConfigPayload = {
   required: boolean;
+};
+
+export type GateType = "pedestrian" | "vehicle" | "mixed" | "visitors" | "staff" | "providers" | "emergency" | "events";
+export type GateStatus = "active" | "inactive" | "maintenance" | "entry_only" | "exit_only" | "blocked" | "emergency";
+export type GateScannerStatus = "active" | "inactive" | "revoked";
+
+export type GateSchedulePayload = {
+  timezone?: string;
+  weekly?: Record<string, Array<{ start: string; end: string }>>;
+};
+
+export type GateRulesPayload = {
+  allowedAccessModes?: Array<"pedestrian" | "vehicle" | "visitor" | "manual">;
+  allowedPersonTypes?: string[];
+};
+
+export type GateRowPayload = {
+  id: string;
+  code: string;
+  name: string;
+  type: GateType;
+  location?: string | null;
+  status: GateStatus;
+  schedule: GateSchedulePayload;
+  rules: GateRulesPayload;
+  notes?: string | null;
+  scannerCount?: number;
+  activeScannerCount?: number;
+  lastSeenAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type GateScannerRowPayload = {
+  id: string;
+  gateId: string;
+  scannerDeviceId?: string | null;
+  scannerId: string;
+  label: string;
+  status: GateScannerStatus;
+  lastSeenAt?: string | null;
+  metadata?: Record<string, unknown>;
+  deviceStatus?: ScannerDeviceStatus | null;
+  deviceLabel?: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type GateSummaryRowPayload = {
+  gateId: string;
+  gateCode: string;
+  gateName: string;
+  gateStatus: GateStatus;
+  accepted: number;
+  rejected: number;
+  total: number;
+  lastScanAt?: string | null;
 };
 
 export type AdminClientsConfigPayload = {

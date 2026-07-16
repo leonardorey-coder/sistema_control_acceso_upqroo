@@ -19,6 +19,10 @@ export const statusLabels: Record<string, string> = {
   inactive: "Inactivo",
   disabled: "Deshabilitado",
   blocked: "Bloqueado",
+  maintenance: "Mantenimiento",
+  entry_only: "Solo entrada",
+  exit_only: "Solo salida",
+  emergency: "Emergencia",
   revoked: "Revocado",
   expired: "Expirado",
   rotated: "Rotado",
@@ -77,7 +81,16 @@ export const reasonCodeLabels: Record<string, string> = {
   integration_signed_temp: "Temporal de integracion",
   SIGNED_QR_DISABLED: "QR firmado deshabilitado",
   JTI_ALREADY_CONSUMED: "QR ya usado",
-  INVALID_JSON: "JSON invalido"
+  INVALID_JSON: "JSON invalido",
+  GATE_NOT_FOUND: "Scanner sin puerta asignada",
+  GATE_INACTIVE: "Puerta inactiva",
+  GATE_BLOCKED: "Puerta bloqueada",
+  GATE_MAINTENANCE: "Puerta en mantenimiento",
+  GATE_ENTRY_ONLY: "Puerta configurada solo para entrada",
+  GATE_EXIT_ONLY: "Puerta configurada solo para salida",
+  GATE_MODE_NOT_ALLOWED: "Modo de acceso no permitido en esta puerta",
+  GATE_PERSON_TYPE_NOT_ALLOWED: "Tipo de persona no permitido en esta puerta",
+  GATE_SCHEDULE_CLOSED: "Puerta fuera de horario"
 };
 
 export const vehicleTypeLabels: Record<string, string> = {
@@ -162,6 +175,14 @@ export const adminActionLabels: Record<string, string> = {
   "scanner_device.requested": "Solicitud de scanner",
   "scanner_device.approved": "Scanner aprobado",
   "scanner_device.revoked": "Scanner revocado",
+  "gate.created": "Puerta creada",
+  "gate.updated": "Puerta actualizada",
+  "gate.disabled": "Puerta desactivada",
+  "gate.blocked": "Puerta bloqueada",
+  "gate.emergency_enabled": "Emergencia activada",
+  "gate_scanner.created": "Scanner asignado a puerta",
+  "gate_scanner.updated": "Scanner de puerta actualizado",
+  "gate_scanner.revoked": "Scanner revocado de puerta",
   "person.created": "Persona creada",
   "person.imported": "Personas importadas",
   "person.updated": "Persona actualizada",

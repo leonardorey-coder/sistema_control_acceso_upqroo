@@ -1,5 +1,26 @@
 # Feature: gates y puertas de acceso
 
+## Estado de implementacion
+
+Implementada de extremo a extremo en julio de 2026:
+
+- Esquema `gates` y `gate_scanners` con migraciones aditivas.
+- Vinculo opcional al dispositivo autenticado de `scanner_devices`.
+- CRUD, estados operativos, horarios, reglas, scanners y auditoria.
+- Wrapper transaccional `access_scan_gate_v1`: una regla rechazada revierte el
+  acceso y el consumo JTI antes de registrar el rechazo.
+- `gate_id` en eventos y consumos JTI; `gate_id` y `exit_gate_id` en el registro
+  para conservar por separado la puerta de entrada y la de salida.
+- Filtro de registros por puerta y resumen diario con aceptados/rechazados.
+- Pestaña administrativa `Puertas` y contexto de gate en el scanner.
+- Backfill controlado de dispositivos activos a
+  `acceso-legacy-sin-clasificar`, pendiente de reasignacion fisica por un super
+  administrador.
+
+Las asignaciones guardia-gate y el control de cupo permanecen fuera de alcance,
+tal como se decidio en este documento: la identidad del operador se deriva de
+la sesion administrativa y el cupo requiere una feature propia.
+
 ## Objetivo
 
 Registrar y controlar el acceso segun la puerta fisica, pluma, torniquete,

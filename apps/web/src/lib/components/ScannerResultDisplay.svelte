@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { ScannerResultPayload } from "@control-acceso/shared";
   import StatusBadge from "./StatusBadge.svelte";
+  import { labelFor } from "$lib/ui/labels";
   import VehiclePreview3D from "./VehiclePreview3D.svelte";
 
   type Row = Record<string, unknown>;
@@ -46,7 +47,9 @@
         <div><dt>Tipo</dt><dd>{result.personType ?? "-"}</dd></div>
         <div><dt>Carrera</dt><dd>{result.career ?? "-"}</dd></div>
         <div><dt>Vehiculo</dt><dd>{result.vehiclePlate ?? "-"}</dd></div>
-        <div><dt>Estado</dt><dd>{result.reasonCode ?? (result.accepted ? "ACEPTADO" : "RECHAZADO")}</dd></div>
+        <div><dt>Puerta</dt><dd>{result.gateName ?? result.gateCode ?? "-"}</dd></div>
+        <div><dt>Scanner</dt><dd>{result.scannerId ?? scannerId ?? "-"}</dd></div>
+        <div><dt>Estado</dt><dd>{labelFor("reasonCode", result.reasonCode) || (result.accepted ? "Aceptado" : "Rechazado")}</dd></div>
         <div><dt>Fecha</dt><dd>{result.timestamp ? new Date(String(result.timestamp)).toLocaleString("es-MX") : "-"}</dd></div>
       </dl>
       {#if result.vehiclePlate}

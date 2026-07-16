@@ -7,6 +7,8 @@ import {
   accessScanEvents,
   administradores,
   auditLog,
+  gateScanners,
+  gates,
   operationalConfig,
   personas,
   qrJtiConsumptions,
@@ -68,6 +70,30 @@ async function ensureIntegrationAdmin() {
   }
 
   return { username, password };
+}
+
+async function ensureIntegrationGate() {
+  const [gate] = await db.insert(gates).values({
+    code: "integration-gate",
+    name: "Integration Gate",
+    type: "mixed",
+    status: "active",
+    schedule: {},
+    rules: {}
+  }).onConflictDoUpdate({
+    target: gates.code,
+    set: { name: "Integration Gate", type: "mixed", status: "active", schedule: {}, rules: {}, updatedAt: new Date() }
+  }).returning();
+
+  await db.insert(gateScanners).values({
+    gateId: gate!.id,
+    scannerId: "integration-scanner",
+    label: "Integration Scanner",
+    status: "active"
+  }).onConflictDoUpdate({
+    target: gateScanners.scannerId,
+    set: { gateId: gate!.id, label: "Integration Scanner", status: "active", updatedAt: new Date() }
+  });
 }
 
 async function getAdminByUsername(username: string) {
@@ -241,6 +267,7 @@ describeIfPostgres("postgres integration", () => {
   let spoofAdminId = "";
 
   beforeAll(async () => {
+    await ensureIntegrationGate();
     const admin = await ensureIntegrationAdmin();
     sessionAdminId = (await getAdminByUsername(admin.username)).id;
     spoofAdminId = (await ensureSpoofTargetAdmin()).id;
@@ -275,6 +302,72 @@ describeIfPostgres("postgres integration", () => {
     expect(adminsBody.data.rows.length).toBeGreaterThan(0);
     expect(adminsBody.data.rows.find((row: { username: string }) => row.username === "integration_super")?.lastLoginAt).toBeTruthy();
     expectNoSecretFieldNames(adminsBody);
+  });
+
+  it("enforces gate assignment, status and direction without leaving partial access", async () => {
+    const person = await createActivePerson("GateRule");
+    const suffix = randomUUID().slice(0, 8);
+    const [entryGate] = await db.insert(gates).values({
+      code: `entry-gate-${suffix}`,
+      name: "Entry Integration Gate",
+      type: "pedestrian",
+      status: "entry_only",
+      schedule: {},
+      rules: {}
+    }).returning();
+    const [exitGate] = await db.insert(gates).values({
+      code: `exit-gate-${suffix}`,
+      name: "Exit Integration Gate",
+      type: "pedestrian",
+      status: "exit_only",
+      schedule: {},
+      rules: {}
+    }).returning();
+    await db.insert(gateScanners).values([
+      { gateId: entryGate!.id, scannerId: `entry-scanner-${suffix}`, label: "Entry scanner", status: "active" },
+      { gateId: exitGate!.id, scannerId: `exit-scanner-${suffix}`, label: "Exit scanner", status: "active" }
+    ]);
+
+    const missingGateResponse = await app.request("/api/v1/access/scan", {
+      method: "POST",
+      headers: jsonHeaders(cookie),
+      body: JSON.stringify({ manualMatricula: person.matricula, scannerId: `missing-${suffix}` })
+    });
+    expect((await missingGateResponse.json()).data.reasonCode).toBe("GATE_NOT_FOUND");
+
+    const entryResponse = await app.request("/api/v1/access/scan", {
+      method: "POST",
+      headers: jsonHeaders(cookie),
+      body: JSON.stringify({ manualMatricula: person.matricula, scannerId: `entry-scanner-${suffix}` })
+    });
+    const entry = (await entryResponse.json()).data;
+    expect(entry.accepted).toBe(true);
+    expect(entry.action).toBe("entry");
+    expect(entry.gateId).toBe(entryGate!.id);
+
+    const rejectedExitResponse = await app.request("/api/v1/access/scan", {
+      method: "POST",
+      headers: jsonHeaders(cookie),
+      body: JSON.stringify({ manualMatricula: person.matricula, scannerId: `entry-scanner-${suffix}` })
+    });
+    const rejectedExit = (await rejectedExitResponse.json()).data;
+    expect(rejectedExit.accepted).toBe(false);
+    expect(rejectedExit.reasonCode).toBe("GATE_ENTRY_ONLY");
+    const stillOpen = await db.query.registrosAcceso.findFirst({ where: eq(registrosAcceso.id, entry.registroId) });
+    expect(stillOpen?.status).toBe("in_progress");
+    expect(stillOpen?.salidaAt).toBeNull();
+
+    const exitResponse = await app.request("/api/v1/access/scan", {
+      method: "POST",
+      headers: jsonHeaders(cookie),
+      body: JSON.stringify({ manualMatricula: person.matricula, scannerId: `exit-scanner-${suffix}` })
+    });
+    const exit = (await exitResponse.json()).data;
+    expect(exit.accepted).toBe(true);
+    expect(exit.action).toBe("exit");
+    const completed = await db.query.registrosAcceso.findFirst({ where: eq(registrosAcceso.id, entry.registroId) });
+    expect(completed?.gateId).toBe(entryGate!.id);
+    expect(completed?.exitGateId).toBe(exitGate!.id);
   });
 
   it("exposes the current admin session id and audits login/logout", async () => {
@@ -360,7 +453,7 @@ describeIfPostgres("postgres integration", () => {
     const entryResponse = await app.request("/api/v1/access/scan", {
       method: "POST",
       headers: jsonHeaders(cookie),
-      body: JSON.stringify({ token: qrBody.data.token })
+      body: JSON.stringify({ token: qrBody.data.token, scannerId: "integration-scanner" })
     });
     const entryBody = await entryResponse.json();
 
@@ -372,7 +465,7 @@ describeIfPostgres("postgres integration", () => {
     const exitResponse = await app.request("/api/v1/access/scan", {
       method: "POST",
       headers: jsonHeaders(cookie),
-      body: JSON.stringify({ token: qrBody.data.token })
+      body: JSON.stringify({ token: qrBody.data.token, scannerId: "integration-scanner" })
     });
     const exitBody = await exitResponse.json();
 
@@ -412,7 +505,7 @@ describeIfPostgres("postgres integration", () => {
         const response = await app.request("/api/v1/access/scan", {
           method: "POST",
           headers: jsonHeaders(cookie),
-          body: JSON.stringify({ manualMatricula: matricula })
+          body: JSON.stringify({ manualMatricula: matricula, scannerId: "integration-scanner" })
         });
         const body = await response.json();
 
@@ -478,7 +571,7 @@ describeIfPostgres("postgres integration", () => {
     const scanResponse = await app.request("/api/v1/access/scan", {
       method: "POST",
       headers: jsonHeaders(cookie),
-      body: JSON.stringify({ token: qrBody.data.token })
+      body: JSON.stringify({ token: qrBody.data.token, scannerId: "integration-scanner" })
     });
     const scanBody = await scanResponse.json();
     expect(scanResponse.status).toBe(200);
@@ -748,7 +841,7 @@ describeIfPostgres("postgres integration", () => {
     const scanResponse = await app.request("/api/v1/access/scan", {
       method: "POST",
       headers: jsonHeaders(cookie),
-      body: JSON.stringify({ manualMatricula: matricula })
+      body: JSON.stringify({ manualMatricula: matricula, scannerId: "integration-scanner" })
     });
     const scanBody = await scanResponse.json();
 

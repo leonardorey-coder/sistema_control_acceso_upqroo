@@ -199,6 +199,29 @@ describe("access atomic contracts", () => {
     expect(accessRoutes).toContain("(requireScannerDevice && !adminCanBypassScannerDevice) || proofSupplied");
   });
 
+  it("ships first-class gates with transactional scan rules and legacy scanner continuity", () => {
+    const migration = readMigration("0013_gates_access_control.sql");
+    const backfill = readMigration("0014_gate_scanner_backfill.sql");
+    const accessRepository = readModule("access/access.repository.ts");
+    const gateRoutes = readModule("gates/gates.routes.ts");
+
+    expect(migration).toContain("CREATE TABLE IF NOT EXISTS \"gates\"");
+    expect(migration).toContain("CREATE TABLE IF NOT EXISTS \"gate_scanners\"");
+    expect(migration).toContain("ALTER TABLE \"registros_acceso\" ADD COLUMN IF NOT EXISTS \"gate_id\"");
+    expect(migration).toContain("ALTER TABLE \"access_scan_events\" ADD COLUMN IF NOT EXISTS \"gate_id\"");
+    expect(migration).toContain("CREATE OR REPLACE FUNCTION gate_schedule_allows_v1");
+    expect(migration).toContain("CREATE OR REPLACE FUNCTION access_scan_gate_v1");
+    expect(migration).toContain("EXCEPTION WHEN SQLSTATE 'P0001'");
+    expect(migration).toContain("GATE_MODE_NOT_ALLOWED");
+    expect(migration).toContain("GATE_ENTRY_ONLY");
+    expect(migration).toContain("GATE_EXIT_ONLY");
+    expect(accessRepository).toContain("select access_scan_gate_v1");
+    expect(gateRoutes).toContain("requireAdminRole(\"super_admin\")");
+    expect(gateRoutes).toContain("gate_scanner.revoked");
+    expect(backfill).toContain("acceso-legacy-sin-clasificar");
+    expect(backfill).toContain("WHERE d.status = 'active'");
+  });
+
   it("ships admin browser authorization separately from scanner devices", () => {
     const migration = readMigration("0012_admin_client_keys.sql");
     const schema = readSource("db/schema.ts");

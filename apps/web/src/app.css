@@ -325,6 +325,15 @@ a {
   overflow-x: auto;
 }
 
+/* Los modulos administrativos deben permanecer visibles; el grid evita que
+   una barra horizontal esconda opciones cuando el ancho se reduce. */
+.tabs {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  justify-content: initial;
+  overflow: visible;
+}
+
 .tab-button,
 .tabs button,
 .client-tabs button {
@@ -375,6 +384,38 @@ a {
   background: var(--surface-warm);
   color: var(--orange);
   box-shadow: none;
+}
+
+.tabs .tab-button {
+  min-width: 0;
+  min-height: 52px;
+  padding: 10px 8px;
+  line-height: 1.2;
+  text-align: center;
+  white-space: normal;
+}
+
+.tabs .tab-button > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+  .tabs {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .tabs {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .tabs .tab-button {
+    gap: 6px;
+    padding: 10px 6px;
+    font-size: 13px;
+  }
 }
 
 .legacy-main {
@@ -1584,6 +1625,112 @@ input[type="file"] {
 
 .row-actions {
   justify-content: flex-end;
+}
+
+.gates-layout {
+  grid-template-columns: minmax(300px, 430px) minmax(0, 1fr);
+}
+
+.gate-form {
+  position: sticky;
+  top: 84px;
+  max-height: calc(100dvh - 104px);
+  overflow-y: auto;
+}
+
+.gate-fieldset {
+  min-width: 0;
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+
+.gate-fieldset legend {
+  padding: 0 6px;
+  font-weight: 600;
+}
+
+.gate-fieldset .muted {
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.gate-time-row,
+.gate-check-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+}
+
+.weekday-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.weekday-picker label {
+  cursor: pointer;
+}
+
+.weekday-picker input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.weekday-picker span {
+  display: grid;
+  width: 36px;
+  min-height: 36px;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.weekday-picker input:checked + span {
+  border-color: var(--primary);
+  background: var(--surface-warm);
+  color: #8a4c00;
+  font-weight: 700;
+}
+
+.weekday-picker input:focus-visible + span {
+  outline: 3px solid rgb(255 140 0 / 0.28);
+  outline-offset: 2px;
+}
+
+.gate-code {
+  margin: 3px 0 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.gate-scanner-section {
+  margin-top: 24px;
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+}
+
+.gate-scanner-table {
+  min-width: 640px;
+}
+
+.gate-state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.gate-state-actions > span {
+  margin-right: 4px;
+  color: var(--text-muted);
+  font-size: 14px;
 }
 
 .actions-cell {
@@ -3010,6 +3157,14 @@ th.actions-cell {
 }
 
 @media (max-width: 880px) {
+  .gates-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .gate-form {
+    position: static;
+    max-height: none;
+  }
   .header-container,
   .header-left,
   .header-right,

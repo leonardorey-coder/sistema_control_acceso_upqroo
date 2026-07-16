@@ -85,6 +85,27 @@
       "when": 1781844400000,
       "tag": "0011_vehicle_campus_management",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1781846200000,
+      "tag": "0012_admin_client_keys",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1781848000000,
+      "tag": "0013_gates_access_control",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1781849800000,
+      "tag": "0014_gate_scanner_backfill",
+      "breakpoints": true
     }
   ]
 }

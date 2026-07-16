@@ -8,9 +8,9 @@
   const tone = $derived(
     ["active", "activo", "completed", "confirmed", "used", "accepted", "entry"].includes(raw)
       ? "ok"
-      : ["in_progress", "partial", "auto_closed", "assumed", "exit"].includes(raw)
+      : ["in_progress", "partial", "auto_closed", "assumed", "exit", "maintenance", "entry_only", "exit_only"].includes(raw)
         ? "warn"
-        : ["rejected", "revoked", "disabled", "blocked", "baja", "false"].includes(raw)
+        : ["rejected", "revoked", "disabled", "blocked", "baja", "false", "emergency"].includes(raw)
           ? "danger"
         : "muted"
   );

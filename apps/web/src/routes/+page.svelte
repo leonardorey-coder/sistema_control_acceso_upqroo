@@ -9,6 +9,8 @@
     AttendanceRowPayload,
     AuditLogRowPayload,
     CareerRowPayload,
+    GateRowPayload,
+    GateScannerRowPayload,
     HotQrRowPayload,
     OperationalConfigPayload,
     PersonCredentialRowPayload,
@@ -30,6 +32,7 @@
   import DismissibleNotice from "$lib/components/DismissibleNotice.svelte";
   import EditPersonTab from "$lib/components/EditPersonTab.svelte";
   import GeneratorTab from "$lib/components/GeneratorTab.svelte";
+  import GatesTab from "$lib/components/GatesTab.svelte";
   import HotQrTab from "$lib/components/HotQrTab.svelte";
   import LoginCard from "$lib/components/LoginCard.svelte";
   import VehiclesTab from "$lib/components/VehiclesTab.svelte";
@@ -61,6 +64,7 @@
     | "vehicles.table"
     | "vehicle-permits.table"
     | "vehicle-visitor-permits.table"
+    | "gates.table"
     | "admins.table"
     | "admin-sessions.table"
     | "audit.table"
@@ -135,6 +139,8 @@
   let adminAuditRows = $state<Array<AuditLogRowPayload & Row>>([]);
   let adminAuditTotal = $state(0);
   let scannerDeviceRows = $state<Array<ScannerDeviceRowPayload & Row>>([]);
+  let gateRows = $state<Array<GateRowPayload & Row>>([]);
+  let gateTotal = $state(0);
   let adminClientRows = $state<Array<AdminClientRowPayload & Row>>([]);
   let subjectRows = $state<Row[]>([]);
   let subjectTotal = $state(0);
@@ -186,7 +192,10 @@
     permitType: "",
     permitPersonId: "",
     permitVehicleId: "",
-    visitorPermitStatus: ""
+    visitorPermitStatus: "",
+    gateType: "",
+    gateStatus: "",
+    gateId: ""
   });
 
   let temporaryPagination = $state({ page: 1, pageSize: 10 });
@@ -198,6 +207,7 @@
   let hotQrPagination = $state({ page: 1, pageSize: 10 });
   let credentialPagination = $state({ page: 1, pageSize: 10 });
   let adminAuditPagination = $state({ page: 1, pageSize: 10 });
+  let gatePagination = $state({ page: 1, pageSize: 10 });
   let temporaryFilters = $state({ q: "", status: "", operationalDate: "" });
   let subjectPagination = $state({ page: 1, pageSize: 10 });
   let subjectFilters = $state({ q: "", active: "" });
@@ -260,6 +270,7 @@
     { id: "attendance", label: "Asistencias" },
     { id: "hotqr", label: "Hot-QR" },
     { id: "vehicles", label: "Vehiculos" },
+    { id: "gates", label: "Puertas" },
     { id: "admins", label: "Administradores" },
     { id: "config", label: "Configuracion" }
   ];
@@ -330,6 +341,8 @@
     adminAuditRows = [];
     adminAuditTotal = 0;
     scannerDeviceRows = [];
+    gateRows = [];
+    gateTotal = 0;
     adminClientRows = [];
     subjectRows = [];
     subjectTotal = 0;
@@ -412,6 +425,7 @@
     if (message.topic === "vehicles.table" && activeTab === "vehicles") scheduleRefresh("vehicles", refreshVehicles);
     if (message.topic === "vehicle-permits.table" && activeTab === "vehicles") scheduleRefresh("permits", refreshPermits);
     if (message.topic === "vehicle-visitor-permits.table" && activeTab === "vehicles") scheduleRefresh("vehicle-visitor-permits", refreshVehicleVisitorPermits);
+    if (message.topic === "gates.table" && activeTab === "gates") scheduleRefresh("gates", refreshGates);
     if ((message.topic === "admins.table" || message.topic === "audit.table") && activeTab === "admins") {
       scheduleRefresh("admins", refreshAdmins);
     }
@@ -491,6 +505,11 @@
   }
 
   async function refreshAccess() {
+    if (!gateRows.length) {
+      const gatesResult = await apiRequest<PaginatedRows<GateRowPayload & Row>>("/api/v1/gates?page=1&pageSize=100");
+      gateRows = gatesResult.rows;
+      gateTotal = gatesResult.total;
+    }
     const result = await apiRequest<PaginatedRows<Row>>(`/api/v1/access/today${toQuery({
       q: filters.q,
       date: filters.date,
@@ -498,10 +517,31 @@
       pageSize: accessPagination.pageSize,
       personType: filters.personType,
       accessMode: filters.accessMode,
-      status: filters.status
+      status: filters.status,
+      gateId: filters.gateId
     })}`);
     accessRows = result.rows;
     accessTotal = result.total;
+  }
+
+  async function refreshGates() {
+    const result = await apiRequest<PaginatedRows<GateRowPayload & Row>>(`/api/v1/gates${toQuery({
+      q: filters.q,
+      type: filters.gateType,
+      status: filters.gateStatus,
+      page: gatePagination.page,
+      pageSize: gatePagination.pageSize
+    })}`);
+    gateRows = result.rows;
+    gateTotal = result.total;
+    if (session?.admin.role === "super_admin") {
+      scannerDeviceRows = (await apiRequest<{ rows: Array<ScannerDeviceRowPayload & Row> }>("/api/v1/scanner-devices")).rows;
+    }
+  }
+
+  async function loadGateScanners(gateId: string) {
+    const result = await apiRequest<{ rows: Array<GateScannerRowPayload & Row> }>(`/api/v1/gates/${gateId}/scanners`);
+    return result.rows;
   }
 
   async function refreshAttendance() {
@@ -743,6 +783,7 @@
     else if (activeTab === "attendance") await Promise.allSettled([refreshAttendance(), refreshSubjects(), refreshSchedules()]);
     else if (activeTab === "hotqr") await refreshHotQr();
     else if (activeTab === "vehicles") await Promise.allSettled([refreshVehicles(), refreshPermits(), refreshVehicleVisitorPermits()]);
+    else if (activeTab === "gates") await refreshGates();
     else if (activeTab === "admins") await refreshAdmins();
     else if (activeTab === "config") await refreshConfig();
   }
@@ -871,6 +912,50 @@
   async function filterAccess() {
     accessPagination.page = 1;
     await refreshAccess();
+  }
+
+  async function changeGatePage(next: { page: number; pageSize: number }) {
+    gatePagination = next;
+    await refreshGates();
+  }
+
+  async function filterGates() {
+    gatePagination.page = 1;
+    await refreshGates();
+  }
+
+  async function createGate(input: Record<string, unknown>) {
+    await apiRequest("/api/v1/gates", { method: "POST", body: JSON.stringify(input) });
+    notice = "Puerta creada";
+    await refreshGates();
+  }
+
+  async function updateGate(id: string, input: Record<string, unknown>) {
+    await apiRequest(`/api/v1/gates/${id}`, { method: "PATCH", body: JSON.stringify(input) });
+    notice = "Puerta actualizada";
+    await refreshGates();
+  }
+
+  async function setGateStatus(id: string, action: "disable" | "block" | "emergency" | "activate" | "maintenance") {
+    if (action === "activate" || action === "maintenance") {
+      await updateGate(id, { status: action === "activate" ? "active" : "maintenance" });
+      return;
+    }
+    await apiRequest(`/api/v1/gates/${id}/${action}`, { method: "POST" });
+    notice = action === "block" ? "Puerta bloqueada" : action === "emergency" ? "Modo emergencia activado" : "Puerta desactivada";
+    await refreshGates();
+  }
+
+  async function createGateScanner(gateId: string, input: Record<string, unknown>) {
+    await apiRequest(`/api/v1/gates/${gateId}/scanners`, { method: "POST", body: JSON.stringify(input) });
+    notice = "Scanner asignado a la puerta";
+    await refreshGates();
+  }
+
+  async function revokeGateScanner(gateId: string, scannerId: string) {
+    await apiRequest(`/api/v1/gates/${gateId}/scanners/${scannerId}/revoke`, { method: "POST" });
+    notice = "Scanner revocado de la puerta";
+    await refreshGates();
   }
 
   async function changeAttendancePage(next: { page: number; pageSize: number }) {
@@ -1512,6 +1597,7 @@
             page={accessPagination.page}
             pageSize={accessPagination.pageSize}
             {personTypeRows}
+            {gateRows}
             onFilter={filterAccess}
             onPageChange={changeAccessPage}
           />
@@ -1545,6 +1631,27 @@
             onSchedulePageChange={changeSchedulePage}
             onImportSchedules={importSchedulesCsv}
             onAdjustAttendance={adjustAttendance}
+          />
+        {/if}
+
+        {#if activeTab === "gates"}
+          <GatesTab
+            rows={gateRows}
+            total={gateTotal}
+            page={gatePagination.page}
+            pageSize={gatePagination.pageSize}
+            {filters}
+            scannerDevices={scannerDeviceRows}
+            {personTypeRows}
+            isSuperAdmin={session.admin.role === "super_admin"}
+            onFilter={filterGates}
+            onPageChange={changeGatePage}
+            onCreate={createGate}
+            onUpdate={updateGate}
+            onSetStatus={setGateStatus}
+            onLoadScanners={loadGateScanners}
+            onCreateScanner={createGateScanner}
+            onRevokeScanner={revokeGateScanner}
           />
         {/if}
 
